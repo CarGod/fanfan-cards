@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.zip
+.DS_Store
+.vite/
+coverage/
+*.local
+
+# The CRX signing key IS the extension's identity — losing it or leaking it both
+# end badly, so it lives only on the machine that signs releases.
+.crx-key.pem
+*.crx
+update.xml

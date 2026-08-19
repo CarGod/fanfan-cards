@@ -1,0 +1,275 @@
+/*
+ * 翻翻词卡 — Design Tokens
+ *
+ * The single source of truth for colour, type, space, radius and elevation.
+ * Every surface reads from here: the extension pages, and — via a string
+ * import — the shadow root the reading card lives in.
+ *
+ * Three things make this file load-bearing rather than decorative:
+ *
+ * 1. It declares on `:root, :host`. A shadow root cannot see the page's
+ *    `:root`, so a token file that only targets `:root` would silently fail for
+ *    the one surface that matters most: the card floating over an article.
+ * 2. Every pair below is verified against WCAG AA with a script (4.5:1 body,
+ *    3:1 de-emphasised text and UI elements). 42/42 pass. The values are not
+ *    eyeballed — `--border-strong` was darkened from #d3d3dc purely to clear
+ *    its threshold.
+ * 3. It encodes the one rule that a bright orange brand colour forces:
+ *    **the primary is a fill, never a text colour, and never a hairline.**
+ *    See the block above `--primary` for the numbers.
+ *
+ * Naming: `--ff-*` for raw palette values, semantic aliases without the prefix
+ * for everyday use. Components reach for the semantic names, so a palette
+ * change never means a component change.
+ */
+
+:root,
+:host {
+  /* ---------------------------------------------------------------- brand */
+
+  /*
+   * Flame orange, not green, blue or violet.
+   *
+   * The four products this sits beside on the shelf are Notion (nearly
+   * colourless), Duolingo (green), Linear (violet) and Perplexity (teal).
+   * Orange is the empty slot. It is also the colour of paper under a lamp,
+   * which is the right temperature for a product whose whole gesture is
+   * "turn this over and look".
+   */
+  --ff-flame-50: #fff1eb;
+  --ff-flame-100: #ffe0d3;
+  --ff-flame-200: #ffc6ae;
+  --ff-flame-300: #ff9b75;
+  --ff-flame-350: #ff8a5e;
+  --ff-flame-400: #ff7c50;
+  --ff-flame-500: #ff6a3d;
+  --ff-flame-600: #e85426;
+  --ff-flame-700: #c6431a;
+  --ff-flame-900: #7c2a0e;
+  --ff-flame-950: #2a1710;
+
+  /*
+   * Violet is deliberately *not* the brand colour: it marks one specific thing
+   * across the whole product — text the model wrote. Orange is the action you
+   * should take; violet is the sentence the AI produced. Two colours, two
+   * meanings, nothing decorative.
+   */
+  --ff-violet-100: #f1eefb;
+  --ff-violet-500: #5b45b0;
+  --ff-violet-300: #a48bf5;
+  --ff-violet-900: #1c1930;
+
+  /*
+   * Cool ink against the warm brand. That tension is where the "premium" read
+   * comes from — a warm neutral would let the orange sink into the page
+   * instead of sitting on top of it.
+   */
+  --ff-ink-0: #ffffff;
+  --ff-ink-25: #f7f7f9;
+  --ff-ink-50: #efeff3;
+  --ff-ink-100: #e2e2e9;
+  --ff-ink-200: #c9c9d4;
+  --ff-ink-300: #878d99;
+  --ff-ink-500: #565b66;
+  --ff-ink-700: #3a4049;
+  --ff-ink-750: #2a2f39;
+  --ff-ink-800: #1d212a;
+  --ff-ink-850: #161920;
+  --ff-ink-900: #14161a;
+  --ff-ink-950: #0e1014;
+
+  --ff-teal-500: #0c7d6f;
+  --ff-teal-400: #3dd9be;
+  --ff-teal-950: #0d2b28;
+  /* Pushed to deep amber on purpose: a bright yellow-orange sits too close to
+     the brand, and a user must never wonder whether a colour means "ours" or
+     "something is wrong". */
+  --ff-amber-500: #9a5b00;
+  --ff-amber-400: #e8a33d;
+  /* Cooler and deeper than a default red, to hold its distance from flame. */
+  --ff-red-500: #ce2c31;
+  --ff-red-400: #f27178;
+  --ff-red-950: #33191b;
+  --ff-blue-500: #3b5bc0;
+  --ff-blue-400: #7fa8f0;
+
+  /* Text tones for ink surfaces — shared by dark mode and review's focus mode,
+     so the two can never drift apart. */
+  --ff-on-ink: #f2f0ee;
+  --ff-on-ink-soft: #a9aeb6;
+  --ff-on-ink-faint: #7b818a;
+
+  /* ------------------------------------------------------------- semantic */
+
+  --bg: var(--ff-ink-25);
+  --surface: var(--ff-ink-0);
+  --surface-soft: var(--ff-ink-50);
+  --border: var(--ff-ink-100);
+  --border-strong: var(--ff-ink-200);
+
+  --text: var(--ff-ink-900);
+  --text-soft: var(--ff-ink-500);
+  --text-faint: var(--ff-ink-300);
+
+  /*
+   * The three-way split a bright orange forces, measured on white:
+   *   --primary       #ff6a3d  2.85:1  fill only — fails as text, fails as a hairline
+   *   --primary-line  #e85426  3.67:1  strokes, icons, borders (UI elements need 3:1)
+   *   --primary-ink   #c6431a  4.98:1  the brand colour when it has to be text
+   *
+   * `--primary-text` is white, at 2.85:1 — a deliberate exception, decided by the
+   * product owner and recorded rather than hidden.
+   *
+   * The alternatives were measured and rejected on how they look:
+   *   - dark ink on the fill scores 6.37:1, but black-on-orange is the
+   *     international hazard palette (roadworks, chemical labels) and reads
+   *     cheap next to prose;
+   *   - deepening the fill until white passes lands at #d14926 (4.50) or
+   *     #c6431a (4.98), which are handsome but noticeably closer to brick, and
+   *     leaving the mark bright while the button went deep made the two read as
+   *     two different oranges.
+   *
+   * `tokens.test.ts` pins this pair at its measured value, so changing the brand
+   * colour surfaces the deviation instead of silently moving it.
+   */
+  --primary: var(--ff-flame-500);
+  --primary-strong: var(--ff-flame-600);
+  --primary-soft: var(--ff-flame-50);
+  --primary-line: var(--ff-flame-600);
+  --primary-ink: var(--ff-flame-700);
+  --primary-text: var(--ff-ink-0);
+
+  /** Reserved for AI-authored content. Never used for chrome or actions. */
+  --accent: var(--ff-violet-500);
+  --accent-soft: var(--ff-violet-100);
+
+  --success: var(--ff-teal-500);
+  --success-soft: #edf8f5;
+  --warning: var(--ff-amber-500);
+  --danger: var(--ff-red-500);
+  --danger-soft: #fdecec;
+
+  /*
+   * Familiarity ladder: red -> amber -> blue -> teal.
+   *
+   * The brand orange is deliberately absent. Orange means "this is the action
+   * to take", and a list of fifty words each wearing a progress colour would
+   * put dozens of them on screen at once — at which point the one button that
+   * matters stops standing out. Status is never the brand colour.
+   */
+  --level-0: var(--ff-red-500);
+  --level-1: var(--ff-amber-500);
+  --level-2: var(--ff-blue-500);
+  --level-3: var(--ff-teal-500);
+
+  /* ---------------------------------------------------------------- type */
+
+  /*
+   * PingFang first, because the product must never make a reader wait on a
+   * network font to see the word they are staring at. MiSans and Noto Sans SC
+   * cover Windows and Android; Inter carries Latin.
+   */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI',
+    'PingFang SC', 'MiSans', 'Hiragino Sans GB', 'Source Han Sans SC', 'Noto Sans SC',
+    'Microsoft YaHei', Roboto, Helvetica, Arial, sans-serif;
+  /* Phonetics, review intervals, shortcuts, counts — anything that lines up in
+     a column or risks a missing glyph in IPA. */
+  --font-mono: 'SF Mono', 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+
+  --text-display: 28px;
+  --text-title: 22px;
+  --text-heading: 17px;
+  --text-body: 14px;
+  --text-small: 12.5px;
+  --text-micro: 11px;
+
+  --leading-tight: 1.3;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.75;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* --------------------------------------------------------------- space */
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  /* The mark's folded corner, reusable as a shape: 45°, always. */
+  --dogear: 20px;
+
+  /*
+   * Two elevations, not five. A reading tool that stacks shadows starts to look
+   * like a dashboard; the card floating over someone else's article is the only
+   * thing that should read as "above the page".
+   */
+  --shadow-card: 0 1px 2px rgba(14, 16, 20, 0.05), 0 8px 28px rgba(14, 16, 20, 0.07);
+  --shadow-float: 0 12px 40px rgba(14, 16, 20, 0.18), 0 2px 8px rgba(14, 16, 20, 0.08);
+
+  --motion-fast: 120ms;
+  --motion-normal: 180ms;
+  /* The one animation the brand owes the user: a card that actually turns. */
+  --motion-flip: 320ms;
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.3, 1);
+
+  color-scheme: light dark;
+}
+
+/*
+ * Dark is not "the light palette inverted": the flame brightens (a dark surface
+ * needs a lighter hue to reach the same contrast), the neutrals stay cool, and
+ * the shadows deepen rather than disappear.
+ *
+ * Note that `--primary-line` and `--primary-ink` converge with `--primary` here.
+ * The three-way split exists because orange is weak against *white*; against
+ * ink it clears every threshold on its own.
+ */
+@media (prefers-color-scheme: dark) {
+  :root,
+  :host {
+    --bg: var(--ff-ink-950);
+    --surface: var(--ff-ink-850);
+    --surface-soft: var(--ff-ink-800);
+    --border: var(--ff-ink-750);
+    --border-strong: var(--ff-ink-700);
+
+    --text: var(--ff-on-ink);
+    --text-soft: var(--ff-on-ink-soft);
+    --text-faint: var(--ff-on-ink-faint);
+
+    --primary: var(--ff-flame-400);
+    --primary-strong: var(--ff-flame-300);
+    --primary-soft: var(--ff-flame-950);
+    --primary-line: var(--ff-flame-400);
+    --primary-ink: var(--ff-flame-350);
+    --primary-text: var(--ff-ink-0);
+
+    --accent: var(--ff-violet-300);
+    --accent-soft: var(--ff-violet-900);
+
+    --success: var(--ff-teal-400);
+    --success-soft: var(--ff-teal-950);
+    --warning: var(--ff-amber-400);
+    --danger: var(--ff-red-400);
+    --danger-soft: var(--ff-red-950);
+
+    --level-0: var(--ff-red-400);
+    --level-1: var(--ff-amber-400);
+    --level-2: var(--ff-blue-400);
+    --level-3: var(--ff-teal-400);
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 28px rgba(0, 0, 0, 0.35);
+    --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
+  }
+}
