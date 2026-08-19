@@ -9,6 +9,7 @@
 import type { ExplainWordInput, WordExplanation, AIErrorCode } from './ai.ts'
 import type { VocabularyEntry } from './vocabulary.ts'
 import type { Settings } from './settings.ts'
+import type { SyncErrorCode } from './sync.ts'
 
 export interface SaveWordPayload {
   /**
@@ -107,9 +108,24 @@ export interface Envelope<T extends MessageType = MessageType> {
   payload: MessageRequest<T>
 }
 
+/**
+ * A failure, carried across the message boundary with enough to rebuild it.
+ *
+ * `kind` exists because the codes overlap: `auth`, `rate_limit`, `network`,
+ * `timeout` and `unknown` are both AI error codes and sync error codes, so the
+ * code alone cannot say which class to reconstruct. Without it every sync
+ * failure arrived as an AIError with code `unknown`, and the Chinese
+ * explanations in `SYNC_ERROR_MESSAGES` — the whole point of having them —
+ * never once rendered for a manual sync.
+ */
+export type ErrorKind = 'ai' | 'sync' | 'internal'
+
 export type Reply<T extends MessageType> =
   | { ok: true; data: MessageResponse<T> }
-  | { ok: false; error: { code: AIErrorCode | 'internal'; message: string } }
+  | {
+      ok: false
+      error: { kind: ErrorKind; code: AIErrorCode | SyncErrorCode | 'internal'; message: string }
+    }
 
 /**
  * Background -> content-script commands (context menu, keyboard shortcut).

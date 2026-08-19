@@ -46,11 +46,52 @@ function entry(patch: Partial<VocabularyEntry> = {}): VocabularyEntry {
  * quietly undoing what you did on the first.
  */
 describe('resolveConflict', () => {
-  it('keeps the copy with more review history when neither was deleted', () => {
+  it('keeps the copy with more review history when the edits are the same age', () => {
     const local = entry({ review: { ...entry().review, reviewCount: 5 } })
     const remote = entry({ review: { ...entry().review, reviewCount: 1 } })
-    expect(resolveConflict(local, remote)).toBe(local)
-    expect(resolveConflict(remote, local)).toBe(local)
+    expect(resolveConflict(local, remote).review.reviewCount).toBe(5)
+    expect(resolveConflict(remote, local).review.reviewCount).toBe(5)
+  })
+
+  /*
+   * The bug this exists for: write a note on the laptop, review the same word
+   * twice on the phone, sync — and the note is gone, because the copy with more
+   * reviews used to win outright.
+   */
+  it('never lets review history overwrite a newer edit', () => {
+    const edited = entry({
+      notes: '这里指数据库迁移，不是人口迁徙',
+      updatedAt: T + 5000,
+      review: { ...entry().review, reviewCount: 2 },
+    })
+    const reviewed = entry({
+      notes: '',
+      updatedAt: T,
+      review: { ...entry().review, reviewCount: 9 },
+    })
+
+    for (const merged of [resolveConflict(edited, reviewed), resolveConflict(reviewed, edited)]) {
+      expect(merged.notes).toBe('这里指数据库迁移，不是人口迁徙')
+      // …and the reviews that really happened are still counted.
+      expect(merged.review.reviewCount).toBe(9)
+    }
+  })
+
+  it('follows the most recent review, not the highest level', () => {
+    // Reviewed later and demoted: the schedule must follow that, or a word the
+    // reader has just forgotten comes back marked as mastered.
+    // The demoted copy must have *fewer* reviews than the mastered one, or the
+    // fixture cannot tell "follow the latest review" apart from "follow the
+    // bigger counter" — and a test that both rules pass proves nothing.
+    const mastered = entry({
+      review: { ...entry().review, level: 3, reviewCount: 9, lastReviewedAt: T },
+    })
+    const demoted = entry({
+      review: { ...entry().review, level: 1, reviewCount: 4, lastReviewedAt: T + 9000 },
+    })
+
+    expect(resolveConflict(mastered, demoted).review.level).toBe(1)
+    expect(resolveConflict(demoted, mastered).review.level).toBe(1)
   })
 
   // The bug this exists for: delete a word on the laptop, and the desktop —

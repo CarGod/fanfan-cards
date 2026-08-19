@@ -97,8 +97,57 @@ export function resolveConflict(
   if (localDeleted && !remoteDeleted) return remote
   if (remoteDeleted && !localDeleted) return local
 
-  const remoteReviews = remote.review?.reviewCount ?? 0
-  return remoteReviews > local.review.reviewCount ? remote : local
+  /*
+   * Neither side wins outright, because neither side is wholly right.
+   *
+   * This used to be `remoteReviews > localReviews ? remote : local`, which
+   * silently threw away the newer edit whenever the other device happened to
+   * have reviewed more: write a note on your laptop, review the same word twice
+   * on your phone, sync — and the note is gone, with nothing to say it ever
+   * existed.
+   *
+   * So the two halves are decided separately, each by the thing that actually
+   * knows the truth about it:
+   *
+   *   - the fields the reader edits (notes, meanings, source) come from
+   *     whichever copy was **edited last**;
+   *   - the review state comes from whichever copy was **reviewed last**,
+   *     because the most recent grade is what the schedule must follow. Taking
+   *     the higher level instead would resurrect a "mastered" the reader has
+   *     since demoted.
+   *
+   * `reviewCount` and `lapses` take the maximum: both devices' reviews really
+   * happened, and a counter that goes backwards after a sync reads as data loss
+   * even when nothing was lost.
+   */
+  /*
+   * On a tie there is no information about which edit came later, so fall back
+   * to the copy carrying more learning history — the same tiebreak this rule
+   * used to apply unconditionally. What changed is that it is now only a
+   * tiebreak, and can no longer override a genuinely newer edit.
+   */
+  const localEdited = local.updatedAt ?? 0
+  const remoteEdited = remote.updatedAt ?? 0
+  const newerEdit =
+    remoteEdited === localEdited
+      ? (remote.review?.reviewCount ?? 0) > (local.review?.reviewCount ?? 0)
+        ? remote
+        : local
+      : remoteEdited > localEdited
+        ? remote
+        : local
+  const localReviewedAt = local.review?.lastReviewedAt ?? 0
+  const remoteReviewedAt = remote.review?.lastReviewedAt ?? 0
+  const newerReview = remoteReviewedAt > localReviewedAt ? remote : local
+
+  return {
+    ...newerEdit,
+    review: {
+      ...newerReview.review,
+      reviewCount: Math.max(local.review?.reviewCount ?? 0, remote.review?.reviewCount ?? 0),
+      lapses: Math.max(local.review?.lapses ?? 0, remote.review?.lapses ?? 0),
+    },
+  }
 }
 
 export function snapshotFilename(now: Date = new Date()): string {
