@@ -64,6 +64,10 @@ function isOurs(node: Node): boolean {
 const MAX_CONCURRENT = 3
 /** Consecutive failed batches before the run gives up. */
 const MAX_FAILURES = 3
+/** Quiet period a rescan waits for… */
+const RESCAN_QUIET = 400
+/** …and the longest it will wait for that quiet to arrive. */
+const RESCAN_MAX_WAIT = 2000
 /** Per request. Larger batches mean fewer round trips but a longer tail latency. */
 const BATCH_LIMITS = { maxUnits: 12, maxChars: 3000 }
 
@@ -77,6 +81,8 @@ export interface PageTranslatorOptions {
 export class PageTranslator {
   private mutations: MutationObserver | null = null
   private rescan: ReturnType<typeof setTimeout> | null = null
+  /** When the pending rescan must run at the latest; 0 when none is pending. */
+  private rescanDueAt = 0
   private queue: TranslationUnit[] = []
   private flushing = false
   private state: TranslatorState = 'idle'
@@ -168,12 +174,7 @@ export class PageTranslator {
         return [...record.addedNodes].some((node) => !isOurs(node))
       })
       if (!worthRescanning) return
-      if (this.rescan) clearTimeout(this.rescan)
-      this.rescan = setTimeout(() => {
-        sweepOrphanSlots()
-        this.refreshChangedUnits()
-        this.absorbNewUnits()
-      }, 400)
+      this.scheduleRescan()
     })
     /*
      * `characterData` matters as much as `childList` here.
@@ -189,6 +190,34 @@ export class PageTranslator {
       subtree: true,
       characterData: true,
     })
+
+  }
+
+  /**
+   * Debounce with a ceiling.
+   *
+   * A plain debounce never fires on a feed that never goes quiet: x.com mutates
+   * the DOM continuously — relative timestamps ticking over, images arriving,
+   * rows recycling as you scroll — and every one of those pushed the timer back
+   * another 400ms. Expanding a post produced a mutation like any other, and the
+   * rescan that would have noticed the longer text simply never ran. That is why
+   * a translation could sit truncated under four extra lines of English while
+   * the mechanism meant to fix it was, in principle, working.
+   *
+   * So: settle for 400ms of quiet, but never wait more than RESCAN_MAX_WAIT for
+   * it.
+   */
+  private scheduleRescan(): void {
+    if (this.rescanDueAt === 0) this.rescanDueAt = Date.now() + RESCAN_MAX_WAIT
+    if (this.rescan) clearTimeout(this.rescan)
+    const wait = Math.max(0, Math.min(RESCAN_QUIET, this.rescanDueAt - Date.now()))
+    this.rescan = setTimeout(() => {
+      this.rescan = null
+      this.rescanDueAt = 0
+      sweepOrphanSlots()
+      this.refreshChangedUnits()
+      this.absorbNewUnits()
+    }, wait)
   }
 
   /**
@@ -234,6 +263,7 @@ export class PageTranslator {
     this.mutations = null
     if (this.rescan) clearTimeout(this.rescan)
     this.rescan = null
+    this.rescanDueAt = 0
     this.units = []
     this.queue = []
     this.state = 'idle'
