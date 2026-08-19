@@ -302,13 +302,22 @@ export async function mergeEntries(
  * Same reasoning as `mergeEntries`: the caller must not read the table, decide,
  * and write it back, because everything saved in between disappears.
  */
-export async function keepOnly(keep: Set<string>): Promise<number> {
+export async function keepOnly(keep: Set<string>, decidedAt = Date.now()): Promise<number> {
   let dropped = 0
   await withLock(STORAGE_KEYS.words, async () => {
     const map = ((await storage().get<WordMap>(STORAGE_KEYS.words)) ?? {}) as WordMap
     const next: WordMap = {}
     for (const entry of Object.values(map)) {
-      if (keep.has(entry.normalized)) next[entry.id] = entry
+      /*
+       * A word saved *after* the decision was made was never considered by it.
+       *
+       * `keep` is assembled from several seconds of network reads, and anything
+       * collected in that window would otherwise be deleted by a verdict that
+       * predates it — silently, with no tombstone, right after the reader
+       * watched it appear in the card. Newer than the decision means "not this
+       * operation's business".
+       */
+      if (keep.has(entry.normalized) || entry.createdAt > decidedAt) next[entry.id] = entry
       else dropped++
     }
     if (dropped > 0) await storage().set(STORAGE_KEYS.words, next)

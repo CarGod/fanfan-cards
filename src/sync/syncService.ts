@@ -6,9 +6,10 @@ import {
   purgeTombstones,
 } from '@/storage/repositories/vocabularyRepo.ts'
 import { readSyncState, writeSyncState } from '@/storage/repositories/syncStateRepo.ts'
+import { mergeActivity, mergeReviewLog } from '@/storage/repositories/activityRepo.ts'
 import { SyncError, type SyncState } from '@/types/sync.ts'
 import type { Settings } from '@/types/settings.ts'
-import type { VocabularyEntry } from '@/types/vocabulary.ts'
+import type { DailyActivity, ReviewLogEntry, VocabularyEntry } from '@/types/vocabulary.ts'
 import { GitHubClient, gitBlobSha, type CommitFile, type GitHubRepo } from './githubClient.ts'
 import { buildCommitMessage, renderReadme, renderShardMarkdown } from './markdown.ts'
 import {
@@ -235,6 +236,9 @@ async function performSync(
     mode === 'forcePush' ? 0 : await pullRemote(client, { owner, repoName, remote, signal })
 
   if (mode === 'forcePull') {
+    // Stamped before the network reads below, so words collected while they run
+    // are not judged by a verdict that predates them.
+    const decidedAt = Date.now()
     /*
      * "远端覆盖本地": adopt the repository's contents and drop whatever this
      * device held that the repository does not.
@@ -288,7 +292,7 @@ async function performSync(
       )
     }
 
-    const dropped = await dropLocalOnly(remoteWords)
+    const dropped = await dropLocalOnly(remoteWords, decidedAt)
     return {
       pushed: 0,
       pulled: pulled + dropped,
@@ -356,6 +360,16 @@ async function pullRemote(
     signal?: AbortSignal | undefined
   },
 ): Promise<number> {
+  /*
+   * The learning record lives in the repository too.
+   *
+   * `meta/reviews.json` and `meta/activity.json` were written on every sync and
+   * read on none, so the second device — whose local log starts empty — replaced
+   * months of history with its own on its first push. They are pulled and merged
+   * here for the same reason the word shards are.
+   */
+  await mergeHistory(client, args)
+
   const paths = [...args.remote.keys()].filter(
     (path) => isShardDataPath(path) || path === LAYOUT.legacySnapshot,
   )
@@ -385,6 +399,38 @@ async function pullRemote(
     pulled += merged.added + merged.merged
   }
   return pulled
+}
+
+/** Pulls the two `meta/` files and merges them into the local history. */
+async function mergeHistory(
+  client: GitHubClient,
+  args: {
+    owner: string
+    repoName: string
+    remote: Map<string, string>
+    signal?: AbortSignal | undefined
+  },
+): Promise<void> {
+  const load = async <T>(path: string): Promise<T[]> => {
+    const sha = args.remote.get(path)
+    if (!sha) return []
+    const text = await client.readBlob(args.owner, args.repoName, sha, args.signal)
+    if (!text.trim()) return []
+    try {
+      const parsed: unknown = JSON.parse(text)
+      // Activity is stored locally as a map by date, but committed as an array;
+      // accept either so an older repository still merges.
+      if (Array.isArray(parsed)) return parsed as T[]
+      return Object.values(parsed as Record<string, T>)
+    } catch {
+      // History is a nice-to-have next to the words themselves — a corrupt
+      // meta file must not stop the words from syncing.
+      return []
+    }
+  }
+
+  await mergeReviewLog(await load<ReviewLogEntry>(LAYOUT.reviews))
+  await mergeActivity(await load<DailyActivity>(LAYOUT.activity))
 }
 
 /** Every file the repository should contain, keyed by path. */
@@ -427,11 +473,11 @@ export function buildRepoFiles(
  * dated: the user has just said this device's divergence is the wrong one, so
  * keeping a tombstone would push that deletion back out to the other device.
  */
-async function dropLocalOnly(remoteWords: Set<string>): Promise<number> {
+async function dropLocalOnly(remoteWords: Set<string>, decidedAt: number): Promise<number> {
   // `keepOnly` reads and writes under one lock. Reading here and calling
   // `replaceAll` afterwards — which is what this did — deletes anything saved
   // in between, and this runs right after several seconds of network reads.
-  return keepOnly(remoteWords)
+  return keepOnly(remoteWords, decidedAt)
 }
 
 /** Live words, for anything user-facing. */

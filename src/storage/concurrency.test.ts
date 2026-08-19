@@ -74,3 +74,29 @@ describe('saving during a merge', () => {
     expect((await listAllEntries()).filter((entry) => entry.word === 'alpha')).toHaveLength(1)
   })
 })
+
+describe('forcePull 的时间窗口', () => {
+  it('保留裁剪决定作出之后才收藏的词', async () => {
+    await saveEntry(input('alpha'))
+    const decidedAt = Date.now()
+
+    // 网络读取期间收藏的新词：它从未被这次裁剪考虑过。
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    await saveEntry(input('during'))
+
+    await keepOnly(new Set(['alpha']), decidedAt)
+
+    const words = (await listAllEntries()).map((entry) => entry.word).sort()
+    expect(words).toEqual(['alpha', 'during'])
+  })
+
+  it('仍然裁掉决定作出之前就存在的本地独有词', async () => {
+    await saveEntry(input('alpha'))
+    await saveEntry(input('stray'))
+    await new Promise((resolve) => setTimeout(resolve, 5))
+
+    await keepOnly(new Set(['alpha']), Date.now())
+
+    expect((await listAllEntries()).map((entry) => entry.word)).toEqual(['alpha'])
+  })
+})
