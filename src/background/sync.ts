@@ -1,4 +1,4 @@
-import { runSync } from '@/sync/syncService.ts'
+import { runSync, type SyncMode, type SyncResult } from '@/sync/syncService.ts'
 import { getSettings, watchSettings } from '@/storage/repositories/settingsRepo.ts'
 import { STORAGE_KEYS } from '@/shared/constants.ts'
 
@@ -20,15 +20,43 @@ const ALARM_SOON = 'ara:sync-soon'
 const DEBOUNCE_MINUTES = 0.5
 
 /**
- * True while a sync is running.
+ * True while a sync is running **in this worker**.
  *
- * A sync that pulls remote words writes to `ara:words`, which would trip the
- * change listener and schedule another sync. That loop terminates on its own
- * (the second pass finds nothing to commit), but skipping it saves a pointless
- * round trip. In-memory is fine: losing the flag to a worker restart costs one
- * redundant sync, never correctness.
+ * Two jobs. First, a sync that pulls remote words writes to `ara:words`, which
+ * would trip the change listener and schedule another sync; skipping that saves
+ * a pointless round trip.
+ *
+ * Second, and the reason this file now owns every sync: a module-level flag is
+ * per JavaScript context. The options page used to call `runSync()` directly, in
+ * *its* context, where this variable does not exist — so the page and the worker
+ * could sync at the same time, read the same HEAD, and the loser came back with
+ * 「远端已前进」 about a commit this very device had just pushed. Every caller
+ * now goes through `requestSync`, so there is one flag and one owner.
+ *
+ * In-memory is fine: losing the flag to a worker restart costs one redundant
+ * sync, never correctness.
  */
 let syncing = false
+/** Shared with in-flight callers so a second request joins rather than queues. */
+let inFlight: Promise<SyncResult> | null = null
+
+/**
+ * The one entry point for running a sync.
+ *
+ * A second request while one is running gets the *same* promise rather than a
+ * second round trip — pressing 「立即同步」 twice should mean "sync", not "sync
+ * twice".
+ */
+export function requestSync(mode: SyncMode = 'merge'): Promise<SyncResult> {
+  if (inFlight) return inFlight
+  syncing = true
+  inFlight = runSync(mode)
+    .finally(() => {
+      syncing = false
+      inFlight = null
+    })
+  return inFlight
+}
 
 export function registerSyncScheduler(): void {
   chrome.alarms.onAlarm.addListener((alarm) => {
@@ -51,15 +79,12 @@ export function registerSyncScheduler(): void {
 
 async function safeSync(): Promise<void> {
   if (syncing) return
-  syncing = true
   try {
-    await runSync()
+    await requestSync()
   } catch (error) {
     // The failure is already recorded in sync state for the options page; an
     // unhandled rejection here would just noise up the worker console.
     console.warn('[fanfan] scheduled sync failed:', error)
-  } finally {
-    syncing = false
   }
 }
 

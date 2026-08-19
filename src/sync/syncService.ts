@@ -1,6 +1,10 @@
 import { buildSnapshot, importSnapshot, type KnowledgeSnapshot } from '@/services/exportService.ts'
 import { getSettings, saveSettings } from '@/storage/repositories/settingsRepo.ts'
-import { purgeTombstones } from '@/storage/repositories/vocabularyRepo.ts'
+import {
+  listAllEntries,
+  purgeTombstones,
+  replaceAll,
+} from '@/storage/repositories/vocabularyRepo.ts'
 import { readSyncState, writeSyncState } from '@/storage/repositories/syncStateRepo.ts'
 import { SyncError, type SyncState } from '@/types/sync.ts'
 import type { Settings } from '@/types/settings.ts'
@@ -124,7 +128,24 @@ export interface SyncResult {
   changed: boolean
 }
 
-export async function runSync(signal?: AbortSignal): Promise<SyncResult> {
+/**
+ * How to reconcile the two sides.
+ *
+ * `merge` is the only non-destructive one and the only one that ever runs on
+ * its own: it pulls, merges additively, and pushes. The other two exist because
+ * two devices can genuinely diverge in a way no merge rule resolves — and when
+ * that happens the reader is the only one who knows which side is the good one.
+ *
+ * They are deliberately not automatic. A product that silently picks a winner
+ * in a conflict is a product that eventually deletes months of someone's words
+ * without ever asking.
+ */
+export type SyncMode = 'merge' | 'forcePush' | 'forcePull'
+
+export async function runSync(
+  mode: SyncMode = 'merge',
+  signal?: AbortSignal,
+): Promise<SyncResult> {
   const settings = await getSettings()
   const config = settings.sync
 
@@ -134,12 +155,24 @@ export async function runSync(signal?: AbortSignal): Promise<SyncResult> {
   try {
     let result: SyncResult
     try {
-      result = await performSync(config, signal)
+      result = await performSync(config, mode, signal)
     } catch (error) {
-      // Losing the race is normal with two devices; the fix is simply to redo
-      // the whole pull-merge-push against the new tip, not to bother the user.
+      /*
+       * Losing the race is normal, and redoing the whole pull-merge-push against
+       * the new tip is the fix — not bothering the user.
+       *
+       * Two retries rather than one: with a second device or a slow connection,
+       * one retry can land inside the same window that caused the first failure.
+       * Three attempts total is where the odds stop being interesting; past that
+       * something is genuinely wrong and the user should be told.
+       */
       if (!(error instanceof SyncError) || error.code !== 'stale_head') throw error
-      result = await performSync(config, signal)
+      try {
+        result = await performSync(config, mode, signal)
+      } catch (retryError) {
+        if (!(retryError instanceof SyncError) || retryError.code !== 'stale_head') throw retryError
+        result = await performSync(config, mode, signal)
+      }
     }
     await writeSyncState({
       lastAttemptAt: now,
@@ -171,7 +204,11 @@ export async function runSync(signal?: AbortSignal): Promise<SyncResult> {
   }
 }
 
-async function performSync(config: Settings['sync'], signal?: AbortSignal): Promise<SyncResult> {
+async function performSync(
+  config: Settings['sync'],
+  mode: SyncMode,
+  signal?: AbortSignal,
+): Promise<SyncResult> {
   const client = new GitHubClient(config.token)
   const owner = config.owner || (await client.getUser(signal)).login
   const repoName = sanitizeRepoName(config.repo)
@@ -190,7 +227,47 @@ async function performSync(config: Settings['sync'], signal?: AbortSignal): Prom
     (await client.listTree(owner, repoName, head, signal)).map((entry) => [entry.path, entry.sha]),
   )
 
-  const pulled = await pullRemote(client, { owner, repoName, remote, signal })
+  /*
+   * `forcePush` skips the pull entirely — that is what "本地覆盖远端" means, and
+   * merging first would defeat it.
+   */
+  const pulled =
+    mode === 'forcePush' ? 0 : await pullRemote(client, { owner, repoName, remote, signal })
+
+  if (mode === 'forcePull') {
+    /*
+     * "远端覆盖本地": adopt the repository's contents and drop whatever this
+     * device held that the repository does not.
+     *
+     * `pullRemote` above already merged the remote in, so everything the
+     * repository knows about is present locally by now; what is left is to
+     * remove the local-only entries. Doing it in this order rather than wiping
+     * first means a failure half way through leaves a superset, never a hole.
+     */
+    const remoteWords = new Set<string>()
+    for (const path of remote.keys()) {
+      if (!isShardDataPath(path)) continue
+      const sha = remote.get(path)
+      if (!sha) continue
+      const text = await client.readBlob(owner, repoName, sha, signal)
+      try {
+        for (const entry of JSON.parse(text) as VocabularyEntry[]) {
+          if (entry?.normalized) remoteWords.add(entry.normalized)
+        }
+      } catch {
+        throw new SyncError('conflict', `远端 ${path} 不是合法 JSON，已停止以免误删本地词卡`)
+      }
+    }
+    const dropped = await dropLocalOnly(remoteWords)
+    return {
+      pushed: 0,
+      pulled: pulled + dropped,
+      filesChanged: 0,
+      repoFullName,
+      repoUrl: repo.html_url,
+      changed: dropped > 0 || pulled > 0,
+    }
+  }
 
   const snapshot = stampWithDataTime(await buildSnapshot())
   const files = buildRepoFiles(snapshot, repoFullName)
@@ -309,6 +386,21 @@ export function buildRepoFiles(
   files.set(LAYOUT.readme, renderReadme(snapshot, repoFullName, [...shards.keys()]))
 
   return files
+}
+
+/**
+ * Drops local entries the repository has never heard of.
+ *
+ * Only used by 「远端覆盖本地」. Tombstones are removed outright rather than
+ * dated: the user has just said this device's divergence is the wrong one, so
+ * keeping a tombstone would push that deletion back out to the other device.
+ */
+async function dropLocalOnly(remoteWords: Set<string>): Promise<number> {
+  const local = await listAllEntries()
+  const strays = local.filter((entry) => !remoteWords.has(entry.normalized))
+  if (strays.length === 0) return 0
+  await replaceAll(local.filter((entry) => remoteWords.has(entry.normalized)))
+  return strays.length
 }
 
 /** Live words, for anything user-facing. */

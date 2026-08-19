@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryAdapter, setStorageAdapter } from '@/storage/area.ts'
 import { saveSettings } from '@/storage/repositories/settingsRepo.ts'
-import { listEntries, removeEntry, saveEntry } from '@/storage/repositories/vocabularyRepo.ts'
+import {
+  listAllEntries,
+  listEntries,
+  removeEntry,
+  saveEntry,
+} from '@/storage/repositories/vocabularyRepo.ts'
 import { readSyncState } from '@/storage/repositories/syncStateRepo.ts'
 import { buildSnapshot } from '@/services/exportService.ts'
 import { SyncError } from '@/types/sync.ts'
@@ -539,6 +544,66 @@ describe('runSync', () => {
     const state = await readSyncState()
     expect(state.outcome).toBe('failed')
     expect(state.errorCode).toBe('conflict')
+  })
+
+  /*
+   * The two escape hatches from a real conflict. Both delete something, which is
+   * exactly why they need tests: the failure mode is not "it did not work", it
+   * is "it deleted the wrong side and nobody noticed until the words were gone".
+   */
+  it('forcePull drops local-only words and keeps everything the repo knows', async () => {
+    const fake = fakeGitHub()
+    await setup(fake)
+    await seedWord('apple')
+    await connectGitHub()
+    await runSync()
+
+    // This device then adds a word the repository has never seen.
+    await seedWord('zebra')
+
+    await runSync('forcePull')
+
+    const left = (await listAllEntries()).filter((entry) => !entry.deletedAt)
+    expect(left.map((entry) => entry.normalized).sort()).toEqual(['apple'])
+    // Dropped, not tombstoned: a tombstone would push this deletion back out to
+    // the other device, which is the opposite of "the remote wins".
+    expect(await listAllEntries()).toHaveLength(1)
+  })
+
+  it('forcePull leaves the repository alone', async () => {
+    const fake = fakeGitHub()
+    await setup(fake)
+    await seedWord('apple')
+    await connectGitHub()
+    await runSync()
+    const commitsBefore = fake.state.commits.length
+
+    await seedWord('zebra')
+    await runSync('forcePull')
+
+    expect(fake.state.commits).toHaveLength(commitsBefore)
+  })
+
+  it('forcePush commits local content without merging the remote in first', async () => {
+    const fake = fakeGitHub()
+    await setup(fake)
+    await seedWord('apple')
+    await connectGitHub()
+    await runSync()
+
+    // Another device pushes a word this one has never seen.
+    fake.state.files.set(
+      'vocabulary/q.json',
+      `${JSON.stringify([remoteEntry('quokka')], null, 2)}\n`,
+    )
+
+    await seedWord('zebra')
+    const result = await runSync('forcePush')
+
+    expect(result.pulled).toBe(0)
+    // The remote word never reached this device — that is what "local wins" means.
+    const words = (await listAllEntries()).map((entry) => entry.normalized).sort()
+    expect(words).toEqual(['apple', 'zebra'])
   })
 
   it('fails clearly when no token is configured', async () => {

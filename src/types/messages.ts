@@ -68,6 +68,29 @@ export interface MessageMap {
   'page/state': { req: { translating: boolean }; res: { ok: true } }
   /** Asked once on load: should this page translate itself without being told? */
   'page/shouldTranslate': { req: Record<string, never>; res: { translating: boolean } }
+  /**
+   * Run a sync, in the background.
+   *
+   * The options page used to call `runSync()` itself. That put a second copy of
+   * the whole pull-merge-push in a different JavaScript context from the worker's
+   * — and the mutex guarding it is a module-level variable, so the two contexts
+   * could not see each other's. Two syncs then read the same HEAD, the first
+   * won, and the second came back with 「远端已前进」 about a commit this very
+   * device had just made. One owner, one lock.
+   *
+   * `mode` lets the user break a genuine deadlock by choosing a side.
+   */
+  'sync/run': {
+    req: { mode?: 'merge' | 'forcePush' | 'forcePull' }
+    res: {
+      pushed: number
+      pulled: number
+      filesChanged: number
+      repoFullName: string
+      repoUrl: string
+      changed: boolean
+    }
+  }
   /** Whole-page translation; batched because round trips dominate the cost. */
   'page/translate': {
     req: { texts: string[]; hint?: string }

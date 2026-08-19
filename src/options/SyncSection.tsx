@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Field, Toggle } from '@/components/index.tsx'
 import { useSettings } from '@/components/hooks.ts'
 import { readSyncState, watchSyncState } from '@/storage/repositories/syncStateRepo.ts'
-import { connectGitHub, runSync, sanitizeRepoName } from '@/sync/syncService.ts'
+import { connectGitHub, sanitizeRepoName, type SyncMode } from '@/sync/syncService.ts'
+import { sendMessage } from '@/services/messaging.ts'
 import { EMPTY_SYNC_STATE, SYNC_ERROR_MESSAGES, SyncError, type SyncState } from '@/types/sync.ts'
 import { formatRelative, truncate } from '@/shared/utils.ts'
 
@@ -64,7 +65,7 @@ export function SyncSection({ onToast }: { onToast: (message: string) => void })
       )
       // A freshly created repo is empty; push straight away so the user sees
       // their words on GitHub instead of an empty repo.
-      await runSync()
+      await sendMessage('sync/run', {})
       onToast('首次同步完成')
     } catch (thrown) {
       setError(describe(thrown))
@@ -73,15 +74,45 @@ export function SyncSection({ onToast }: { onToast: (message: string) => void })
     }
   }
 
-  const syncNow = async () => {
+  /*
+   * Ask the worker; never sync from this page.
+   *
+   * Running it here put a second pull-merge-push in a different JavaScript
+   * context from the worker's, where the mutex guarding it does not exist — so
+   * clicking this while the background alarm was running made the two race, and
+   * the loser reported 「远端已前进」 about a commit this very device had just
+   * made. The worker is also the context that survives this page being closed.
+   */
+  /*
+   * A second click, deliberately.
+   *
+   * Both overrides delete words. `window.confirm` is not elegant, but it is the
+   * one dialog a user cannot dismiss by accident, and this is the only place in
+   * the product where a mis-click costs data that is not recoverable from the
+   * other side.
+   */
+  const confirmForce = async (mode: SyncMode) => {
+    const message =
+      mode === 'forcePull'
+        ? '用远端覆盖本地：本机上远端没有的词卡会被删除，且不会再同步回去。确定吗？'
+        : '用本地覆盖远端：仓库里这台设备没有的词卡会被覆盖。确定吗？'
+    if (!window.confirm(message)) return
+    await syncNow(mode)
+  }
+
+  const syncNow = async (mode: SyncMode = 'merge') => {
     setBusy('syncing')
     setError('')
     try {
-      const result = await runSync()
+      const result = await sendMessage('sync/run', mode === 'merge' ? {} : { mode })
       onToast(
-        result.changed
-          ? `已同步 ${result.pushed} 个词条${result.pulled ? `，并合并了远端 ${result.pulled} 条` : ''}`
-          : '远端已是最新，无需提交',
+        mode === 'forcePull'
+          ? `已用远端内容覆盖本地，本地现有 ${result.pulled} 条变动`
+          : mode === 'forcePush'
+            ? `已用本地内容覆盖远端，提交了 ${result.filesChanged} 个文件`
+            : result.changed
+              ? `已同步 ${result.pushed} 个词条${result.pulled ? `，并合并了远端 ${result.pulled} 条` : ''}`
+              : '远端已是最新，无需提交',
       )
     } catch (thrown) {
       setError(describe(thrown))
@@ -202,7 +233,49 @@ export function SyncSection({ onToast }: { onToast: (message: string) => void })
           style={{ marginTop: 16, marginBottom: 0 }}
         >
           {state.outcome === 'failed' ? (
-            <>上次同步失败（{formatRelative(state.lastAttemptAt)}）：{truncate(state.error, 160)}</>
+            <>
+              上次同步失败（{formatRelative(state.lastAttemptAt)}）：
+              {truncate(state.error, 160)}
+              {/*
+                A conflict is the one failure the user can actually resolve, and
+                the only one where the product must not choose for them: both
+                ways out delete something. So the buttons appear only for this
+                error code, and each says what it costs.
+              */}
+              {state.errorCode === 'stale_head' || state.errorCode === 'conflict' ? (
+                <div className="stack" style={{ gap: 8, marginTop: 12 }}>
+                  <div>
+                    两台设备各自改过词卡，自动合并没能对上。先试一次重新合并——它不会删任何东西。
+                    仍然失败，再选一边覆盖，<strong>被覆盖的那一边会丢掉对方没有的词卡</strong>。
+                  </div>
+                  <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      disabled={busy !== 'idle'}
+                      onClick={() => void syncNow()}
+                    >
+                      重新合并（安全）
+                    </button>
+                    <button
+                      className="btn btn-sm"
+                      disabled={busy !== 'idle'}
+                      title="丢弃本机上远端没有的词卡，改用仓库里的内容"
+                      onClick={() => void confirmForce('forcePull')}
+                    >
+                      用远端覆盖本地
+                    </button>
+                    <button
+                      className="btn btn-sm"
+                      disabled={busy !== 'idle'}
+                      title="用本机内容整体提交，覆盖仓库里这台设备没有的改动"
+                      onClick={() => void confirmForce('forcePush')}
+                    >
+                      用本地覆盖远端
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </>
           ) : (
             <>
               上次同步 {formatRelative(state.lastSuccessAt)} · {state.repoFullName} ·{' '}

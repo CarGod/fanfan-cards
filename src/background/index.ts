@@ -7,7 +7,7 @@ import { handleExplain } from './handlers/explain.ts'
 import { handleLookupWord, handleRemoveWord, handleSaveWord } from './handlers/vocabulary.ts'
 import { handleTranslatePage } from './handlers/translate.ts'
 import { handlePageState, handleShouldTranslate } from './handlers/pageState.ts'
-import { ensureSyncAlarm, registerSyncScheduler } from './sync.ts'
+import { ensureSyncAlarm, registerSyncScheduler, requestSync } from './sync.ts'
 import { ensureReminderAlarm, registerReminder } from './reminder.ts'
 
 /**
@@ -36,6 +36,7 @@ registerHandlers({
   'settings/get': async () => ({ settings: await getSettings() }),
   'page/translate': handleTranslatePage,
   'page/state': handlePageState,
+  'sync/run': async (payload) => requestSync(payload.mode ?? 'merge'),
   'page/shouldTranslate': handleShouldTranslate,
   'app/open': async (payload) => {
     await openAppPage(payload.route)
