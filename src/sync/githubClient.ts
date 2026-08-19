@@ -201,11 +201,24 @@ export class GitHubClient {
     branch: string
     message: string
     files: CommitFile[]
+    /**
+     * The commit the caller's merge was computed against.
+     *
+     * Reading HEAD again here would compare-and-swap against a different commit
+     * from the one the diff was built on: anything another device pushed in
+     * between would be committed *over* rather than merged, and the ref update
+     * would succeed — so the run would report success while quietly discarding
+     * the other device's words. Passing it in makes the check mean what the
+     * caller thinks it means.
+     */
+    expectedHead?: string
     signal?: AbortSignal | undefined
   }): Promise<boolean> {
     if (args.files.length === 0) return false
 
-    const head = await this.getHeadSha(args.owner, args.repo, args.branch, args.signal)
+    const head =
+      args.expectedHead ??
+      (await this.getHeadSha(args.owner, args.repo, args.branch, args.signal))
 
     const tree = await Promise.all(
       args.files.map(async (file) => {

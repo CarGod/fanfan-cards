@@ -244,6 +244,78 @@ export async function removeMany(ids: string[]): Promise<number> {
   })
 }
 
+/**
+ * Merge a batch of entries in, under one lock.
+ *
+ * The reason this exists rather than "read all, merge, replaceAll": that shape
+ * reads the table *outside* the lock and writes the whole table back inside it,
+ * so anything saved in between is overwritten by a snapshot taken before it
+ * existed. It is not a narrow race — a sync pulls one shard at a time over the
+ * network, so the window is the whole sync, and a word saved during it vanishes
+ * with no tombstone and no error.
+ *
+ * `decide` picks the survivor when both sides know a word; returning the
+ * incoming copy adopts it under the existing id, so a word does not change
+ * identity just because it came back from the repository.
+ */
+export async function mergeEntries(
+  incoming: VocabularyEntry[],
+  decide: (existing: VocabularyEntry, incoming: VocabularyEntry) => VocabularyEntry,
+): Promise<{ added: number; merged: number; skipped: number }> {
+  const result = { added: 0, merged: 0, skipped: 0 }
+
+  await withLock(STORAGE_KEYS.words, async () => {
+    // Read inside the lock: this is the entire point of the function.
+    const map = ((await storage().get<WordMap>(STORAGE_KEYS.words)) ?? {}) as WordMap
+    const byNormalized = new Map(Object.values(map).map((entry) => [entry.normalized, entry]))
+
+    for (const entry of incoming) {
+      if (!entry || typeof entry.normalized !== 'string' || !entry.id) {
+        result.skipped++
+        continue
+      }
+      const existing = byNormalized.get(entry.normalized)
+      if (!existing) {
+        byNormalized.set(entry.normalized, entry)
+        if (!entry.deletedAt) result.added++
+        continue
+      }
+      const winner = decide(existing, entry)
+      byNormalized.set(
+        entry.normalized,
+        winner === entry ? { ...entry, id: existing.id } : existing,
+      )
+      result.merged++
+    }
+
+    const next: WordMap = {}
+    for (const entry of byNormalized.values()) next[entry.id] = entry
+    await storage().set(STORAGE_KEYS.words, next)
+  })
+
+  return result
+}
+
+/**
+ * Keeps only the entries whose normalized form is in `keep`, under one lock.
+ *
+ * Same reasoning as `mergeEntries`: the caller must not read the table, decide,
+ * and write it back, because everything saved in between disappears.
+ */
+export async function keepOnly(keep: Set<string>): Promise<number> {
+  let dropped = 0
+  await withLock(STORAGE_KEYS.words, async () => {
+    const map = ((await storage().get<WordMap>(STORAGE_KEYS.words)) ?? {}) as WordMap
+    const next: WordMap = {}
+    for (const entry of Object.values(map)) {
+      if (keep.has(entry.normalized)) next[entry.id] = entry
+      else dropped++
+    }
+    if (dropped > 0) await storage().set(STORAGE_KEYS.words, next)
+  })
+  return dropped
+}
+
 /** Bulk replace — used by import and (later) sync reconciliation. */
 export async function replaceAll(entries: VocabularyEntry[]): Promise<void> {
   await withLock(STORAGE_KEYS.words, async () => {

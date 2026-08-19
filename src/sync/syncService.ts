@@ -1,9 +1,9 @@
 import { buildSnapshot, importSnapshot, type KnowledgeSnapshot } from '@/services/exportService.ts'
 import { getSettings, saveSettings } from '@/storage/repositories/settingsRepo.ts'
 import {
+  keepOnly,
   listAllEntries,
   purgeTombstones,
-  replaceAll,
 } from '@/storage/repositories/vocabularyRepo.ts'
 import { readSyncState, writeSyncState } from '@/storage/repositories/syncStateRepo.ts'
 import { SyncError, type SyncState } from '@/types/sync.ts'
@@ -244,20 +244,50 @@ async function performSync(
      * remove the local-only entries. Doing it in this order rather than wiping
      * first means a failure half way through leaves a superset, never a hole.
      */
+    /*
+     * The list of "words the repository has" must be read from exactly the same
+     * files `pullRemote` read, or the difference between the two lists gets
+     * deleted as if it were local-only.
+     *
+     * It was not: this loop skipped `vocabulary.json`, the pre-shard layout that
+     * `pullRemote` does read. On a repository still in that layout the set came
+     * out empty, and every word on the device — including the ones just merged
+     * in from the repository — was deleted. One predicate out of step with
+     * another, and the feature becomes "erase this device".
+     */
     const remoteWords = new Set<string>()
     for (const path of remote.keys()) {
-      if (!isShardDataPath(path)) continue
+      if (!isShardDataPath(path) && path !== LAYOUT.legacySnapshot) continue
       const sha = remote.get(path)
       if (!sha) continue
       const text = await client.readBlob(owner, repoName, sha, signal)
       try {
-        for (const entry of JSON.parse(text) as VocabularyEntry[]) {
+        // A shard is a bare array; the legacy file is a whole snapshot.
+        const parsed = JSON.parse(text) as unknown
+        const entries = (Array.isArray(parsed)
+          ? parsed
+          : ((parsed as { entries?: unknown }).entries ?? [])) as VocabularyEntry[]
+        for (const entry of entries) {
           if (entry?.normalized) remoteWords.add(entry.normalized)
         }
       } catch {
         throw new SyncError('conflict', `远端 ${path} 不是合法 JSON，已停止以免误删本地词卡`)
       }
     }
+
+    /*
+     * A repository that appears to contain nothing is far more likely to be a
+     * parse or layout problem than a user who genuinely wants this device
+     * emptied. Refusing costs one confusing error message; not refusing costs
+     * the whole library, with no tombstones and nothing to restore from.
+     */
+    if (remoteWords.size === 0 && (await listAllEntries()).some((entry) => !entry.deletedAt)) {
+      throw new SyncError(
+        'conflict',
+        '远端仓库里没有读到任何词卡，已中止「用远端覆盖本地」以免清空本机。请先确认仓库内容，或改用「用本地覆盖远端」。',
+      )
+    }
+
     const dropped = await dropLocalOnly(remoteWords)
     return {
       pushed: 0,
@@ -296,6 +326,8 @@ async function performSync(
       branch,
       message: buildCommitMessage(snapshot, countNewWords(snapshot, remote)),
       files: changes,
+      // The same commit the merge above was computed against.
+      expectedHead: head,
       ...(signal ? { signal } : {}),
     }))
 
@@ -396,11 +428,10 @@ export function buildRepoFiles(
  * keeping a tombstone would push that deletion back out to the other device.
  */
 async function dropLocalOnly(remoteWords: Set<string>): Promise<number> {
-  const local = await listAllEntries()
-  const strays = local.filter((entry) => !remoteWords.has(entry.normalized))
-  if (strays.length === 0) return 0
-  await replaceAll(local.filter((entry) => remoteWords.has(entry.normalized)))
-  return strays.length
+  // `keepOnly` reads and writes under one lock. Reading here and calling
+  // `replaceAll` afterwards — which is what this did — deletes anything saved
+  // in between, and this runs right after several seconds of network reads.
+  return keepOnly(remoteWords)
 }
 
 /** Live words, for anything user-facing. */

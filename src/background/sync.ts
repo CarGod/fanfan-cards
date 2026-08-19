@@ -37,8 +37,15 @@ const DEBOUNCE_MINUTES = 0.5
  * sync, never correctness.
  */
 let syncing = false
-/** Shared with in-flight callers so a second request joins rather than queues. */
-let inFlight: Promise<SyncResult> | null = null
+/**
+ * Shared with in-flight callers so a second request joins rather than queues.
+ *
+ * Keyed by mode, because joining is only correct when the two callers want the
+ * same thing. Handing a 「用远端覆盖本地」 request the promise of a plain merge
+ * that happened to be running made the UI report a destructive operation as
+ * done when it had never run — the worst shape a bug can take in this feature.
+ */
+let inFlight: { mode: SyncMode; promise: Promise<SyncResult> } | null = null
 
 /**
  * The one entry point for running a sync.
@@ -47,15 +54,20 @@ let inFlight: Promise<SyncResult> | null = null
  * second round trip — pressing 「立即同步」 twice should mean "sync", not "sync
  * twice".
  */
-export function requestSync(mode: SyncMode = 'merge'): Promise<SyncResult> {
-  if (inFlight) return inFlight
+export async function requestSync(mode: SyncMode = 'merge'): Promise<SyncResult> {
+  // Same intent: join. Different intent: wait for the current one, then do it.
+  if (inFlight) {
+    if (inFlight.mode === mode) return inFlight.promise
+    await inFlight.promise.catch(() => undefined)
+    return requestSync(mode)
+  }
   syncing = true
-  inFlight = runSync(mode)
-    .finally(() => {
-      syncing = false
-      inFlight = null
-    })
-  return inFlight
+  const promise = runSync(mode).finally(() => {
+    syncing = false
+    inFlight = null
+  })
+  inFlight = { mode, promise }
+  return promise
 }
 
 export function registerSyncScheduler(): void {

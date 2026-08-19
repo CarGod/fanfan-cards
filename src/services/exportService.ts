@@ -1,6 +1,6 @@
 import { SCHEMA_VERSION } from '@/shared/constants.ts'
 import { readActivity } from '@/storage/repositories/activityRepo.ts'
-import { listAllEntries, replaceAll } from '@/storage/repositories/vocabularyRepo.ts'
+import { listAllEntries, mergeEntries } from '@/storage/repositories/vocabularyRepo.ts'
 import { readReviewLog } from '@/storage/repositories/activityRepo.ts'
 import type { DailyActivity, ReviewLogEntry, VocabularyEntry } from '@/types/vocabulary.ts'
 
@@ -67,29 +67,18 @@ export async function importSnapshot(raw: unknown): Promise<ImportResult> {
   }
   if (!Array.isArray(snapshot.entries)) throw new Error('文件缺少 entries 字段')
 
-  const current = await listAllEntries()
-  const byNormalized = new Map(current.map((entry) => [entry.normalized, entry]))
-  const result: ImportResult = { added: 0, merged: 0, skipped: 0 }
-
-  for (const incoming of snapshot.entries) {
-    if (!incoming || typeof incoming.normalized !== 'string' || !incoming.id) {
-      result.skipped++
-      continue
-    }
-    const existing = byNormalized.get(incoming.normalized)
-    if (!existing) {
-      byNormalized.set(incoming.normalized, incoming)
-      if (!incoming.deletedAt) result.added++
-      continue
-    }
-
-    const winner = resolveConflict(existing, incoming)
-    byNormalized.set(incoming.normalized, winner === incoming ? { ...incoming, id: existing.id } : existing)
-    result.merged++
-  }
-
-  await replaceAll([...byNormalized.values()])
-  return result
+  /*
+   * Read, merge and write happen inside one lock.
+   *
+   * This function used to read the whole table here, merge in memory, and call
+   * `replaceAll` at the end. `replaceAll` takes the lock — but the read did not,
+   * so a word saved while a sync was pulling its shards got overwritten by a
+   * snapshot taken before that word existed. No error, no tombstone, and the
+   * repository never learned about it either. Confirmed with a repro before
+   * this change: save 'alpha', then run an import and a save of 'bravo' at the
+   * same time, and 'bravo' is simply gone.
+   */
+  return mergeEntries(snapshot.entries as VocabularyEntry[], resolveConflict)
 }
 
 /** Exported for testing: the rule that decides which copy of a word survives. */
