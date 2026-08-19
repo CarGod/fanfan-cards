@@ -5,9 +5,28 @@ import {
   TRANSLATION_CLASS,
   batchUnits,
   collectUnits,
+  directText,
   type TranslationUnit,
 } from './walker.ts'
-import { clearSlot, createSlot, fillSlot, sweepOrphanSlots } from './slot.ts'
+import { clearAllSlots, clearSlot, createSlot, fillSlot, sweepOrphanSlots } from './slot.ts'
+
+/** Whitespace-insensitive, so a reflow is not mistaken for new content. */
+const normalise = (text: string) => text.replace(/\s+/g, ' ').trim()
+
+/**
+ * True for our own injected nodes, and for anything inside one.
+ *
+ * `1` rather than `Node.ELEMENT_NODE`: this runs inside someone else's page,
+ * where `Node` is a global the page is free to overwrite — and a content script
+ * that trusts page globals breaks on exactly the sites that do unusual things.
+ * The numeric values are fixed by the DOM spec and cannot be shadowed.
+ */
+const ELEMENT_NODE = 1
+
+function isOurs(node: Node): boolean {
+  const element = node.nodeType === ELEMENT_NODE ? (node as Element) : node.parentElement
+  return Boolean(element?.closest?.(`.${TRANSLATION_CLASS}`))
+}
 
 /**
  * Bilingual page translation.
@@ -132,23 +151,70 @@ export class PageTranslator {
    */
   private watchForNewContent(): void {
     this.mutations = new MutationObserver((records) => {
-      const addedElements = records.some((record) =>
-        [...record.addedNodes].some(
-          (node) =>
-            node.nodeType === Node.ELEMENT_NODE &&
-            // Our own insertions must not trigger a rescan, or the observer
-            // feeds itself forever.
-            !(node as Element).classList?.contains(TRANSLATION_CLASS),
-        ),
-      )
-      if (!addedElements) return
+      const worthRescanning = records.some((record) => {
+        // Our own insertions and edits must never trigger a rescan, or the
+        // observer feeds itself forever.
+        if (isOurs(record.target)) return false
+        if (record.type === 'characterData') return true
+        /*
+         * Text nodes count, not just elements.
+         *
+         * Expanding a post usually replaces its text rather than adding markup,
+         * and assigning `textContent` produces a childList record whose added
+         * node is a *text* node. An element-only check sees nothing at all —
+         * which is precisely how a translation ends up frozen at the truncated
+         * version while the English underneath it grew four lines longer.
+         */
+        return [...record.addedNodes].some((node) => !isOurs(node))
+      })
+      if (!worthRescanning) return
       if (this.rescan) clearTimeout(this.rescan)
       this.rescan = setTimeout(() => {
         sweepOrphanSlots()
+        this.refreshChangedUnits()
         this.absorbNewUnits()
       }, 400)
     })
-    this.mutations.observe(document.body, { childList: true, subtree: true })
+    /*
+     * `characterData` matters as much as `childList` here.
+     *
+     * A post behind 「显示更多」 is translated while it is still truncated, and
+     * expanding it often only replaces the text inside the same element — no
+     * nodes added, nothing for a childList-only observer to see. The result is a
+     * translation that stops mid-sentence under a paragraph that goes on for
+     * another four lines, which reads worse than no translation at all.
+     */
+    this.mutations.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    })
+  }
+
+  /**
+   * Re-translate anything whose source text changed under us.
+   *
+   * The unit list remembers the exact text each translation was made from, so
+   * "the paragraph grew" is a string comparison rather than a guess. Whitespace
+   * is normalised first: sites re-flow text constantly, and re-translating a
+   * paragraph because two spaces became one would be a request per reflow.
+   */
+  private refreshChangedUnits(): void {
+    if (this.state !== 'running') return
+    for (const unit of this.units) {
+      if (!unit.element.isConnected) continue
+      // A unit still waiting for its answer will be filled with the right text;
+      // touching it now would strand the in-flight request.
+      if (unit.element.getAttribute(TRANSLATED_MARK) === 'pending') continue
+
+      const current = directText(unit.element)
+      if (normalise(current) === normalise(unit.text)) continue
+
+      unit.text = current
+      clearSlot(unit.element)
+      if (current.length >= 2) this.enqueue(unit)
+    }
+    if (this.queue.length > 0) void this.flush()
   }
 
   private absorbNewUnits(): void {
@@ -172,10 +238,7 @@ export class PageTranslator {
     this.queue = []
     this.state = 'idle'
 
-    for (const node of document.querySelectorAll(`.${TRANSLATION_CLASS}`)) node.remove()
-    for (const node of document.querySelectorAll(`[${TRANSLATED_MARK}]`)) {
-      node.removeAttribute(TRANSLATED_MARK)
-    }
+    clearAllSlots()
     this.emit()
   }
 

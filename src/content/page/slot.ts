@@ -65,6 +65,22 @@ export function clearSlot(element: Element): void {
 }
 
 /**
+ * Puts the page back exactly as it was found.
+ *
+ * Turning translation off has to leave no trace: not just our inserted nodes,
+ * but every attribute we wrote onto the site's own elements. `data-ara-id` was
+ * being left behind — invisible, but it is still our litter on someone else's
+ * DOM, and it would make a later run think it had already numbered that element.
+ */
+export function clearAllSlots(): void {
+  for (const node of document.querySelectorAll(`.${TRANSLATION_CLASS}`)) node.remove()
+  for (const element of document.querySelectorAll(`[${TRANSLATED_MARK}], [${SOURCE_ID}]`)) {
+    element.removeAttribute(TRANSLATED_MARK)
+    element.removeAttribute(SOURCE_ID)
+  }
+}
+
+/**
  * Removes placeholders whose source element is gone.
  *
  * A feed that recycles nodes can drop a paragraph while its request is still in

@@ -188,7 +188,7 @@ function isSkippable(element: Element, context: SkipContext): boolean {
  * `aria-hidden` icon inside a paragraph would otherwise be spliced into the
  * source text and translated as if the reader could see it.
  */
-function directText(element: Element): string {
+export function directText(element: Element): string {
   let text = ''
   for (const node of element.childNodes) {
     if (node.nodeType === Node.TEXT_NODE) {
