@@ -18,6 +18,7 @@ import { CardError, CardSkeleton, WordCard } from '@/content/ui/WordCard.tsx'
 import { App } from '@/app/App.tsx'
 import { Popup } from '@/popup/Popup.tsx'
 import { Options } from '@/options/Options.tsx'
+import { FeedShowcase } from './FeedShowcase.tsx'
 import { STORAGE_KEYS } from '@/shared/constants.ts'
 import { storage } from '@/storage/area.ts'
 import { DAY_MS, dateKey } from '@/shared/utils.ts'
@@ -458,6 +459,7 @@ function Harness() {
     { id: 'popup', label: 'Popup' },
     { id: 'app', label: '学习应用' },
     { id: 'options', label: '设置页' },
+    { id: 'feed', label: '信息流（展开重译）' },
   ]
 
   return (
@@ -495,6 +497,7 @@ function Harness() {
         ) : null}
         {view === 'app' ? <App /> : null}
         {view === 'options' ? <Options /> : null}
+        {view === 'feed' ? <FeedShowcase /> : null}
       </div>
     </div>
   )

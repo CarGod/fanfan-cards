@@ -55,7 +55,27 @@ const stub = {
       addListener: (fn: (message: unknown) => void) => listeners.add(fn),
       removeListener: (fn: (message: unknown) => void) => listeners.delete(fn),
     },
-    async sendMessage(envelope: { type: string }): Promise<Reply<'ping'>> {
+    async sendMessage(envelope: { type: string; payload?: unknown }): Promise<Reply<'ping'>> {
+      /*
+       * Page translation answers fast and echoes the length it was given, so the
+       * preview can show whether a re-translation actually carried the longer
+       * text — which is the whole point of the 「显示更多」 exercise.
+       */
+      if (envelope.type === 'page/translate') {
+        const texts = (envelope.payload as { texts: string[] }).texts
+        await new Promise((resolve) => setTimeout(resolve, 300))
+        return {
+          ok: true,
+          data: {
+            translations: texts.map(
+              (text) => `【译文 ${text.length} 字】${text.slice(0, 60)}…（此处应为中文译文）`,
+            ),
+          },
+        } as unknown as Reply<'ping'>
+      }
+      if (envelope.type === 'page/shouldTranslate') {
+        return { ok: true, data: { translating: false } } as unknown as Reply<'ping'>
+      }
       await new Promise((resolve) => setTimeout(resolve, 600))
       if (envelope.type === 'ai/explain') {
         return {
