@@ -3,6 +3,7 @@ import { Field, SegmentedControl, Toggle } from '@/components/index.tsx'
 import { BrandMark } from '@/components/icons.tsx'
 import { useEntries, useSettings, useToast } from '@/components/hooks.ts'
 import { resolveProvider } from '@/ai/index.ts'
+import { requestOptionalApiAccess } from '@/ai/hostPermission.ts'
 import { AIError, AI_ERROR_MESSAGES } from '@/types/ai.ts'
 import {
   PROVIDER_CATALOGUE,
@@ -134,6 +135,11 @@ export function Options() {
     setQuote(current)
     setTest({ kind: 'running' })
     try {
+      // An explicit base URL may point at a user-chosen gateway that is not in
+      // the required provider allow-list. Request exactly that origin while
+      // this click still counts as a Chrome user gesture.
+      if (config.baseUrl.trim()) await requestOptionalApiAccess(config.baseUrl)
+
       const { provider, downgradeReason } = resolveProvider(settings)
       if (downgradeReason) {
         setTest({ kind: 'fail', message: downgradeReason })
@@ -213,8 +219,11 @@ export function Options() {
       <div>
       {welcome ? (
         <div className="banner">
-          <strong>欢迎使用！</strong> 现在就可以在任意英文网页划词试用（默认离线词典）。
-          想要真正的「结合上下文解释」，在下面选一个模型并填入 API Key 即可。
+          <strong>欢迎使用！</strong>
+          扩展只在你主动划词或翻译时读取选中文字、附近上下文、页面标题和网址；
+          词卡、设置与 Key 默认只保存在本机。配置模型后，这些阅读内容会直接发送给你选择的模型服务商；
+          启用 GitHub 同步后，词卡会发送到你自己的仓库。开发者没有中转服务器，也不收集这些数据。
+          不配置 Key 也可以使用离线词典。
         </div>
       ) : null}
 

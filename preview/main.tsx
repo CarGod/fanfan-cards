@@ -198,6 +198,183 @@ function CardShowcase() {
   )
 }
 
+/**
+ * Store screenshot #1: the real content card over a restrained article page.
+ * Nothing here invents product behaviour — the article is only scenery and
+ * the card is the exact component shipped in the extension.
+ */
+function StoreReaderShowcase() {
+  return (
+    <main
+      style={{
+        height: '100vh',
+        overflow: 'hidden',
+        background: '#fbfbfc',
+        color: '#20232a',
+        fontFamily: "Georgia, 'Times New Roman', serif",
+      }}
+    >
+      <header
+        style={{
+          height: 64,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 64px',
+          borderBottom: '1px solid #e6e7eb',
+          background: '#fff',
+          fontFamily: 'var(--font-sans)',
+        }}
+      >
+        <strong style={{ fontSize: 17, letterSpacing: '-0.01em' }}>Engineering Notes</strong>
+        <span style={{ color: '#777d88', fontSize: 13 }}>DATABASES · RELIABILITY · TOOLING</span>
+      </header>
+
+      <article style={{ width: 760, marginLeft: 92, padding: '62px 0 80px' }}>
+        <div
+          style={{
+            color: '#6f7580',
+            fontFamily: 'var(--font-sans)',
+            fontSize: 13,
+            letterSpacing: '0.08em',
+          }}
+        >
+          DATABASE RELIABILITY · 8 MIN READ
+        </div>
+        <h1
+          style={{
+            margin: '18px 0 18px',
+            fontSize: 48,
+            lineHeight: 1.08,
+            letterSpacing: '-0.035em',
+            fontWeight: 650,
+          }}
+        >
+          A safer pattern for zero-downtime database migrations
+        </h1>
+        <p style={{ margin: '0 0 42px', color: '#747a84', fontFamily: 'var(--font-sans)', fontSize: 15 }}>
+          Notes from a production schema change · August 18, 2026
+        </p>
+        <p style={{ fontSize: 21, lineHeight: 1.78, margin: '0 0 24px', color: '#363a42' }}>
+          A database{' '}
+          <span
+            style={{
+              background: '#f1eefb',
+              color: '#3f2c90',
+              borderBottom: '2px solid #5b45b0',
+              borderRadius: 3,
+              padding: '1px 3px',
+            }}
+          >
+            migration
+          </span>{' '}
+          can be dangerous when a table is large, writes are continuous, and rollback has never
+          been rehearsed.
+        </p>
+        <p style={{ fontSize: 21, lineHeight: 1.78, margin: '0 0 24px', color: '#363a42' }}>
+          The safest changes are reversible and idempotent. Add the new structure first, move data
+          in small batches, and remove the old path only after every reader has switched.
+        </p>
+        <blockquote
+          style={{
+            margin: '34px 0',
+            padding: '6px 0 6px 24px',
+            borderLeft: '3px solid #ff6a3d',
+            color: '#525761',
+            fontSize: 19,
+            lineHeight: 1.7,
+          }}
+        >
+          Treat every schema change as a deploy, not as a one-off command.
+        </blockquote>
+      </article>
+
+      <div
+        style={{
+          position: 'absolute',
+          right: 68,
+          top: 92,
+          width: 352,
+          transform: 'scale(.86)',
+          transformOrigin: 'top right',
+        }}
+      >
+        <ShadowMount>
+          <WordCard
+            selection="migration"
+            sentence={SENTENCE}
+            explanation={SAMPLE_EXPLANATION}
+            meta={{ providerId: 'claude', model: 'claude-opus-5', offline: false, cached: false }}
+            savedEntry={null}
+            saving={false}
+            enriching={false}
+            showEnglishDefinition
+            autoSpeak={false}
+            onSave={() => {}}
+            onRemove={() => {}}
+            onOpenBook={() => {}}
+            onClose={() => {}}
+          />
+        </ShadowMount>
+      </div>
+    </main>
+  )
+}
+
+/** Required 440x280 Chrome Web Store small promotional tile. */
+function StorePromoTile() {
+  return (
+    <div
+      style={{
+        width: 440,
+        height: 280,
+        overflow: 'hidden',
+        position: 'relative',
+        display: 'grid',
+        placeItems: 'center',
+        background: 'linear-gradient(145deg, #fff1eb 0%, #ffffff 48%, #f1eefb 100%)',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          width: 250,
+          height: 166,
+          borderRadius: 28,
+          background: '#5b45b0',
+          opacity: 0.08,
+          transform: 'translate(88px, 42px) rotate(10deg)',
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          width: 250,
+          height: 166,
+          borderRadius: 28,
+          background: '#ff6a3d',
+          opacity: 0.11,
+          transform: 'translate(-92px, -38px) rotate(-10deg)',
+        }}
+      />
+      <div
+        style={{
+          width: 152,
+          height: 152,
+          borderRadius: 34,
+          display: 'grid',
+          placeItems: 'center',
+          background: 'rgba(255,255,255,.9)',
+          border: '1px solid rgba(20,22,26,.08)',
+          boxShadow: '0 24px 60px rgba(28,25,48,.16)',
+        }}
+      >
+        <BrandMark size={104} />
+      </div>
+    </div>
+  )
+}
+
 /** Mounts children in a real shadow root with the real content stylesheet. */
 function ShadowFrame({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -205,29 +382,35 @@ function ShadowFrame({ title, children }: { title: string; children: React.React
       <div className="faint" style={{ marginBottom: 8 }}>
         {title}
       </div>
-      <div
-        ref={(host) => {
-          if (!host || host.shadowRoot) return
-          // In the extension the host is a 0x0 fixed anchor and the layer is
-          // positioned by JS. For side-by-side inspection we un-fix it inline
-          // (inline styles beat the `:host` rule).
-          host.style.setProperty('position', 'static', 'important')
-          host.style.setProperty('width', 'auto', 'important')
-          host.style.setProperty('height', 'auto', 'important')
-          host.style.setProperty('display', 'block', 'important')
-
-          const shadow = host.attachShadow({ mode: 'open' })
-          const style = document.createElement('style')
-          style.textContent = contentStyles
-          shadow.appendChild(style)
-          const mount = document.createElement('div')
-          mount.className = 'layer'
-          mount.style.setProperty('position', 'static', 'important')
-          shadow.appendChild(mount)
-          createRoot(mount).render(children)
-        }}
-      />
+      <ShadowMount>{children}</ShadowMount>
     </div>
+  )
+}
+
+function ShadowMount({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      ref={(host) => {
+        if (!host || host.shadowRoot) return
+        // In the extension the host is a 0x0 fixed anchor and the layer is
+        // positioned by JS. Store previews un-fix it so the real component can
+        // be laid out inside the screenshot scene.
+        host.style.setProperty('position', 'static', 'important')
+        host.style.setProperty('width', 'auto', 'important')
+        host.style.setProperty('height', 'auto', 'important')
+        host.style.setProperty('display', 'block', 'important')
+
+        const shadow = host.attachShadow({ mode: 'open' })
+        const style = document.createElement('style')
+        style.textContent = contentStyles
+        shadow.appendChild(style)
+        const mount = document.createElement('div')
+        mount.className = 'layer'
+        mount.style.setProperty('position', 'static', 'important')
+        shadow.appendChild(mount)
+        createRoot(mount).render(children)
+      }}
+    />
   )
 }
 
@@ -241,20 +424,35 @@ function applyForcedTheme(): void {
   if (params.get('theme') !== 'light') return
   const style = document.createElement('style')
   style.textContent = `:root {
-    --bg:#f7f8fc; --surface:#ffffff; --surface-soft:#f1f2f8; --border:#e4e6ef;
-    --border-strong:#d3d6e3; --text:#191d27; --text-soft:#5a6272; --text-faint:#8c94a5;
-    --primary:#5b5bd6; --primary-soft:#eeeefc; --primary-text:#ffffff;
-    --success:#0f9d76; --success-soft:#e4f7f1; --warning:#c2820b;
-    --danger:#d1435b; --danger-soft:#fdedef;
-    --shadow:0 1px 2px rgba(16,22,43,.05), 0 8px 28px rgba(16,22,43,.07);
-    --level-0:#d1435b; --level-1:#c2820b; --level-2:#3b82c4; --level-3:#0f9d76;
+    --bg:#f7f7f9; --surface:#ffffff; --surface-soft:#efeff3; --border:#e2e2e9;
+    --border-strong:#c9c9d4; --text:#14161a; --text-soft:#565b66; --text-faint:#878d99;
+    --primary:#ff6a3d; --primary-strong:#e85426; --primary-soft:#fff1eb;
+    --primary-line:#e85426; --primary-ink:#c6431a; --primary-text:#ffffff;
+    --accent:#5b45b0; --accent-soft:#f1eefb;
+    --success:#0c7d6f; --success-soft:#edf8f5; --warning:#9a5b00;
+    --danger:#ce2c31; --danger-soft:#fdecec;
+    --level-0:#ce2c31; --level-1:#9a5b00; --level-2:#3b5bc0; --level-3:#0c7d6f;
     color-scheme: light;
   }`
   document.head.appendChild(style)
 }
 
 function Harness() {
-  const view = new URLSearchParams(location.search).get('view') ?? 'card'
+  const params = new URLSearchParams(location.search)
+  const store = params.get('store')
+  if (store === 'reader') return <StoreReaderShowcase />
+  if (store === 'app') {
+    // Chrome Web Store screenshots have an exact aspect ratio. The real app
+    // reserves a scrollbar gutter to prevent navigation jumps, but the static
+    // capture is one viewport and must not lose those pixels to an empty gutter.
+    document.documentElement.style.scrollbarGutter = 'auto'
+    document.documentElement.style.overflow = 'hidden'
+    document.body.style.overflow = 'hidden'
+    return <App />
+  }
+  if (store === 'promo') return <StorePromoTile />
+
+  const view = params.get('view') ?? 'card'
   const views = [
     { id: 'card', label: '划词卡片' },
     { id: 'popup', label: 'Popup' },

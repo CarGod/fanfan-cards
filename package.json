@@ -19,7 +19,8 @@
     "smoke": "node scripts/smoke-test.mjs",
     "verify": "npm run typecheck && npm run test && npm run build && npm run smoke",
     "preview": "vite --config vite.preview.config.ts",
-    "crx": "npm run build && node scripts/pack-crx.mjs"
+    "crx": "npm run build && node scripts/pack-crx.mjs",
+    "shot": "node scripts/store-shot.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.117.1",

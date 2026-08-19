@@ -45,8 +45,8 @@
 **学习面板** — 收藏总数、待复习数、今日目标进度、连续学习天数、近两周活跃柱状图、熟悉度分布、
 最近收藏。全部由本地数据真实计算，没有一个装饰性指标。
 
-![划词卡片的三种状态](docs/screenshots/content-card-states.jpg)
-![学习面板](docs/screenshots/dashboard-light.jpg)
+![划词卡片：结果、加载与错误三种状态](docs/screenshots/reading-card.png)
+![学习面板](docs/screenshots/dashboard.png)
 
 **同步到 GitHub 私有仓库** — 填一个 Personal Access Token，扩展自动替你创建私有仓库，
 之后每次同步都是一次提交：`vocabulary.json`（机器读）+ `VOCABULARY.md`（人读，按字母分组）+
@@ -147,10 +147,13 @@ src/
 | [docs/TECH_DECISION.md](docs/TECH_DECISION.md) | 关键技术选择及其取舍（含被否决的方案） |
 | [docs/BRAND_GUIDELINE.md](docs/BRAND_GUIDELINE.md) | 品牌调性、色彩、字体、界面规范与文案语气 |
 | [docs/LOGO_DESIGN.md](docs/LOGO_DESIGN.md) | Logo 概念、几何、用色与使用规范 |
+| [docs/PRIVACY.md](docs/PRIVACY.md) | 扩展处理、传输与删除用户数据的方式 |
 | [docs/READ_FROG_ANALYSIS.md](docs/READ_FROG_ANALYSIS.md) | read-frog 源码分析：借鉴什么、不借鉴什么 |
 | [docs/TODO.md](docs/TODO.md) | 迭代计划与进度 |
 
 ## 隐私
+
+完整政策见 [翻翻词卡隐私政策](docs/PRIVACY.md)。
 
 - 所有数据（词卡、复习记录、设置、API Key）只保存在浏览器本地 `chrome.storage.local`。
 - 没有服务器，没有账号，没有埋点。

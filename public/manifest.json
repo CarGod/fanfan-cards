@@ -43,7 +43,7 @@
     "storage",
     "unlimitedStorage",
     "contextMenus",
-    "tabs",
+    "activeTab",
     "alarms",
     "notifications"
   ],
