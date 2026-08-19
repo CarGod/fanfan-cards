@@ -146,8 +146,7 @@ function isOptedOut(element: Element): boolean {
     element.getAttribute('translate') === 'no' ||
     element.classList.contains('notranslate') ||
     element.classList.contains(TRANSLATION_CLASS) ||
-    element.id === CONTENT_HOST_ID ||
-    element.hasAttribute(TRANSLATED_MARK)
+    element.id === CONTENT_HOST_ID
   )
 }
 
@@ -159,15 +158,29 @@ function hasHiddenClass(element: Element): boolean {
   return HIDDEN_CLASSES.some((name) => element.classList.contains(name))
 }
 
+/*
+ * "Already translated" is state, not policy.
+ *
+ * It used to live in `isOptedOut` alongside `translate="no"` and our own output,
+ * which conflated two different things: one says *never touch this*, the other
+ * says *this has been handled*. Collection wants both. A caller looking for the
+ * element in order to manage an existing translation — take it off again,
+ * replace it with a longer one — must be able to find it, and could not: the
+ * 「再按一次收起」 gesture never worked from the day it shipped, because the
+ * lookup refused to return an element it had already translated.
+ */
 interface SkipContext {
   isHidden: (element: Element) => boolean
   fontFamilyOf: (element: Element) => string
   range: TranslationRange
+  /** True for lookups that need to find already-translated elements. */
+  allowTranslated?: boolean
 }
 
 /** Ordered cheapest-first; the style read is last because it forces layout. */
 function isSkippable(element: Element, context: SkipContext): boolean {
   if (SKIP_TAGS.has(element.tagName) || isOptedOut(element)) return true
+  if (!context.allowTranslated && element.hasAttribute(TRANSLATED_MARK)) return true
   if (hasHiddenClass(element)) return true
 
   if (context.range === 'content') {
@@ -319,6 +332,7 @@ export function findUnitAt(
       ((element: Element) =>
         element instanceof HTMLElement ? getComputedStyle(element).fontFamily : ''),
     range: options.range ?? 'all',
+    allowTranslated: true,
   }
   const minLength = options.minLength ?? 12
   const target_ = options.targetLanguage ?? 'zh-CN'

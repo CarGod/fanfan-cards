@@ -2,31 +2,14 @@ import { sendMessage } from '@/services/messaging.ts'
 import { AIError } from '@/types/ai.ts'
 import {
   TRANSLATED_MARK,
-  TRANSLATION_CLASS,
   batchUnits,
   collectUnits,
-  directText,
   type TranslationUnit,
 } from './walker.ts'
 import { clearAllSlots, clearSlot, createSlot, fillSlot, sweepOrphanSlots } from './slot.ts'
+import { ChangeWatcher } from './watcher.ts'
 
-/** Whitespace-insensitive, so a reflow is not mistaken for new content. */
-const normalise = (text: string) => text.replace(/\s+/g, ' ').trim()
 
-/**
- * True for our own injected nodes, and for anything inside one.
- *
- * `1` rather than `Node.ELEMENT_NODE`: this runs inside someone else's page,
- * where `Node` is a global the page is free to overwrite — and a content script
- * that trusts page globals breaks on exactly the sites that do unusual things.
- * The numeric values are fixed by the DOM spec and cannot be shadowed.
- */
-const ELEMENT_NODE = 1
-
-function isOurs(node: Node): boolean {
-  const element = node.nodeType === ELEMENT_NODE ? (node as Element) : node.parentElement
-  return Boolean(element?.closest?.(`.${TRANSLATION_CLASS}`))
-}
 
 /**
  * Bilingual page translation.
@@ -64,10 +47,6 @@ function isOurs(node: Node): boolean {
 const MAX_CONCURRENT = 3
 /** Consecutive failed batches before the run gives up. */
 const MAX_FAILURES = 3
-/** Quiet period a rescan waits for… */
-const RESCAN_QUIET = 400
-/** …and the longest it will wait for that quiet to arrive. */
-const RESCAN_MAX_WAIT = 2000
 /** Per request. Larger batches mean fewer round trips but a longer tail latency. */
 const BATCH_LIMITS = { maxUnits: 12, maxChars: 3000 }
 
@@ -79,10 +58,17 @@ export interface PageTranslatorOptions {
 }
 
 export class PageTranslator {
-  private mutations: MutationObserver | null = null
-  private rescan: ReturnType<typeof setTimeout> | null = null
-  /** When the pending rescan must run at the latest; 0 when none is pending. */
-  private rescanDueAt = 0
+  private readonly watcher = new ChangeWatcher(
+    (unit) => {
+      clearSlot(unit.element)
+      if (unit.text.length >= 2) this.enqueue(unit)
+      void this.flush()
+    },
+    () => {
+      sweepOrphanSlots()
+      this.absorbNewUnits()
+    },
+  )
   private queue: TranslationUnit[] = []
   private flushing = false
   private state: TranslatorState = 'idle'
@@ -155,95 +141,13 @@ export class PageTranslator {
    * Debounced because these sites mutate the DOM continuously; rescanning on
    * every mutation would spend more time walking the tree than translating.
    */
+  /**
+   * One watcher does three jobs on one debounce: notice translated paragraphs
+   * whose text changed, sweep placeholders whose source is gone, and pick up
+   * content the page loaded after we started.
+   */
   private watchForNewContent(): void {
-    this.mutations = new MutationObserver((records) => {
-      const worthRescanning = records.some((record) => {
-        // Our own insertions and edits must never trigger a rescan, or the
-        // observer feeds itself forever.
-        if (isOurs(record.target)) return false
-        if (record.type === 'characterData') return true
-        /*
-         * Text nodes count, not just elements.
-         *
-         * Expanding a post usually replaces its text rather than adding markup,
-         * and assigning `textContent` produces a childList record whose added
-         * node is a *text* node. An element-only check sees nothing at all —
-         * which is precisely how a translation ends up frozen at the truncated
-         * version while the English underneath it grew four lines longer.
-         */
-        return [...record.addedNodes].some((node) => !isOurs(node))
-      })
-      if (!worthRescanning) return
-      this.scheduleRescan()
-    })
-    /*
-     * `characterData` matters as much as `childList` here.
-     *
-     * A post behind 「显示更多」 is translated while it is still truncated, and
-     * expanding it often only replaces the text inside the same element — no
-     * nodes added, nothing for a childList-only observer to see. The result is a
-     * translation that stops mid-sentence under a paragraph that goes on for
-     * another four lines, which reads worse than no translation at all.
-     */
-    this.mutations.observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    })
-
-  }
-
-  /**
-   * Debounce with a ceiling.
-   *
-   * A plain debounce never fires on a feed that never goes quiet: x.com mutates
-   * the DOM continuously — relative timestamps ticking over, images arriving,
-   * rows recycling as you scroll — and every one of those pushed the timer back
-   * another 400ms. Expanding a post produced a mutation like any other, and the
-   * rescan that would have noticed the longer text simply never ran. That is why
-   * a translation could sit truncated under four extra lines of English while
-   * the mechanism meant to fix it was, in principle, working.
-   *
-   * So: settle for 400ms of quiet, but never wait more than RESCAN_MAX_WAIT for
-   * it.
-   */
-  private scheduleRescan(): void {
-    if (this.rescanDueAt === 0) this.rescanDueAt = Date.now() + RESCAN_MAX_WAIT
-    if (this.rescan) clearTimeout(this.rescan)
-    const wait = Math.max(0, Math.min(RESCAN_QUIET, this.rescanDueAt - Date.now()))
-    this.rescan = setTimeout(() => {
-      this.rescan = null
-      this.rescanDueAt = 0
-      sweepOrphanSlots()
-      this.refreshChangedUnits()
-      this.absorbNewUnits()
-    }, wait)
-  }
-
-  /**
-   * Re-translate anything whose source text changed under us.
-   *
-   * The unit list remembers the exact text each translation was made from, so
-   * "the paragraph grew" is a string comparison rather than a guess. Whitespace
-   * is normalised first: sites re-flow text constantly, and re-translating a
-   * paragraph because two spaces became one would be a request per reflow.
-   */
-  private refreshChangedUnits(): void {
-    if (this.state !== 'running') return
-    for (const unit of this.units) {
-      if (!unit.element.isConnected) continue
-      // A unit still waiting for its answer will be filled with the right text;
-      // touching it now would strand the in-flight request.
-      if (unit.element.getAttribute(TRANSLATED_MARK) === 'pending') continue
-
-      const current = directText(unit.element)
-      if (normalise(current) === normalise(unit.text)) continue
-
-      unit.text = current
-      clearSlot(unit.element)
-      if (current.length >= 2) this.enqueue(unit)
-    }
-    if (this.queue.length > 0) void this.flush()
+    this.watcher.begin()
   }
 
   private absorbNewUnits(): void {
@@ -259,11 +163,7 @@ export class PageTranslator {
   }
 
   stop(): void {
-    this.mutations?.disconnect()
-    this.mutations = null
-    if (this.rescan) clearTimeout(this.rescan)
-    this.rescan = null
-    this.rescanDueAt = 0
+    this.watcher.stop()
     this.units = []
     this.queue = []
     this.state = 'idle'
@@ -319,7 +219,9 @@ export class PageTranslator {
       })
 
       batch.forEach((unit, index) => {
-        fillSlot(unit.element, unit.text, result.translations[index] ?? '')
+        if (fillSlot(unit.element, unit.text, result.translations[index] ?? '')) {
+          this.watcher.watch(unit)
+        }
       })
       // Consecutive, not cumulative: a run that keeps succeeding has recovered.
       this.failures = 0

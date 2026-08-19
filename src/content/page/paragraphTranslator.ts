@@ -1,6 +1,7 @@
 import { sendMessage } from '@/services/messaging.ts'
 import { TRANSLATED_MARK, findUnitAt, type TranslationUnit } from './walker.ts'
 import { clearSlot, createSlot, fillSlot } from './slot.ts'
+import { ChangeWatcher, type WatchedUnit } from './watcher.ts'
 
 /**
  * Translate one paragraph, on demand.
@@ -62,6 +63,13 @@ export class ParagraphTranslator {
   private hovered: TranslationUnit | null = null
   private pointer: { x: number; y: number } | null = null
   private readonly inFlight = new WeakSet<Element>()
+  /*
+   * A paragraph you translated by hand deserves the same honesty as a
+   * whole-page one: if it was behind 「显示更多」 and you then expand it, the
+   * translation underneath must follow. This was only wired into the page
+   * translator, so the gesture translated once and never looked again.
+   */
+  private readonly watcher = new ChangeWatcher((unit) => void this.retranslate(unit))
   private readonly options: ParagraphTranslatorOptions
   private bound = false
 
@@ -76,6 +84,7 @@ export class ParagraphTranslator {
   }
 
   destroy(): void {
+    this.watcher.stop()
     this.disarm()
     if (!this.bound) return
     window.removeEventListener('keydown', this.onKeyDown, true)
@@ -149,11 +158,18 @@ export class ParagraphTranslator {
     unit.element.classList.add(HOVER_CLASS)
   }
 
+  /** The paragraph grew (or changed); replace its translation with a fresh one. */
+  private async retranslate(unit: WatchedUnit): Promise<void> {
+    clearSlot(unit.element)
+    await this.translate(unit)
+  }
+
   private async translate(unit: TranslationUnit): Promise<void> {
     const { element, text } = unit
 
     // Same gesture, second time: take it back off.
     if (element.getAttribute(TRANSLATED_MARK) === 'done') {
+      this.watcher.forget(element)
       clearSlot(element)
       return
     }
@@ -167,7 +183,9 @@ export class ParagraphTranslator {
         texts: [text],
         hint: document.title,
       })
-      fillSlot(element, text, result.translations[0] ?? '')
+      if (fillSlot(element, text, result.translations[0] ?? '')) {
+        this.watcher.watch({ element, text })
+      }
     } catch (error) {
       clearSlot(element)
       this.options.onError?.(error instanceof Error ? error.message : String(error))
