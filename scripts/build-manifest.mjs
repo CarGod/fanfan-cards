@@ -92,7 +92,26 @@ if (missing.length > 0) {
   process.exit(1)
 }
 
+/*
+ * A MAIN-world content script runs in the page's own JavaScript context, where
+ * `chrome` does not exist. Reaching for an extension API there fails at runtime,
+ * on the page, silently — the feature just never happens and nothing in the
+ * build says why. So the rule is checked here, where it costs nothing.
+ */
+const mainWorldScripts = (manifest.content_scripts ?? [])
+  .filter((entry) => entry.world === 'MAIN')
+  .flatMap((entry) => entry.js ?? [])
+
+const withChromeApi = mainWorldScripts.filter((relative) =>
+  /\bchrome\s*[.[]/.test(readFileSync(join(distDir, relative), 'utf8')),
+)
+if (withChromeApi.length > 0) {
+  console.error('MAIN-world scripts reference the chrome API, which is undefined there:')
+  for (const path of withChromeApi) console.error(`  - ${path}`)
+  process.exit(1)
+}
+
 writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 console.log(
-  `manifest ok - v${manifest.version}, ${referenced.length} referenced files present, no credentials in bundle`,
+  `manifest ok - v${manifest.version}, ${referenced.length} referenced files present, ${mainWorldScripts.length} main-world script(s) clean, no credentials in bundle`,
 )

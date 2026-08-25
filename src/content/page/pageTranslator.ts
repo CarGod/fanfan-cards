@@ -8,6 +8,7 @@ import {
 } from './walker.ts'
 import { clearAllSlots, clearSlot, createSlot, fillSlot, sweepOrphanSlots } from './slot.ts'
 import { ChangeWatcher } from './watcher.ts'
+import { noteOrphanError } from '@/shared/extensionContext.ts'
 
 
 
@@ -162,6 +163,22 @@ export class PageTranslator {
     void this.flush()
   }
 
+  /**
+   * 停下来，但**不碰页面上已经有的译文**。
+   *
+   * 和 `stop()` 的区别就在这里：`stop()` 是读者主动点「还原页面」，清干净是他要的；
+   * 而扩展更新导致的失联不是他要求的任何事，把他已经读到一半的译文一起抹掉，
+   * 只会让一次本可以无感的更新变成一次数据丢失。
+   */
+  pause(): void {
+    this.watcher.stop()
+    // 排队中的那些永远等不到译文了，占位符得撤掉，不然页面上留一排「翻译中…」。
+    for (const unit of this.queue) clearSlot(unit.element)
+    this.queue = []
+    this.state = 'idle'
+    this.emit()
+  }
+
   stop(): void {
     this.watcher.stop()
     this.units = []
@@ -233,6 +250,16 @@ export class PageTranslator {
         // error text would be worse than a page with nothing added.
         clearSlot(unit.element)
       }
+      /*
+       * 扩展刚更新过，这个脚本已经和它失联了。再试多少次都是同一个结果，
+       * 而每一次都会往控制台扔一条看起来像 bug 的错误。安静地停住，
+       * 让界面去说那句唯一有用的话：刷新页面。
+       */
+      if (noteOrphanError(error)) {
+        this.pause()
+        return
+      }
+
       this.options.onError?.(error instanceof Error ? error.message : String(error))
 
       /*

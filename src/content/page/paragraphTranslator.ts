@@ -2,6 +2,7 @@ import { sendMessage } from '@/services/messaging.ts'
 import { TRANSLATED_MARK, findUnitAt, type TranslationUnit } from './walker.ts'
 import { clearSlot, createSlot, fillSlot } from './slot.ts'
 import { ChangeWatcher, type WatchedUnit } from './watcher.ts'
+import { noteOrphanError } from '@/shared/extensionContext.ts'
 
 /**
  * Translate one paragraph, on demand.
@@ -28,6 +29,20 @@ export interface ParagraphTranslatorOptions {
 }
 
 /** True while the configured key is held. */
+/**
+ * 反引号那个键，按**物理位置**认，不按打出来的字符认。
+ *
+ * `event.key` 给的是输入法处理之后的结果：中文输入法开着的时候，这个键打出来的是
+ * `·`，不是 `` ` ``。只比对反引号字符，等于告诉所有中文用户「这个手势不存在」——
+ * 而他们看到的现象是按了没反应，没有任何线索。`event.code` 是键盘上的位置，
+ * 与布局和输入法都无关。
+ */
+function isBacktickKey(event: KeyboardEvent): boolean {
+  if (event.code === 'Backquote') return true
+  // 有些环境（远程桌面、部分虚拟键盘）不给 code，那就退回认字符，两种都收。
+  return event.key === '`' || event.key === '·'
+}
+
 function matches(key: ParagraphTriggerKey, event: KeyboardEvent | MouseEvent): boolean {
   switch (key) {
     case 'alt':
@@ -37,7 +52,7 @@ function matches(key: ParagraphTriggerKey, event: KeyboardEvent | MouseEvent): b
     case 'shift':
       return event.shiftKey
     case 'backtick':
-      return 'key' in event && event.key === '`'
+      return 'key' in event && isBacktickKey(event)
     default:
       return false
   }
@@ -129,7 +144,7 @@ export class ParagraphTranslator {
      * key in the keyboard.
      */
     const released =
-      this.key === 'backtick' ? event.key === '`' : !matches(this.key, event)
+      this.key === 'backtick' ? isBacktickKey(event) : !matches(this.key, event)
     if (released) this.disarm()
   }
 
@@ -188,6 +203,12 @@ export class ParagraphTranslator {
       }
     } catch (error) {
       clearSlot(element)
+      // 失联之后每一次悬停都会再报一次同样的错。停掉手势，交给界面提示刷新。
+      if (noteOrphanError(error)) {
+        this.setKey('off')
+        return
+      }
+
       this.options.onError?.(error instanceof Error ? error.message : String(error))
     } finally {
       this.inFlight.delete(element)

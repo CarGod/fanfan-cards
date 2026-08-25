@@ -90,6 +90,19 @@ export const settingsSchema = z.object({
    * might be typing, which the trigger guards against.
    */
   paragraphTriggerKey: z.enum(['off', 'backtick', 'alt', 'ctrl', 'shift']).default('backtick'),
+  /**
+   * 视频字幕：显示模式与字号。
+   *
+   * 存在设置里而不是只存在面板里，是因为读者在播放器上调完之后换一个视频、换一台
+   * 设备，期待的是「我调过了」，而不是每次从头再调一遍。
+   */
+  videoSubtitleMode: z.enum(['bilingual', 'translationOnly']).default('bilingual'),
+  videoSubtitleFontScale: z.number().min(0.6).max(2).default(1),
+  /** 字幕底衬的不透明度。0 是完全透明，靠描边压住画面。 */
+  videoSubtitleBackground: z.number().min(0).max(1).default(0.7),
+  /** 打开视频就自动开字幕，而不是每次手动点一下。 */
+  videoSubtitleAuto: z.boolean().default(false),
+
   /** Example sentences per lookup. 0 turns them off (and makes lookups faster). */
   exampleCount: z.number().int().min(0).max(6).default(3),
   /** Cap on selection length (characters) that will be sent to the model. */

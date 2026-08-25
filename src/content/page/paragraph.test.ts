@@ -25,6 +25,44 @@ describe('findUnitAt', () => {
     expect(findUnitAt(document.getElementById('p'))?.element.id).toBe('p')
   })
 
+  /*
+   * x.com 的推文正文。
+   *
+   * 它建在 React Native Web 上，正文那个 `<div data-testid="tweetText">` 计算出来是
+   * `display: inline`——标签是块级的，样式是行内的。整页翻译一直认得它（`directText`
+   * 按标签折叠行内子节点，不看计算样式），而悬停这条路多看了一眼计算样式，于是从唯一
+   * 装着正文的那个元素上直接爬了过去，一路爬到 body 也找不到东西。
+   *
+   * 两条路必须用同一条规则，否则「整页能翻、单段不能」这种事会一直冒出来。
+   */
+  it('计算样式是 inline 的块级元素，照样是一段（x.com 的推文正文）', () => {
+    mount(
+      '<div data-testid="cellInnerDiv"><article data-testid="tweet"><div>' +
+        '<div dir="auto" lang="en" data-testid="tweetText" id="tt">' +
+        '<span id="sp">It has not been used yet, but would you look at that. Codex for scale.</span>' +
+        '</div></div></article></div>',
+    )
+
+    // 真实页面上这个 div 的 display 就是 inline，jsdom 里造不出来，只能把它按住。
+    const native = window.getComputedStyle
+    window.getComputedStyle = ((element: Element) =>
+      ({
+        display: element.id === 'tt' ? 'inline' : 'block',
+        fontFamily: '',
+        visibility: 'visible',
+      }) as unknown as CSSStyleDeclaration) as typeof window.getComputedStyle
+
+    try {
+      const unit = findUnitAt(document.getElementById('sp'), {
+        isHidden: () => false,
+        fontFamilyOf: () => '',
+      })
+      expect(unit?.element.id).toBe('tt')
+    } finally {
+      window.getComputedStyle = native
+    }
+  })
+
   it('refuses code, which is not prose', () => {
     mount('<pre id="c">ALTER TABLE users ADD COLUMN email_verified boolean;</pre>')
     expect(findUnitAt(document.getElementById('c'))).toBeNull()

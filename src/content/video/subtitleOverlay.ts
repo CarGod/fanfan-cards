@@ -11,8 +11,10 @@ export type SubtitleMode = 'bilingual' | 'translationOnly'
 
 export interface OverlayOptions {
   mode: SubtitleMode
-  /** 相对播放器宽度的字号倍率，1 为默认。 */
+  /** 字号倍率，1 为默认。 */
   fontScale: number
+  /** 字幕底衬的不透明度，0 是完全透明（只靠描边压住画面）。 */
+  background: number
 }
 
 export const OVERLAY_CLASS = 'fanfan-subtitle-overlay'
@@ -20,12 +22,33 @@ export const OVERLAY_CLASS = 'fanfan-subtitle-overlay'
 /** 译文尚未到达时的占位，避免字幕在等待期间整块跳动。 */
 const PENDING = '…'
 
+/**
+ * 字号跟着**播放器**走，不跟着窗口走。
+ *
+ * 第一版用的是 `vw`，也就是视口宽度——于是把窗口拉宽，字就变大，哪怕播放器根本没变；
+ * 而在一个 1440p 的屏幕上，默认档直接糊了半个画面。字幕是画面的一部分，它唯一该
+ * 参照的就是画面本身。这个比例对着 YouTube 自己的默认字号调的。
+ */
+const WIDTH_RATIO = 0.0195
+const MIN_PX = 13
+const MAX_PX = 46
+/** 原文退一步：它是拿来对照的，主角是译文。 */
+const SOURCE_RATIO = 0.82
+/** 播放器宽度还没量到时的兜底，别让字幕在第一帧是 0 号字。 */
+const FALLBACK_WIDTH = 960
+/** 低于这个不透明度就认为读者要的是「没有底衬」，描边得自己扛住画面。 */
+const BARE_BACKGROUND = 0.15
+
+const clamp = (min: number, value: number, max: number): number =>
+  Math.min(max, Math.max(min, value))
+
 export class SubtitleOverlay {
   private readonly root: HTMLElement
   private readonly source: HTMLElement
   private readonly translation: HTMLElement
   private lastIndex = -2
   private options: OverlayOptions
+  private playerWidth = 0
 
   constructor(options: OverlayOptions) {
     this.options = options
@@ -53,6 +76,13 @@ export class SubtitleOverlay {
     this.applyOptions()
     // 模式变了要立刻重画，否则要等到下一句才生效。
     this.lastIndex = -2
+  }
+
+  /** 播放器尺寸变了（全屏、剧场模式、拖窗口）就重算字号。 */
+  setPlayerWidth(width: number): void {
+    if (width <= 0 || width === this.playerWidth) return
+    this.playerWidth = width
+    this.applyOptions()
   }
 
   /**
@@ -90,8 +120,14 @@ export class SubtitleOverlay {
   }
 
   private applyOptions(): void {
-    const scale = this.options.fontScale
-    this.source.style.fontSize = `${(2.2 * scale).toFixed(2)}vw`
-    this.translation.style.fontSize = `${(2.4 * scale).toFixed(2)}vw`
+    const width = this.playerWidth || FALLBACK_WIDTH
+    const size = clamp(MIN_PX, width * WIDTH_RATIO * this.options.fontScale, MAX_PX)
+    this.translation.style.fontSize = `${size.toFixed(1)}px`
+    this.source.style.fontSize = `${(size * SOURCE_RATIO).toFixed(1)}px`
+
+    const background = clamp(0, this.options.background, 1)
+    this.root.style.setProperty('--ff-subtitle-bg', `rgba(8, 8, 8, ${background})`)
+    // 底衬淡到不管用的时候，可读性只能靠描边接手。
+    this.root.dataset['bare'] = String(background < BARE_BACKGROUND)
   }
 }

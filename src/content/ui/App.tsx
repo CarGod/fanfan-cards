@@ -15,7 +15,7 @@ import type { VocabularyEntry } from '@/types/vocabulary.ts'
 import { sendMessage } from '@/services/messaging.ts'
 import { getSettings, isHostEnabled, watchSettings } from '@/storage/repositories/settingsRepo.ts'
 import { clamp, debounce, truncate } from '@/shared/utils.ts'
-import { isExtensionAlive } from '@/shared/extensionContext.ts'
+import { isExtensionAlive, isOrphaned, onOrphaned } from '@/shared/extensionContext.ts'
 import { PageTranslator } from '../page/pageTranslator.ts'
 import { ParagraphTranslator } from '../page/paragraphTranslator.ts'
 import { injectPageStyles } from '../page/styles.ts'
@@ -70,6 +70,7 @@ export function App({ host }: { host: HTMLElement }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [orphaned, setOrphaned] = useState(isOrphaned)
 
   const [dragOffset, setDragOffset] = useState<Offset>(ZERO_OFFSET)
   const requestRef = useRef(0)
@@ -77,6 +78,14 @@ export function App({ host }: { host: HTMLElement }) {
   phaseRef.current = phase
 
   const enabled = isHostEnabled(settings, location.hostname)
+
+  /*
+   * 扩展更新之后，这个页面上的脚本就和它失联了——每个开着的标签页都会这样。
+   * 它自己什么也做不了，读者也不知道发生了什么，所以唯一有用的事就是把那句
+   * 「刷新一下」说出来，并且**不自动消失**：这不是一条操作反馈，是一个待办。
+   */
+  useEffect(() => onOrphaned(() => setOrphaned(true)), [])
+  const notice = orphaned ? '扩展已更新，刷新页面后继续使用' : toast
 
   useEffect(() => {
     // Disabled on this site means disabled for every gesture, not just the card.
@@ -414,7 +423,7 @@ export function App({ host }: { host: HTMLElement }) {
   )
 
   if (!enabled || phase.kind === 'idle') {
-    return toast ? <Toast text={toast} /> : null
+    return notice ? <Toast text={notice} /> : null
   }
 
   return (
@@ -473,7 +482,7 @@ export function App({ host }: { host: HTMLElement }) {
           />
         ) : null}
       </FloatingLayer>
-      {toast ? <Toast text={toast} /> : null}
+      {notice ? <Toast text={notice} /> : null}
     </>
   )
 }

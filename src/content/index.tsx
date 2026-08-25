@@ -3,6 +3,7 @@ import { CONTENT_HOST_ID } from '@/shared/constants.ts'
 import { warmUpVoices } from '@/services/speech.ts'
 import styles from './styles.css?inline'
 import { App } from './ui/App.tsx'
+import { YouTubeSubtitles } from './video/youtube.ts'
 
 /**
  * Content-script bootstrap.
@@ -51,10 +52,29 @@ function mount(): Root | null {
   return root
 }
 
+/**
+ * YouTube 走一条自己的路：字幕层和控制栏按钮长在播放器的 DOM 里，不在我们的 shadow
+ * root 里——播放器全屏、剧场模式、迷你播放器的定位全靠它，自己另起一套只会更差。
+ */
+function mountYouTube(): YouTubeSubtitles | null {
+  if (!/(^|\.)youtube\.com$/.test(location.hostname)) return null
+  const subtitles = new YouTubeSubtitles()
+  void subtitles.start()
+  return subtitles
+}
+
 const root = mount()
 if (root) {
   warmUpVoices()
+  const subtitles = mountYouTube()
   // Chrome fires this when the extension is reloaded or updated; without the
   // teardown the page keeps a React tree bound to a dead message channel.
-  window.addEventListener('pagehide', () => root.unmount(), { once: true })
+  window.addEventListener(
+    'pagehide',
+    () => {
+      subtitles?.destroy()
+      root.unmount()
+    },
+    { once: true },
+  )
 }

@@ -346,16 +346,21 @@ export function findUnitAt(
     if (isSkippable(element, context)) return null
 
     /*
-     * An inline element is never a unit.
+     * 行内元素永远不是一段。
      *
-     * Hovering the `<em>` in "can <em>lock a table</em> for minutes" would
-     * otherwise translate those three words on their own — `collectUnits` never
-     * produces such a unit either, because it folds inline children into their
-     * block parent. Keep climbing until the block that owns the sentence.
+     * 悬停在 "can <em>lock a table</em> for minutes" 的 `<em>` 上，要翻的是整句，
+     * 不是那三个词——`collectUnits` 也从来不会产出这样的单元，因为它把行内子节点
+     * 折进块级父节点里了。所以一路往上爬，直到那个真正拥有这句话的块。
+     *
+     * 判据只看**标签**，不看计算样式。这一条是踩出来的：x.com 建在 React Native Web
+     * 上，推文正文那个 `<div data-testid="tweetText">` 计算出来是 `display: inline`,
+     * 而它是唯一装着正文的元素。多看一眼计算样式，就会从它头上爬过去，一路爬到 body
+     * 也找不到东西——于是整页翻译在 x.com 上好好的，悬停整段翻译却毫无反应。
+     *
+     * 根源是两条路用了两套规则：`directText` 按标签折叠，这里按计算样式判断。
+     * 统一成标签之后，「能翻整页却翻不了单段」这类错配就没有生长的地方了。
      */
-    const inline =
-      INLINE_TAGS.has(element.tagName) ||
-      (element instanceof HTMLElement && getComputedStyle(element).display.startsWith('inline'))
+    const inline = INLINE_TAGS.has(element.tagName)
 
     if (!inline) {
       const text = directText(element)
