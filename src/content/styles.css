@@ -1,0 +1,575 @@
+@import '../styles/design-token.css';
+
+/*
+ * Content-script styles.
+ *
+ * Injected into a shadow root, so nothing here can leak onto the host page and
+ * nothing on the host page can leak in. Every value is explicit for that
+ * reason — a bare `color` would otherwise inherit whatever the article uses.
+ *
+ * The tokens above declare on `:host` as well as `:root`, which is the only
+ * reason a shared design system can reach inside a shadow root at all.
+ */
+
+:host {
+  /* `all: initial` cuts the host page's inherited font, colour and line-height;
+     the token declarations above survive because custom properties are set on
+     this same element by their own rule. */
+  all: initial;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  z-index: 2147483647;
+}
+
+.layer {
+  position: fixed;
+  font-family: var(--font-sans);
+  color: var(--text);
+  line-height: 1.6;
+  font-size: 14px;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.layer *,
+.layer *::before,
+.layer *::after {
+  box-sizing: border-box;
+}
+
+/* ---------- trigger pill ---------- */
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  animation: ara-pop 140ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.trigger:hover {
+  border-color: var(--primary-line);
+  color: var(--primary-ink);
+}
+
+.trigger .mark {
+  flex: none;
+  border-radius: 5px;
+}
+
+.trigger .hint {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+/* ---------- card ---------- */
+
+.card {
+  width: 372px;
+  max-width: calc(100vw - 16px);
+  /* The default is generous on purpose: the first paint happens before
+     placement has run, and a tight default would make that first measurement
+     report a short card, which then drives the placement maths. */
+  max-height: min(var(--ara-card-max, 720px), calc(100vh - 24px));
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  overflow: hidden;
+  animation: ara-pop 160ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+@keyframes ara-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+  /* The header is a drag handle; selecting its text instead would fight the drag. */
+  user-select: none;
+}
+
+.card-head:active {
+  cursor: grabbing;
+}
+
+.card-head button {
+  cursor: pointer;
+}
+
+.headline {
+  flex: 1;
+  min-width: 0;
+}
+
+.word-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/*
+ * CEFR band. Coloured by difficulty rather than given one accent colour, so the
+ * badge answers "is this worth learning?" at a glance instead of just labelling.
+ */
+.cefr {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid currentColor;
+  opacity: 0.95;
+}
+
+.cefr[data-band='A'] {
+  color: var(--success);
+}
+
+.cefr[data-band='B'] {
+  color: var(--warning);
+}
+
+.cefr[data-band='C'] {
+  color: var(--danger);
+}
+
+.word {
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  word-break: break-word;
+}
+
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+
+.phonetic {
+  font-size: 13px;
+  color: var(--text-soft);
+  font-family: 'SF Mono', ui-monospace, Menlo, Consolas, monospace;
+}
+
+.pos {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+}
+
+.btn svg,
+.icon-btn svg {
+  flex: none;
+  /* Stroke icons sit optically low next to CJK text without this nudge. */
+  margin-top: -1px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0;
+}
+
+.icon-btn:hover {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.card-body {
+  padding: 12px 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex: 1;
+}
+
+/* The host page's scrollbar theme does not reach into a shadow root, so an
+   unstyled scrollbar renders in the platform default — a bright white bar down
+   the side of a dark card. */
+.card-body,
+.source-quote {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.card-body::-webkit-scrollbar,
+.source-quote::-webkit-scrollbar {
+  width: 10px;
+}
+
+.card-body::-webkit-scrollbar-track,
+.source-quote::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.card-body::-webkit-scrollbar-thumb,
+.source-quote::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+.card-body::-webkit-scrollbar-thumb:hover,
+.source-quote::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+  background-clip: content-box;
+}
+
+.section + .section {
+  margin-top: 12px;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 4px;
+}
+
+.label-speak {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.label-speak:hover {
+  background: var(--surface-soft);
+  color: var(--primary-ink);
+}
+
+.body-text {
+  font-size: 14px;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.muted {
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+/* The contextual reading is the product. Give it the visual weight. */
+.context-block {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 0 8px 8px 0;
+  padding: 9px 11px;
+}
+
+.example-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.example-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.example {
+  font-size: 13.5px;
+  font-style: italic;
+  color: var(--text);
+}
+
+.example-zh {
+  font-size: 12.5px;
+  color: var(--text-soft);
+  margin-top: 2px;
+}
+
+.source-quote {
+  font-size: 12.5px;
+  color: var(--text-soft);
+  background: var(--surface-soft);
+  border-radius: 8px;
+  padding: 8px 10px;
+  max-height: 92px;
+  overflow-y: auto;
+}
+
+.source-quote mark {
+  background: transparent;
+  color: var(--primary-ink);
+  font-weight: 650;
+}
+
+.sentence-translation {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text);
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+}
+
+.syn-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.syn-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.syn-word {
+  font-weight: 650;
+  color: var(--text);
+  flex: none;
+}
+
+.syn-meaning {
+  color: var(--text-soft);
+  font-size: 12.5px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.chip {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+}
+
+/* ---------- footer ---------- */
+
+.card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/*
+ * White on flame is 2.85:1 — a deliberate exception (see design-token.css).
+ * Since the ratio is fixed by that decision, the two levers left are stroke
+ * weight and letter-spacing: a heavier, slightly looser glyph is measurably
+ * easier to resolve at low contrast, and costs nothing.
+ */
+.btn-primary {
+  background: var(--primary);
+  color: var(--primary-text);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  flex: 1;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.06);
+}
+
+.btn-primary:disabled {
+  cursor: default;
+  opacity: 0.75;
+  filter: none;
+}
+
+.btn-saved {
+  background: transparent;
+  border-color: var(--success);
+  color: var(--success);
+  flex: 1;
+}
+
+.btn-remove {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+  flex: 1;
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-soft);
+}
+
+.btn-ghost:hover {
+  color: var(--text);
+  border-color: var(--text-faint);
+}
+
+.provider-tag {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+/* ---------- states ---------- */
+
+.skeleton-line {
+  height: 11px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-soft) 25%,
+    var(--border) 37%,
+    var(--surface-soft) 63%
+  );
+  background-size: 400% 100%;
+  animation: ara-shimmer 1.3s ease-in-out infinite;
+}
+
+.skeleton-line + .skeleton-line {
+  margin-top: 8px;
+}
+
+@keyframes ara-shimmer {
+  from {
+    background-position: 100% 50%;
+  }
+  to {
+    background-position: 0 50%;
+  }
+}
+
+.thinking {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  margin-bottom: 10px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: ara-blink 1s infinite ease-in-out;
+}
+
+@keyframes ara-blink {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.error-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.notice {
+  font-size: 12px;
+  color: var(--text-faint);
+  background: var(--surface-soft);
+  border-radius: 8px;
+  padding: 6px 9px;
+  margin-bottom: 10px;
+}
+
+.toast {
+  position: fixed;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--surface);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  box-shadow: var(--shadow-float);
+  animation: ara-pop 140ms ease-out;
+}

@@ -1,0 +1,93 @@
+{
+  "manifest_version": 3,
+  "name": "翻翻词卡 — AI 英语阅读助手",
+  "version": "1.2.0",
+  "description": "在真实英文网页上阅读，AI 结合上下文解释你不认识的词，一键收藏成你自己的英语知识资产，并按记忆曲线复习。",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "翻翻词卡",
+    "default_popup": "src/popup/index.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "options_ui": {
+    "page": "src/options/index.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "service_worker": "assets/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "assets/content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*"
+      ],
+      "js": [
+        "assets/youtube-main.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    }
+  ],
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "contextMenus",
+    "activeTab",
+    "alarms",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://api.github.com/*",
+    "https://api.anthropic.com/*",
+    "https://api.openai.com/*",
+    "https://api.deepseek.com/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*"
+  ],
+  "commands": {
+    "explain-selection": {
+      "suggested_key": {
+        "default": "Alt+Shift+E"
+      },
+      "description": "解释当前选中的英文"
+    },
+    "translate-page": {
+      "suggested_key": {
+        "default": "Alt+A"
+      },
+      "description": "翻译/还原整个页面"
+    },
+    "open-app": {
+      "suggested_key": {
+        "default": "Alt+Shift+A"
+      },
+      "description": "打开词卡与复习"
+    }
+  }
+}
