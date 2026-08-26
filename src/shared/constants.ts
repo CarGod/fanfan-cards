@@ -1,5 +1,9 @@
-export const APP_NAME = '翻翻词卡'
-export const APP_SHORT_NAME = '翻翻词卡'
+/*
+ * 产品名不再是常量。
+ *
+ * 它是要跟着界面语言变的一条文案（`app.name`），而常量在模块加载时就定死了。
+ * 留一个 `APP_NAME` 在这儿，下一个人一定会顺手 import——所以直接不给这个机会。
+ */
 
 /** All chrome.storage keys live here so migrations have one place to look. */
 export const STORAGE_KEYS = {
@@ -13,7 +17,7 @@ export const STORAGE_KEYS = {
   syncState: 'ara:syncState',
 } as const
 
-export const SCHEMA_VERSION = 5
+export const SCHEMA_VERSION = 6
 
 /** Element id of the shadow host injected into pages. */
 export const CONTENT_HOST_ID = 'fanfan-root'

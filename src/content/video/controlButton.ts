@@ -1,3 +1,4 @@
+import { t, type MessageKey } from '@/i18n/index.ts'
 import type { SubtitleMode } from './subtitleOverlay.ts'
 
 /**
@@ -38,11 +39,22 @@ export interface ControlHandlers {
   onBackground: (opacity: number) => void
 }
 
-const STATUS_LABEL: Record<ControlStatus, string> = {
-  off: '双语字幕',
-  loading: '双语字幕（正在准备）',
-  on: '双语字幕（已开启）',
-  error: '双语字幕（暂时不可用）',
+/**
+ * 存的是**键**，不是文案。
+ *
+ * 文案在这里求值就等于把语言冻结在脚本注入那一刻——内容脚本随页面加载一次，
+ * 之后读者在设置页改成英文，这个按钮会一直停在中文上，而且只在这一处。
+ */
+const STATUS_KEY = {
+  // 关掉的时候按钮上就是功能名本身，没有额外的状态可说。
+  off: 'video.control.subtitles',
+  loading: 'video.control.status_loading',
+  on: 'video.control.status_on',
+  error: 'video.control.status_error',
+} as const satisfies Record<ControlStatus, MessageKey>
+
+function statusLabel(status: ControlStatus): string {
+  return t(STATUS_KEY[status])
 }
 
 export const BUTTON_CLASS = 'fanfan-subtitle-button' 
@@ -128,47 +140,50 @@ export class SubtitleControl {
 
   private renderPanel(): void {
     const { enabled, status, mode, fontScale, background, trackLabel, error } = this.state
-    this.button.setAttribute('aria-label', STATUS_LABEL[status])
+    this.button.setAttribute('aria-label', statusLabel(status))
     this.button.dataset['on'] = String(status === 'on')
     this.button.dataset['status'] = status
     this.button.title =
-      error || (status === 'on' && trackLabel ? `双语字幕 · ${trackLabel}` : STATUS_LABEL[status])
+      error ||
+      (status === 'on' && trackLabel
+        ? t('video.control.status_track', { track: trackLabel })
+        : statusLabel(status))
 
     this.panel.replaceChildren()
 
     this.panel.append(
-      row('双语字幕', toggle(enabled, (next) => this.handlers.onToggle(next))),
+      row(t('video.control.subtitles'), toggle(enabled, (next) => this.handlers.onToggle(next))),
       row(
-        '显示',
+        t('video.control.display'),
         segmented(
           [
-            { value: 'bilingual' as const, label: '双语' },
-            { value: 'translationOnly' as const, label: '仅译文' },
+            { value: 'bilingual' as const, label: t('video.control.mode_bilingual') },
+            { value: 'translationOnly' as const, label: t('video.control.mode_translation') },
           ],
           mode,
           (next) => this.handlers.onMode(next),
         ),
       ),
       row(
-        '字号',
+        t('video.control.font_size'),
         segmented(
           [
-            { value: 0.85, label: '小' },
-            { value: 1, label: '标准' },
-            { value: 1.25, label: '大' },
+            { value: 0.85, label: t('video.control.size_small') },
+            { value: 1, label: t('video.control.size_normal') },
+            { value: 1.25, label: t('video.control.size_large') },
           ],
           fontScale,
           (next) => this.handlers.onFontScale(next),
         ),
       ),
       row(
-        '背景',
+        t('video.control.background'),
         segmented(
           [
-            { value: 0, label: '无' },
-            { value: 0.4, label: '浅' },
-            { value: 0.7, label: '中' },
-            { value: 0.9, label: '深' },
+            { value: 0, label: t('video.control.background_none') },
+            { value: 0.4, label: t('video.control.background_light') },
+            { value: 0.7, label: t('video.control.background_medium') },
+            { value: 0.9, label: t('video.control.background_dark') },
           ],
           background,
           (next) => this.handlers.onBackground(next),
@@ -179,9 +194,9 @@ export class SubtitleControl {
     if (error) {
       this.panel.append(note(error, true))
     } else if (status === 'loading') {
-      this.panel.append(note(trackLabel || '正在准备…', false))
+      this.panel.append(note(trackLabel || t('video.control.preparing'), false))
     } else if (status === 'on' && trackLabel) {
-      this.panel.append(note(`字幕来源：${trackLabel}`, false))
+      this.panel.append(note(t('video.control.source', { track: trackLabel }), false))
     }
   }
 }

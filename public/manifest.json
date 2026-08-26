@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "翻翻词卡 — AI 英语阅读助手",
-  "version": "1.2.0",
-  "description": "在真实英文网页上阅读，AI 结合上下文解释你不认识的词，一键收藏成你自己的英语知识资产，并按记忆曲线复习。",
+  "name": "__MSG_extName__",
+  "version": "1.4.0",
+  "description": "__MSG_extDescription__",
+  "default_locale": "zh_CN",
   "minimum_chrome_version": "116",
   "icons": {
     "16": "icons/icon-16.png",
@@ -11,7 +12,7 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "翻翻词卡",
+    "default_title": "__MSG_actionTitle__",
     "default_popup": "src/popup/index.html",
     "default_icon": {
       "16": "icons/icon-16.png",
@@ -75,19 +76,19 @@
       "suggested_key": {
         "default": "Alt+Shift+E"
       },
-      "description": "解释当前选中的英文"
+      "description": "__MSG_commandExplainSelection__"
     },
     "translate-page": {
       "suggested_key": {
         "default": "Alt+A"
       },
-      "description": "翻译/还原整个页面"
+      "description": "__MSG_commandTranslatePage__"
     },
     "open-app": {
       "suggested_key": {
         "default": "Alt+Shift+A"
       },
-      "description": "打开词卡与复习"
+      "description": "__MSG_commandOpenApp__"
     }
   }
 }

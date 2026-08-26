@@ -187,7 +187,13 @@ describe('stylesheets', () => {
  * button wearing whatever colour the surrounding page happened to set — which
  * is exactly the bug this list exists to make impossible to reintroduce.
  */
-const TEXTLESS_BRAND_FILLS = [".toggle[data-on='true']", '.bar-today', '.progress-fill']
+const TEXTLESS_BRAND_FILLS = [
+  ".toggle[data-on='true']",
+  '.bar-today',
+  '.progress-fill',
+  // 下拉里标「当前是哪一项」的那条 3px 竖杠，是个 ::before 伪元素，装不下文字。
+  ".select-option[data-selected='true']::before",
+]
 
 /** Crude but sufficient: `selector { declarations }` pairs, comments stripped. */
 function rules(css: string): Array<{ selector: string; body: string }> {

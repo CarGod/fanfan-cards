@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { setLanguage } from '@/i18n/index.ts'
 import { REQUEST_EVENT, RESPONSE_EVENT, type BridgeRequest } from './bridge.ts'
 import { callMainWorld } from './youtube.ts'
 
@@ -88,6 +89,9 @@ describe('callMainWorld', () => {
 
   // 没有页面脚本时必须失败，不能挂在那里——界面会永远停在「正在读取字幕…」。
   it('页面世界没人应答时超时失败', async () => {
+    // 超时的那句话是界面文案，跟着界面语言走；断言中文就得先把语言钉住，
+    // 否则测试环境按 navigator.language 走成英文。
+    setLanguage('zh-CN')
     vi.useFakeTimers()
     const pending = callMainWorld({ kind: 'captions' })
     const assertion = expect(pending).rejects.toThrow('页面脚本没有响应')

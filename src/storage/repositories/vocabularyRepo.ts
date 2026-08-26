@@ -8,6 +8,7 @@ import type {
   ExampleSentence,
   SelectionKind,
   Synonym,
+  WordSense,
 } from '@/types/vocabulary.ts'
 import { REVIEW_STATUS_BY_LEVEL } from '@/types/vocabulary.ts'
 import { storage } from '../area.ts'
@@ -24,6 +25,8 @@ export interface NewEntryInput {
   partOfSpeech: string
   cefr: CefrLevel
   meaning: string
+  /** 按词性拆开的释义。给不出就传空数组。 */
+  senses: WordSense[]
   aiExplanation: string
   englishDefinition: string
   sentenceTranslation: string
@@ -121,6 +124,8 @@ export async function saveEntry(
         partOfSpeech: input.partOfSpeech || existing.partOfSpeech,
         cefr: input.cefr || existing.cefr,
         meaning: input.meaning || existing.meaning,
+        // 空数组当作「这次没给」，保住老词卡已经拆好的那份。
+        senses: input.senses.length ? input.senses : (existing.senses ?? []),
         aiExplanation: input.aiExplanation || existing.aiExplanation,
         englishDefinition: input.englishDefinition || existing.englishDefinition,
         sentenceTranslation: input.sentenceTranslation || existing.sentenceTranslation,
@@ -144,6 +149,7 @@ export async function saveEntry(
       partOfSpeech: input.partOfSpeech,
       cefr: input.cefr,
       meaning: input.meaning,
+      senses: input.senses,
       aiExplanation: input.aiExplanation,
       englishDefinition: input.englishDefinition,
       sentenceTranslation: input.sentenceTranslation,
@@ -280,11 +286,23 @@ export async function mergeEntries(
         if (!entry.deletedAt) result.added++
         continue
       }
+      /*
+       * 直接用 `decide` 的返回值，**不要**拿它和两个入参比引用。
+       *
+       * 这里曾经写的是 `winner === entry ? {...entry, id} : existing`。而
+       * `resolveConflict` 在最常见的那条路上返回的是一个**新对象**
+       * （编辑取较新的一方、复习状态取较近的一次、计数取两边最大值）——
+       * 于是两个引用判断同时不成立，落到 `existing`：那份逐字段合出来的结果
+       * 被整个丢掉，本地永远赢。
+       *
+       * 后果是同步只剩下删除还有效：另一台设备上写的笔记、改过的释义、
+       * 复习进度，拉下来之后一律消失，而且没有任何提示——两边都显示"同步成功"。
+       *
+       * id 始终沿用本地那份：远端的 id 换过来会让本地已有的引用（复习记录、
+       * 界面上打开着的卡）全部指空。
+       */
       const winner = decide(existing, entry)
-      byNormalized.set(
-        entry.normalized,
-        winner === entry ? { ...entry, id: existing.id } : existing,
-      )
+      byNormalized.set(entry.normalized, { ...winner, id: existing.id })
       result.merged++
     }
 

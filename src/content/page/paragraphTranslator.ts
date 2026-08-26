@@ -1,6 +1,12 @@
 import { sendMessage } from '@/services/messaging.ts'
-import { TRANSLATED_MARK, findUnitAt, type TranslationUnit } from './walker.ts'
-import { clearSlot, createSlot, fillSlot } from './slot.ts'
+import {
+  TRANSLATED_MARK,
+  TRANSLATION_CLASS,
+  findUnitAt,
+  type TranslationUnit,
+} from './walker.ts'
+import { clearSlot, createSlot, fillSlot, sourceForSlot } from './slot.ts'
+import { LineRetryBudget } from './lineRetry.ts'
 import { ChangeWatcher, type WatchedUnit } from './watcher.ts'
 import { noteOrphanError } from '@/shared/extensionContext.ts'
 
@@ -76,6 +82,13 @@ export class ParagraphTranslator {
   private key: ParagraphTriggerKey = 'off'
   private armed = false
   private hovered: TranslationUnit | null = null
+  /*
+   * 高亮画在谁身上。
+   *
+   * 通常就是原文自己，但「仅译文」模式下原文是 display:none 的——描一个看不见的
+   * 元素等于没描，读者按下键之前不知道自己要翻的是哪一段。那时候描的是译文。
+   */
+  private outlined: Element | null = null
   private pointer: { x: number; y: number } | null = null
   private readonly inFlight = new WeakSet<Element>()
   /*
@@ -85,6 +98,11 @@ export class ParagraphTranslator {
    * translator, so the gesture translated once and never looked again.
    */
   private readonly watcher = new ChangeWatcher((unit) => void this.retranslate(unit))
+  /*
+   * 整段翻译是一次一段的手势，没有「一轮」可言——额度用完就不再补救，
+   * 直到读者重新按下触发键（`setKey` 会重置）。
+   */
+  private readonly lineRetries = new LineRetryBudget()
   private readonly options: ParagraphTranslatorOptions
   private bound = false
 
@@ -96,6 +114,8 @@ export class ParagraphTranslator {
     this.key = key
     if (key === 'off') this.disarm()
     if (!this.bound && key !== 'off') this.bind()
+    // 重新启用这个手势，就重新给一次补救额度。
+    if (key !== 'off') this.lineRetries.reset()
   }
 
   destroy(): void {
@@ -156,21 +176,49 @@ export class ParagraphTranslator {
   }
 
   private clearHover(): void {
-    if (this.hovered) this.hovered.element.classList.remove(HOVER_CLASS)
+    this.outlined?.classList.remove(HOVER_CLASS)
+    this.outlined = null
     this.hovered = null
   }
 
   private updateHover(): void {
     if (!this.pointer) return
-    const element = document.elementFromPoint(this.pointer.x, this.pointer.y)
-    const unit = findUnitAt(element, {
+    const under = document.elementFromPoint(this.pointer.x, this.pointer.y)
+
+    /*
+     * 悬停在译文上，算作悬停在它的原文上。
+     *
+     * `findUnitAt` 会把我们自己插入的节点直接判掉，所以不先换成原文的话，
+     * 「仅译文」模式下翻完一段就再也悬停不到它——这个手势最要紧的那一半
+     * （再按一次收起）就没了。
+     */
+    const fromSlot = sourceForSlot(under)
+    const unit = findUnitAt(fromSlot ?? under, {
       ...(this.options.targetLanguage ? { targetLanguage: this.options.targetLanguage() } : {}),
     })
-    if (unit?.element === this.hovered?.element) return
+    if (!unit) {
+      this.clearHover()
+      return
+    }
+
+    // 原文可能是藏着的，那就描它的译文——描一个看不见的元素等于没描。
+    const outline = fromSlot
+      ? (under?.closest(`.${TRANSLATION_CLASS}`) ?? unit.element)
+      : unit.element
+
+    /*
+     * 段落没变、但该描的东西变了，也要重画。
+     *
+     * 只比段落是不够的：鼠标从原文挪到它自己的译文上，段落是同一个，
+     * 高亮却应当跟着挪过去。少了这半个判断，高亮会留在原文上——
+     * 而仅译文模式下原文是看不见的，读者眼里就是「高亮没了」。
+     */
+    if (unit.element === this.hovered?.element && outline === this.outlined) return
+
     this.clearHover()
-    if (!unit) return
     this.hovered = unit
-    unit.element.classList.add(HOVER_CLASS)
+    this.outlined = outline
+    outline.classList.add(HOVER_CLASS)
   }
 
   /** The paragraph grew (or changed); replace its translation with a fresh one. */
@@ -198,8 +246,11 @@ export class ParagraphTranslator {
         texts: [text],
         hint: document.title,
       })
-      if (fillSlot(element, text, result.translations[0] ?? '')) {
+      const outcome = fillSlot(element, text, result.translations[0] ?? '')
+      if (outcome !== 'rejected') {
         this.watcher.watch({ element, text })
+        // 换行被压平了，逐行重译一次——整段翻译尤其吃这个亏：读者点的就是这一段。
+        if (outcome === 'line-shape-lost') await this.lineRetries.retranslate([{ element, text }])
       }
     } catch (error) {
       clearSlot(element)

@@ -1,4 +1,5 @@
 import { SyncError, type SyncErrorCode } from '@/types/sync.ts'
+import { t } from '@/i18n/index.ts'
 
 /**
  * The slice of the GitHub REST API this product needs — five calls.
@@ -262,7 +263,7 @@ export class GitHubClient {
       // built on a parent that is no longer the tip, so landing it would drop
       // whatever they just pushed. Surface it as retryable.
       if (error instanceof SyncError && (error.code === 'conflict' || error.status === 422)) {
-        throw new SyncError('stale_head', '远端已前进，需要基于最新内容重新合并', 422)
+        throw new SyncError('stale_head', t('error.sync.head_moved'), 422)
       }
       throw error
     }

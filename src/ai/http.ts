@@ -1,4 +1,5 @@
 import { truncate } from '@/shared/utils.ts'
+import { t } from '@/i18n/index.ts'
 import { AIError, type AIErrorCode, type ProviderId } from '@/types/ai.ts'
 
 export const DEFAULT_TIMEOUT_MS = 30_000
@@ -53,7 +54,7 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
       'abort',
       () => {
         clearTimeout(timer)
-        reject(new AIError('aborted', '请求已取消', 'mock'))
+        reject(new AIError('aborted', t('error.ai.aborted'), 'mock'))
       },
       { once: true },
     )
@@ -112,7 +113,7 @@ async function postJsonOnce<T>(options: {
   if (!raw.trim()) {
     throw new AIError(
       'bad_response',
-      `${providerId} 返回了空的响应体（HTTP ${response.status}）——通常是连接被中断`,
+      t('error.http.empty_body', { provider: providerId, status: response.status }),
       providerId,
       response.status,
       { retryable: true },
@@ -121,14 +122,14 @@ async function postJsonOnce<T>(options: {
   try {
     return JSON.parse(raw) as T
   } catch {
-    const contentType = response.headers.get('content-type') ?? '未标注'
+    const contentType = response.headers.get('content-type') ?? t('error.http.content_type_missing')
     const looksLikeHtml = /^\s*<(!doctype|html)/i.test(raw)
     const hint = looksLikeHtml
-      ? '返回的是网页而不是接口响应，通常意味着 API 地址填错了，或请求被网关/代理拦下'
+      ? t('error.http.html_instead_of_json')
       : `content-type: ${contentType}`
     throw new AIError(
       'bad_response',
-      `${providerId} 的响应不是 JSON（${hint}）：${truncate(raw, 200)}`,
+      t('error.http.not_json', { provider: providerId, hint, body: truncate(raw, 200) }),
       providerId,
       response.status,
     )

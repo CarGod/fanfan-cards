@@ -10,6 +10,7 @@ import type {
   TranslateResult,
   WordExplanation,
 } from '@/types/ai.ts'
+import { t } from '@/i18n/index.ts'
 import { postJson } from '../http.ts'
 import { extractJson } from '../json.ts'
 import {
@@ -47,7 +48,7 @@ import {
  *
  * `max_tokens` is a ceiling, not a charge: unused headroom costs nothing.
  */
-const EXPLAIN_MAX_TOKENS = 4000
+export const EXPLAIN_MAX_TOKENS = 4000
 
 /**
  * People paste whatever their provider's docs showed them: a bare host, a path
@@ -250,16 +251,19 @@ export class OpenAICompatibleProvider implements AIProvider {
     if (choice?.finish_reason === 'length') {
       throw new AIError(
         'bad_response',
-        `模型在写出答案前就用尽了 ${args.maxTokens} 个输出 token（finish_reason=length，`
-          + `已生成 ${response.usage?.completion_tokens ?? '?'} 个）。`
-          + '这通常意味着该模型是推理型模型，请在设置页换一个更快的模型，或改用其它服务商。',
+        t('error.provider.token_budget_spent', {
+          limit: args.maxTokens,
+          used: response.usage?.completion_tokens ?? '?',
+        }),
         this.id,
       )
     }
     throw new AIError(
       'bad_response',
-      `模型没有返回任何内容（finish_reason=${choice?.finish_reason ?? 'unknown'}`
-        + `${reasoning ? '，但返回了推理内容且其中没有 JSON' : ''}）`,
+      t('error.provider.no_content', {
+        reason: choice?.finish_reason ?? 'unknown',
+        note: reasoning ? t('error.provider.reasoning_no_json') : '',
+      }),
       this.id,
     )
   }

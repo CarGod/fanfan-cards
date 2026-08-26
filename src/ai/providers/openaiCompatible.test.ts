@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AIError } from '@/types/ai.ts'
-import { OpenAICompatibleProvider } from './openaiCompatible.ts'
+import { t } from '@/i18n/index.ts'
+import { EXPLAIN_MAX_TOKENS, OpenAICompatibleProvider } from './openaiCompatible.ts'
 
 function provider(mode: 'json_schema' | 'json_object' | 'none') {
   return new OpenAICompatibleProvider({
@@ -21,6 +22,7 @@ const GOOD_JSON = JSON.stringify({
   partOfSpeech: 'adjective',
   cefr: 'B2',
   meaning: '误导性的',
+  senses: [],
   contextMeaning: '这里指让家长产生错误理解。',
   englishDefinition: 'giving a wrong impression',
   examples: [{ sentence: 'The chart is misleading.', translation: '这张图有误导性。' }],
@@ -77,13 +79,18 @@ describe('OpenAICompatibleProvider', () => {
 
   // A reasoning model burns its budget before writing any answer. "Model
   // returned no content" is true and useless; the cause has to be in the error.
+  //
+  // 断言比的是 `t()` 的返回值，不是写死的中文片段——这些消息现在有中英两版，
+  // 断死其中一版会在另一种界面语言下变成假失败。比 `t(键, 参数)` 同时锁住了
+  // 「用的哪个键」和「填进去的诊断信息」，正是这条测试真正关心的东西。
   it('explains a length cutoff instead of reporting silence', async () => {
     stubChat({ content: '' }, { finish_reason: 'length' })
     const error = await provider('json_object').explainWord(INPUT).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(AIError)
     expect((error as AIError).code).toBe('bad_response')
-    expect((error as AIError).message).toContain('finish_reason=length')
-    expect((error as AIError).message).toContain('推理型模型')
+    expect((error as AIError).message).toBe(
+      t('error.provider.token_budget_spent', { limit: EXPLAIN_MAX_TOKENS, used: '?' }),
+    )
   })
 
   it('recovers the answer when a gateway puts it in the reasoning channel', async () => {
@@ -95,15 +102,21 @@ describe('OpenAICompatibleProvider', () => {
   it('reports the finish reason when there is nothing usable anywhere', async () => {
     stubChat({ content: '' }, { finish_reason: 'stop' })
     const error = await provider('json_object').explainWord(INPUT).catch((e: unknown) => e)
-    expect((error as AIError).message).toContain('finish_reason=stop')
+    expect((error as AIError).message).toBe(
+      t('error.provider.no_content', { reason: 'stop', note: '' }),
+    )
   })
 
   // Valid JSON with the wrong keys used to render as a card with a word and an
   // empty body — indistinguishable from "the AI had nothing to say".
   it('treats a shape mismatch as a failure, with the raw response attached', async () => {
-    stubChat({ content: JSON.stringify({ 单词: 'misleading', 释义: '误导性的' }) })
+    const wrongShape = { 单词: 'misleading', 释义: '误导性的' }
+    stubChat({ content: JSON.stringify(wrongShape) })
     const error = await provider('json_object').explainWord(INPUT).catch((e: unknown) => e)
     expect((error as AIError).code).toBe('bad_response')
-    expect((error as AIError).message).toContain('单词')
+    // 「原样附上模型返回了什么」是这条测试的重点，所以要连 body 占位符一起比。
+    expect((error as AIError).message).toBe(
+      t('error.schema.field_mismatch', { body: JSON.stringify(wrongShape) }),
+    )
   })
 })

@@ -82,6 +82,25 @@ const MIGRATIONS: Record<number, Migration> = {
     }
     await storage().set(STORAGE_KEYS.words, words)
   },
+
+  /**
+   * v6: 释义按词性拆开存了一份结构化的。
+   *
+   * 老词卡补一个空数组，**不去解析**它们的 meaning。那一行确实常常长得像
+   * 「形容词：独有的；名词：独家新闻」，但也可能是「独有的，排外的」，
+   * 甚至是模型某次自由发挥的别的形状——按分号硬拆，拆对的那些没人夸，
+   * 拆错的那些会把一条本来读得通的释义切成两半胡话。
+   *
+   * 空数组是诚实的：这张卡没有结构化释义，显示时照旧用 meaning。
+   */
+  6: async (db) => {
+    const words = db[STORAGE_KEYS.words] as Record<string, Record<string, unknown>> | undefined
+    if (!words) return
+    for (const entry of Object.values(words)) {
+      if (!Array.isArray(entry['senses'])) entry['senses'] = []
+    }
+    await storage().set(STORAGE_KEYS.words, words)
+  },
 }
 
 export async function initStorage(): Promise<StorageMeta> {

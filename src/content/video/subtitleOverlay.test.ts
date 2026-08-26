@@ -115,3 +115,41 @@ describe('字幕叠加层', () => {
     expect(overlay.element.dataset['bare']).toBe('false')
   })
 })
+
+/**
+ * 「关掉再打开」走的路径和「换视频」不一样。
+ *
+ * 换视频会新建一个 SubtitleOverlay，去重用的 `lastIndex` 自然是干净的；
+ * 而在同一支视频上关掉再打开，用的还是同一个实例——`lastIndex` 停在关掉那一刻的
+ * 下标上，下一次 render 被去重挡回去，画面上就一个字都没有。
+ *
+ * 这也是为什么这一组用例要显式地「藏起来再 render 一次」：那正是
+ * `teardownRun()` 对叠加层做的全部事情。
+ */
+describe('藏起来之后再显示', () => {
+  it('只把 visibility 设成 hidden，同一条字幕上再 render 是不会回来的', () => {
+    overlay.render(cues, ['这是最好的本地模型'], 500)
+    overlay.element.style.visibility = 'hidden'
+
+    overlay.render(cues, ['这是最好的本地模型'], 500)
+    expect(overlay.element.style.visibility).toBe('hidden')
+  })
+
+  it('refresh() 之后同一条字幕能重新画出来', () => {
+    overlay.render(cues, ['这是最好的本地模型'], 500)
+    overlay.element.style.visibility = 'hidden'
+
+    overlay.refresh()
+    overlay.render(cues, ['这是最好的本地模型'], 500)
+    expect(overlay.element.style.visibility).toBe('visible')
+    expect(translation().textContent).toBe('这是最好的本地模型')
+  })
+
+  it('播放头跨到下一条时本来就会自己回来——所以症状是空白一会儿，不是永久空白', () => {
+    overlay.render(cues, ['这是最好的本地模型', '你今天就能跑'], 500)
+    overlay.element.style.visibility = 'hidden'
+
+    overlay.render(cues, ['这是最好的本地模型', '你今天就能跑'], 1500)
+    expect(overlay.element.style.visibility).toBe('visible')
+  })
+})

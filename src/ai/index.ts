@@ -1,5 +1,6 @@
 import type { AIProvider } from '@/types/ai.ts'
-import { providerMeta, type Settings } from '@/types/settings.ts'
+import { t } from '@/i18n/index.ts'
+import { providerLabel, providerMeta, type Settings } from '@/types/settings.ts'
 import { ClaudeProvider } from './providers/claude.ts'
 import { GeminiProvider } from './providers/gemini.ts'
 import { MockProvider } from './providers/mock.ts'
@@ -31,7 +32,7 @@ export function resolveProvider(settings: Settings): ResolvedProvider {
   if (meta.requiresKey && !apiKey) {
     return {
       provider: new MockProvider(),
-      downgradeReason: `${meta.label} 尚未填写 API Key，已使用离线词典`,
+      downgradeReason: t('error.provider.no_key_offline', { provider: providerLabel(meta) }),
     }
   }
 
@@ -79,7 +80,10 @@ export function resolveProvider(settings: Settings): ResolvedProvider {
   } catch (error) {
     return {
       provider: new MockProvider(),
-      downgradeReason: `${meta.label} 配置有误（${error instanceof Error ? error.message : String(error)}），已使用离线词典`,
+      downgradeReason: t('error.provider.bad_config_offline', {
+        provider: providerLabel(meta),
+        reason: error instanceof Error ? error.message : String(error),
+      }),
     }
   }
 }

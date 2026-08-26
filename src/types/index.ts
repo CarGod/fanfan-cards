@@ -4,11 +4,13 @@ export type * from './ai.ts'
 export type * from './messages.ts'
 export type * from './settings.ts'
 export {
-  FAMILIARITY_LABELS,
+  FAMILIARITY_LABEL_KEYS,
+  familiarityLabel,
+  CEFR_HINT_KEYS,
+  cefrHint,
   REVIEW_STATUS_BY_LEVEL,
-  REVIEW_GRADE_LABELS,
 } from './vocabulary.ts'
-export { AIError, AI_ERROR_MESSAGES } from './ai.ts'
+export { AIError, aiErrorMessage } from './ai.ts'
 export {
   settingsSchema,
   DEFAULT_SETTINGS,

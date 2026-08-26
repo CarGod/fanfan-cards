@@ -7,9 +7,17 @@
  * would make the product feel unreliable.
  */
 
+import type { MessageKey } from '@/i18n/index.ts'
+
 export interface SourceLanguage {
   code: string
-  label: string
+  /**
+   * 下拉框里显示的名字，存的是文案键。
+   *
+   * 存键而不是存字：这两张表是模块级常量，写死文案等于把语言冻在模块加载那一刻。
+   * 取值在 `Options.tsx` 的渲染里做。
+   */
+  labelKey: MessageKey
   /** Prompt-facing name. */
   name: string
   /** A selection must contain this script to be worth looking up. */
@@ -18,7 +26,8 @@ export interface SourceLanguage {
 
 export interface TargetLanguage {
   code: string
-  label: string
+  /** 同 {@link SourceLanguage.labelKey}：存键，渲染时再取。 */
+  labelKey: MessageKey
   name: string
   /**
    * Script of the user's own language. When it is non-Latin we can safely skip
@@ -36,26 +45,26 @@ const HANGUL = /\p{Script=Hangul}/u
 const CYRILLIC = /\p{Script=Cyrillic}/u
 
 export const SOURCE_LANGUAGES: readonly SourceLanguage[] = [
-  { code: 'auto', label: '自动识别', name: 'the language of the text', script: null },
-  { code: 'en', label: '英语 English', name: 'English', script: LATIN },
-  { code: 'ja', label: '日语 日本語', name: 'Japanese', script: JAPANESE },
-  { code: 'ko', label: '韩语 한국어', name: 'Korean', script: HANGUL },
-  { code: 'de', label: '德语 Deutsch', name: 'German', script: LATIN },
-  { code: 'fr', label: '法语 Français', name: 'French', script: LATIN },
-  { code: 'es', label: '西班牙语 Español', name: 'Spanish', script: LATIN },
-  { code: 'ru', label: '俄语 Русский', name: 'Russian', script: CYRILLIC },
+  { code: 'auto', labelKey: 'language.source.auto', name: 'the language of the text', script: null },
+  { code: 'en', labelKey: 'language.source.en', name: 'English', script: LATIN },
+  { code: 'ja', labelKey: 'language.source.ja', name: 'Japanese', script: JAPANESE },
+  { code: 'ko', labelKey: 'language.source.ko', name: 'Korean', script: HANGUL },
+  { code: 'de', labelKey: 'language.source.de', name: 'German', script: LATIN },
+  { code: 'fr', labelKey: 'language.source.fr', name: 'French', script: LATIN },
+  { code: 'es', labelKey: 'language.source.es', name: 'Spanish', script: LATIN },
+  { code: 'ru', labelKey: 'language.source.ru', name: 'Russian', script: CYRILLIC },
 ]
 
 export const TARGET_LANGUAGES: readonly TargetLanguage[] = [
-  { code: 'zh-CN', label: '简体中文', name: '简体中文', nativeScript: HAN },
-  { code: 'zh-TW', label: '繁體中文', name: '繁體中文', nativeScript: HAN },
-  { code: 'en', label: 'English', name: 'English', nativeScript: null },
-  { code: 'ja', label: '日本語', name: '日本語', nativeScript: JAPANESE },
-  { code: 'ko', label: '한국어', name: '한국어', nativeScript: HANGUL },
-  { code: 'de', label: 'Deutsch', name: 'Deutsch', nativeScript: null },
-  { code: 'fr', label: 'Français', name: 'Français', nativeScript: null },
-  { code: 'es', label: 'Español', name: 'Español', nativeScript: null },
-  { code: 'ru', label: 'Русский', name: 'Русский', nativeScript: CYRILLIC },
+  { code: 'zh-CN', labelKey: 'language.target.zh_cn', name: '简体中文', nativeScript: HAN },
+  { code: 'zh-TW', labelKey: 'language.target.zh_tw', name: '繁體中文', nativeScript: HAN },
+  { code: 'en', labelKey: 'language.target.en', name: 'English', nativeScript: null },
+  { code: 'ja', labelKey: 'language.target.ja', name: '日本語', nativeScript: JAPANESE },
+  { code: 'ko', labelKey: 'language.target.ko', name: '한국어', nativeScript: HANGUL },
+  { code: 'de', labelKey: 'language.target.de', name: 'Deutsch', nativeScript: null },
+  { code: 'fr', labelKey: 'language.target.fr', name: 'Français', nativeScript: null },
+  { code: 'es', labelKey: 'language.target.es', name: 'Español', nativeScript: null },
+  { code: 'ru', labelKey: 'language.target.ru', name: 'Русский', nativeScript: CYRILLIC },
 ]
 
 export const DEFAULT_SOURCE = 'auto'
@@ -177,4 +186,53 @@ export function repairOmissions(source: string, translation: string): string {
   if (missing.length === 0) return translation
 
   return `${translation.trimEnd()}\n${[...new Set(missing)].join(' ')}`
+}
+
+/**
+ * 让译文的行结构和原文对上。
+ *
+ * 提示词里已经写了「输入几行、译文就几行」，但那是**请求时好好说**——
+ * 和 @用户名 那件事一模一样，说了不算数。原文里的换行不是排版装饰：地址、诗、
+ * 歌词、推文里分行的那几句，塌成一整段之后读者要重新去猜哪里断句，
+ * 而他本来是靠这些行看懂结构的。
+ *
+ * 这里只做**可靠**的修复，修不了就返回 `null`，让调用方去逐行重译——
+ * 那条路的结构是拼出来的，模型没有插手的余地。
+ *
+ * 返回 `null` 的判断标准是「我没法确定哪句对哪行」。硬猜出来的断句比塌成一段更糟：
+ * 塌了读者知道自己在读一整段，断错了他会以为那就是原文的结构。
+ */
+export function conformLineShape(source: string, translation: string): string | null {
+  const sourceLines = source.split('\n')
+  const filled = sourceLines.filter((line) => line.trim())
+  const translated = translation.split('\n').filter((line) => line.trim())
+
+  // 原文本来就是一行：译文里多出来的换行是模型自己加的，合掉。
+  if (filled.length <= 1) {
+    return translated.join(' ').trim()
+  }
+
+  // 行数对不上，只靠这一份译文没法知道哪句属于哪行。
+  if (translated.length !== filled.length) return null
+
+  return rejoinOnSkeleton(source, translated)
+}
+
+/**
+ * 按**原文的骨架**把逐行译文拼回去。
+ *
+ * 不直接用译文自己的换行：空行要落在原文空行的位置上，模型少给或多给一个空行，
+ * 都不该让译文和原文错开一行——错开一行的对照，比不分行更难读。
+ *
+ * 每行译文里自带的换行会被压平。不压的话「按行拼接」这个保证就漏了：
+ * 一行译回来两行，结构又对不上，而那时已经没有下一轮兜底了。
+ */
+export function rejoinOnSkeleton(source: string, lines: readonly string[]): string {
+  let cursor = 0
+  return source
+    .split('\n')
+    .map((line) =>
+      line.trim() ? (lines[cursor++] ?? '').replace(/\s*\n\s*/g, ' ').trim() : '',
+    )
+    .join('\n')
 }

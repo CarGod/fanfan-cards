@@ -41,6 +41,7 @@ function entry(
     partOfSpeech: '',
     cefr: '',
     meaning: '',
+    senses: [],
     aiExplanation: '',
     englishDefinition: '',
     sentenceTranslation: '',

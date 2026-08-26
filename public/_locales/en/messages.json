@@ -1,0 +1,23 @@
+{
+  "extName": {
+    "message": "FanFan Cards — AI English Reading Assistant",
+    "description": "Extension name shown in the Chrome Web Store and chrome://extensions."
+  },
+  "extDescription": {
+    "message": "Read real English pages, let AI explain unfamiliar words in context, save them as your own word cards, and review them on a memory curve.",
+    "description": "One-line summary shown in the store listing."
+  },
+  "actionTitle": {
+    "message": "FanFan Cards",
+    "description": "Tooltip for the toolbar icon."
+  },
+  "commandExplainSelection": {
+    "message": "Explain the selected English"
+  },
+  "commandTranslatePage": {
+    "message": "Translate / restore the whole page"
+  },
+  "commandOpenApp": {
+    "message": "Open word cards and review"
+  }
+}

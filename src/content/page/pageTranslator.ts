@@ -7,6 +7,7 @@ import {
   type TranslationUnit,
 } from './walker.ts'
 import { clearAllSlots, clearSlot, createSlot, fillSlot, sweepOrphanSlots } from './slot.ts'
+import { LineRetryBudget } from './lineRetry.ts'
 import { ChangeWatcher } from './watcher.ts'
 import { noteOrphanError } from '@/shared/extensionContext.ts'
 
@@ -70,6 +71,9 @@ export class PageTranslator {
       this.absorbNewUnits()
     },
   )
+  private readonly lineRetries = new LineRetryBudget()
+  /** 换行被压平、等着逐行补一次的段落。等主队列排空再处理。 */
+  private lineShapeLost: TranslationUnit[] = []
   private queue: TranslationUnit[] = []
   private flushing = false
   private state: TranslatorState = 'idle'
@@ -105,6 +109,9 @@ export class PageTranslator {
     this.state = 'running'
     this.done = 0
     this.failures = 0
+    // 补救额度按「一轮翻译」计：重新开一次整页翻译，就该重新给一次机会。
+    this.lineRetries.reset()
+    this.lineShapeLost = []
     this.emit()
 
     this.walkOptions = {
@@ -183,9 +190,18 @@ export class PageTranslator {
     this.watcher.stop()
     this.units = []
     this.queue = []
+    this.lineShapeLost = []
     this.state = 'idle'
 
     clearAllSlots()
+    /*
+     * 这里**不碰**显示模式。
+     *
+     * 它曾经在这里被清掉，理由是「关掉翻译要把页面还原成进来之前的样子」。
+     * 但显示模式现在整页和整段共用：关掉整页翻译之后，读者悬停翻译出来的段落
+     * 还在页面上，凭什么因为整页停了就把它们的原文放回来。撤干净的时机是
+     * 「这个站被禁用」或者内容脚本卸载，那两处都在 App 里。
+     */
     this.emit()
   }
 
@@ -221,6 +237,13 @@ export class PageTranslator {
         // article is exactly when a stutter is most visible.
         await yieldToMain()
       }
+
+      // 主队列空了，限流额度这才轮得到补救用。
+      if (this.state === 'running' && this.lineShapeLost.length > 0) {
+        const pending = this.lineShapeLost
+        this.lineShapeLost = []
+        await this.lineRetries.retranslate(pending)
+      }
     } finally {
       this.flushing = false
     }
@@ -235,15 +258,26 @@ export class PageTranslator {
         hint: document.title,
       })
 
+      const lost: TranslationUnit[] = []
       batch.forEach((unit, index) => {
-        if (fillSlot(unit.element, unit.text, result.translations[index] ?? '')) {
-          this.watcher.watch(unit)
-        }
+        const outcome = fillSlot(unit.element, unit.text, result.translations[index] ?? '')
+        if (outcome === 'rejected') return
+        this.watcher.watch(unit)
+        if (outcome === 'line-shape-lost') lost.push(unit)
       })
       // Consecutive, not cumulative: a run that keeps succeeding has recovered.
       this.failures = 0
       this.done += batch.length
       this.emit()
+
+      /*
+       * 换行被压平的那几段先攒着，**不在这里补**。
+       *
+       * 补救是第二次请求，而这一刻主队列还在跑。就地补等于在限流额度里和
+       * 「读者正在等的那一屏」抢——一次 429 废掉的是整轮翻译，换来的只是
+       * 几段本来就已经读得懂的译文多了几个换行。攒到队列排空再说。
+       */
+      if (lost.length > 0) this.lineShapeLost.push(...lost)
     } catch (error) {
       for (const unit of batch) {
         // Leave the original untouched and drop our placeholder: a page full of

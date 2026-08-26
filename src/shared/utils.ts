@@ -1,5 +1,6 @@
 /** Small, dependency-free helpers shared by every entrypoint. */
 
+import { currentLanguage, t } from '@/i18n/index.ts'
 import type { SelectionKind } from '@/types/vocabulary.ts'
 
 export function createId(prefix: string): string {
@@ -63,23 +64,31 @@ export function dayDiff(a: number, b: number): number {
   return Math.round((startOfDay(b) - startOfDay(a)) / DAY_MS)
 }
 
+/*
+ * 这两个函数在函数体里取文案，不在模块顶层。
+ *
+ * 它们的返回值是一句一句拼出来的界面文字，不是常量；写成模块级的表会让语言停在
+ * 加载那一刻，而调用方（词库列表、闪卡预览、同步状态）恰好都是长驻页面。
+ */
 export function formatRelative(at: number, now: number = Date.now()): string {
   const diff = now - at
-  if (diff < 60_000) return '刚刚'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`
+  if (diff < 60_000) return t('time.just_now')
+  if (diff < 3_600_000) return t('time.minutes_ago', { count: Math.floor(diff / 60_000) })
+  if (diff < 86_400_000) return t('time.hours_ago', { count: Math.floor(diff / 3_600_000) })
   const days = dayDiff(at, now)
-  if (days === 1) return '昨天'
-  if (days < 30) return `${days} 天前`
-  return new Date(at).toLocaleDateString('zh-CN')
+  if (days === 1) return t('time.yesterday')
+  if (days < 30) return t('time.days_ago', { count: days })
+  // 一个月以上就报日期。日期格式跟界面语言走，不然英文界面里会冒出 2026/1/10 这种
+  // 只有中文读者才熟悉的排法。
+  return new Date(at).toLocaleDateString(currentLanguage() === 'en' ? 'en-US' : 'zh-CN')
 }
 
 export function formatDue(dueAt: number, now: number = Date.now()): string {
-  if (dueAt <= now) return '待复习'
+  if (dueAt <= now) return t('time.due.now')
   const days = dayDiff(now, dueAt)
-  if (days <= 0) return '今天稍后'
-  if (days === 1) return '明天'
-  return `${days} 天后`
+  if (days <= 0) return t('time.due.later_today')
+  if (days === 1) return t('time.due.tomorrow')
+  return t('time.due.in_days', { count: days })
 }
 
 export function debounce<A extends unknown[]>(fn: (...args: A) => void, wait: number) {

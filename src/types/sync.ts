@@ -1,5 +1,7 @@
 /** Contracts for syncing the knowledge base to a Git host. */
 
+import { t, type MessageKey } from '@/i18n/index.ts'
+
 export type SyncErrorCode =
   | 'no_token'
   | 'auth'
@@ -24,17 +26,25 @@ export class SyncError extends Error {
   }
 }
 
-export const SYNC_ERROR_MESSAGES: Record<SyncErrorCode, string> = {
-  no_token: '还没有填写 GitHub Token',
-  auth: 'Token 无效或已过期，请重新生成',
-  forbidden: 'Token 权限不足：需要能创建仓库并读写内容（classic token 勾选 repo）',
-  not_found: '找不到该仓库，或 Token 没有访问它的权限',
-  rate_limit: 'GitHub 接口调用过于频繁，请稍后再试',
-  conflict: '远端在同步过程中被改动了，请再同步一次',
-  stale_head: '另一台设备刚刚推送过，正在基于最新内容重试',
-  network: '无法连接 GitHub，请检查网络或代理',
-  timeout: '连接 GitHub 超时',
-  unknown: 'GitHub 同步失败',
+/**
+ * 同上（见 `types/ai.ts`）：表里存键，取文案是函数。常量表会把语言冻结在模块
+ * 加载那一刻，之后用户改设置就不生效了。
+ */
+const SYNC_ERROR_KEYS: Record<SyncErrorCode, MessageKey> = {
+  no_token: 'error.sync.no_token',
+  auth: 'error.sync.auth',
+  forbidden: 'error.sync.forbidden',
+  not_found: 'error.sync.not_found',
+  rate_limit: 'error.sync.rate_limit',
+  conflict: 'error.sync.conflict',
+  stale_head: 'error.sync.stale_head',
+  network: 'error.sync.network',
+  timeout: 'error.sync.timeout',
+  unknown: 'error.sync.unknown',
+}
+
+export function syncErrorMessage(code: SyncErrorCode): string {
+  return t(SYNC_ERROR_KEYS[code] ?? SYNC_ERROR_KEYS.unknown)
 }
 
 /** Files the extension owns in the user's repository. */

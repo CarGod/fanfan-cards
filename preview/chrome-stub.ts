@@ -15,6 +15,11 @@ const SAMPLE_EXPLANATION = {
   partOfSpeech: 'noun',
   cefr: 'B2' as const,
   meaning: '迁移；移民',
+  // 多词性，好在预览里看得到按词性分行的效果。
+  senses: [
+    { partOfSpeech: 'noun', meaning: '迁移，从一处移到另一处；也指人口迁徙' },
+    { partOfSpeech: 'verb', meaning: '迁移（数据或结构）' },
+  ],
   contextMeaning:
     '这里指数据库结构或数据从旧版本迁移到新版本的过程，不是人口迁徙。作者强调它"危险"，是因为一旦迁移脚本在生产库上执行出错，数据可能无法回滚。',
   englishDefinition:

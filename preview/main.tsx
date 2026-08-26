@@ -8,6 +8,9 @@
  *
  * This directory is not part of the extension build.
  */
+import { useEffect, useState } from 'react'
+import { SegmentedControl } from '@/components/index.tsx'
+import { setLanguage, type ResolvedLanguage } from '@/i18n/index.ts'
 import './chrome-stub.ts'
 import { SAMPLE_EXPLANATION } from './chrome-stub.ts'
 import { createRoot } from 'react-dom/client'
@@ -19,6 +22,7 @@ import { App } from '@/app/App.tsx'
 import { Popup } from '@/popup/Popup.tsx'
 import { Options } from '@/options/Options.tsx'
 import { FeedShowcase } from './FeedShowcase.tsx'
+import { YouTubeShowcase } from './YouTubeShowcase.tsx'
 import { STORAGE_KEYS } from '@/shared/constants.ts'
 import { storage } from '@/storage/area.ts'
 import { DAY_MS, dateKey } from '@/shared/utils.ts'
@@ -45,6 +49,7 @@ function entry(
     partOfSpeech: 'noun',
     cefr: 'B2',
     meaning: '迁移；移民',
+    senses: [],
     aiExplanation: SAMPLE_EXPLANATION.contextMeaning,
     englishDefinition: SAMPLE_EXPLANATION.englishDefinition,
     examples: SAMPLE_EXPLANATION.examples,
@@ -81,6 +86,93 @@ function entry(
   }
 }
 
+/** 多词性释义的形式对照。 */
+const MULTI_SENSE = [
+  {
+    title: '两个词性',
+    word: 'exclusive',
+    sentence: 'Exclusive: post-GPT-6 is already running in the lab.',
+    explanation: {
+      ...SAMPLE_EXPLANATION,
+      word: 'exclusive',
+      lemma: 'exclusive',
+      phonetic: '/ɪkˈskluːsɪv/',
+      partOfSpeech: 'noun',
+      cefr: 'B2' as const,
+      meaning: '',
+      senses: [
+        { partOfSpeech: 'adjective', meaning: '独有的，排外的；不与他人共享的' },
+        { partOfSpeech: 'noun', meaning: '独家新闻' },
+      ],
+      contextMeaning: '这里是名词用法，用作标题标签，意思是"独家消息"。',
+      englishDefinition: 'not shared with others; or, a news story only one outlet has',
+      sentenceTranslation: '独家：GPT-6 之后的那个模型已经在实验室里跑起来了。',
+      examples: [
+        {
+          sentence: 'The magazine ran an exclusive on the merger.',
+          translation: '这家杂志刊出了那桩并购的独家报道。',
+        },
+      ],
+      synonyms: [{ word: 'scoop', meaning: '独家新闻，侧重抢先报道' }],
+    },
+  },
+  {
+    title: '三个词性',
+    word: 'run',
+    sentence: 'They run the migration twice before every release.',
+    explanation: {
+      ...SAMPLE_EXPLANATION,
+      word: 'run',
+      lemma: 'run',
+      phonetic: '/rʌn/',
+      partOfSpeech: 'verb',
+      cefr: 'A1' as const,
+      meaning: '',
+      senses: [
+        { partOfSpeech: 'verb', meaning: '运行，执行；也指跑步' },
+        { partOfSpeech: 'noun', meaning: '一次运行，一趟；也指连续的一段' },
+        { partOfSpeech: 'adjective', meaning: '（run-down）破旧的，疲惫的' },
+      ],
+      contextMeaning: '这里是动词，指执行迁移脚本，不是跑步。',
+      englishDefinition: 'to execute a program or process',
+      sentenceTranslation: '每次发版之前，他们都会把迁移跑两遍。',
+      examples: [
+        {
+          sentence: 'We run the test suite on every commit.',
+          translation: '我们在每次提交上都跑一遍测试。',
+        },
+      ],
+      synonyms: [{ word: 'execute', meaning: '执行，更正式，多用于命令或程序' }],
+    },
+  },
+  {
+    title: '单义词（退回一行）',
+    word: 'idempotent',
+    sentence: 'Make the handler idempotent so a retry is harmless.',
+    explanation: {
+      ...SAMPLE_EXPLANATION,
+      word: 'idempotent',
+      lemma: 'idempotent',
+      phonetic: '/aɪˈdempətənt/',
+      partOfSpeech: 'adjective',
+      cefr: 'C1' as const,
+      meaning: '幂等的：做一次和做多次结果相同',
+      // 单义词返回空数组，显示时退回那一行 meaning。
+      senses: [],
+      contextMeaning: '这里说的是这个处理函数重复执行也不会产生额外影响。',
+      englishDefinition: 'producing the same result however many times it is applied',
+      sentenceTranslation: '把这个处理函数写成幂等的，这样重试就不会有副作用。',
+      examples: [
+        {
+          sentence: 'A PUT request should be idempotent.',
+          translation: 'PUT 请求应当是幂等的。',
+        },
+      ],
+      synonyms: [{ word: 'repeatable', meaning: '可重复的，强调能再做一次，不强调结果相同' }],
+    },
+  },
+]
+
 const WORDS: VocabularyEntry[] = [
   entry('w1', 'migration'),
   entry(
@@ -88,6 +180,7 @@ const WORDS: VocabularyEntry[] = [
     'deprecated',
     {
       meaning: '已弃用的；不推荐使用的',
+      senses: [],
       aiExplanation:
         '这里说的是这个 API 仍然可以调用，但官方不再推荐，且下一个大版本就会删除。不等于"已经删除"。',
       partOfSpeech: 'adjective',
@@ -108,6 +201,7 @@ const WORDS: VocabularyEntry[] = [
     'idempotent',
     {
       meaning: '幂等的',
+      senses: [],
       aiExplanation: '这里指同一个请求重复发送多次，服务端状态和只发送一次完全相同，所以重试是安全的。',
       partOfSpeech: 'adjective',
       phonetic: '/aɪˈdempətənt/',
@@ -127,6 +221,7 @@ const WORDS: VocabularyEntry[] = [
     'bottleneck',
     {
       meaning: '瓶颈',
+      senses: [],
       aiExplanation: '这里指整个流水线里限制吞吐的那一环，作者测出来是磁盘 I/O 而不是 CPU。',
       phonetic: '/ˈbɑːtlnek/',
       createdAt: NOW - 9 * DAY_MS,
@@ -167,10 +262,33 @@ function CardShowcase() {
           autoSpeak={false}
           onSave={() => {}}
           onRemove={() => {}}
-          onOpenBook={() => {}}
           onClose={() => {}}
         />
       </ShadowFrame>
+
+      {/*
+        多词性释义。
+        这三张卡是形式对照：两个词性、三个词性、以及单义词退回一行的样子。
+        单义那张同样重要——大多数词是单义的，这条路必须一直好用。
+      */}
+      {MULTI_SENSE.map((sample) => (
+        <ShadowFrame key={sample.word} title={sample.title}>
+          <WordCard
+            selection={sample.word}
+            sentence={sample.sentence}
+            explanation={sample.explanation}
+            meta={{ providerId: 'claude', model: 'claude-opus-5', offline: false, cached: false }}
+            savedEntry={null}
+            saving={false}
+            enriching={false}
+            showEnglishDefinition
+            autoSpeak={false}
+            onSave={() => {}}
+            onRemove={() => {}}
+            onClose={() => {}}
+          />
+        </ShadowFrame>
+      ))}
 
       <ShadowFrame title="加载态">
         <CardSkeleton word="idempotent" onClose={() => {}} />
@@ -313,7 +431,6 @@ function StoreReaderShowcase() {
             autoSpeak={false}
             onSave={() => {}}
             onRemove={() => {}}
-            onOpenBook={() => {}}
             onClose={() => {}}
           />
         </ShadowMount>
@@ -452,8 +569,18 @@ function Harness() {
     return <App />
   }
   if (store === 'promo') return <StorePromoTile />
+  if (store === 'youtube') return <YouTubeShowcase />
 
   const view = params.get('view') ?? 'card'
+  /*
+   * 预览的语言由这里说了算，不跟着开发者的浏览器走。
+   *
+   * 不定死的话，同一个预览在两台机器上会长得不一样，而「英文标题被截断」这种问题
+   * 只会出现在其中一台上——谁的机器是英文，谁才看得见。
+   */
+  const [language, setLang] = useState<ResolvedLanguage>('zh-CN')
+  useEffect(() => setLanguage('zh-CN'), [])
+
   const views = [
     { id: 'card', label: '划词卡片' },
     { id: 'popup', label: 'Popup' },
@@ -486,6 +613,25 @@ function Harness() {
             {item.label}
           </a>
         ))}
+
+        {/*
+          语言开关。
+          这是个双语产品，而中英两版的排版差别很大——英文标题更长、更容易折行或被截断。
+          预览如果只能看一种语言，那另一种就只能靠上线之后有人报错才发现。
+        */}
+        <div style={{ marginLeft: 'auto' }}>
+          <SegmentedControl
+            value={language}
+            options={[
+              { value: 'zh-CN', label: '中文' },
+              { value: 'en', label: 'English' },
+            ]}
+            onChange={(next) => {
+              setLanguage(next)
+              setLang(next)
+            }}
+          />
+        </div>
       </div>
 
       <div style={{ padding: view === 'app' || view === 'options' ? 0 : 24 }}>

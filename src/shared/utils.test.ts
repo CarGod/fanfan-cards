@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { setLanguage } from '@/i18n/index.ts'
 import { dayDiff, formatDue, hashString, isPhrase, normalizeWord, truncate } from './utils.ts'
 
 describe('normalizeWord', () => {
@@ -33,10 +34,25 @@ describe('dayDiff', () => {
 })
 
 describe('formatDue', () => {
+  const now = new Date(2026, 0, 10, 12).getTime()
+
   it('labels overdue cards as reviewable', () => {
-    const now = new Date(2026, 0, 10, 12).getTime()
+    setLanguage('zh-CN')
     expect(formatDue(now - 1000, now)).toBe('待复习')
     expect(formatDue(new Date(2026, 0, 11, 9).getTime(), now)).toBe('明天')
+  })
+
+  /*
+   * 语言切换后必须跟着变。
+   *
+   * 这一条挡的是「模块顶层求值」那个错：把文案写成模块级常量时，第一个用例照样
+   * 通过，只有换过语言之后才露馅——而那正是没人会手动去点的路径。
+   */
+  it('follows the interface language', () => {
+    setLanguage('en')
+    expect(formatDue(now - 1000, now)).toBe('Due now')
+    expect(formatDue(new Date(2026, 0, 11, 9).getTime(), now)).toBe('Tomorrow')
+    setLanguage('zh-CN')
   })
 })
 

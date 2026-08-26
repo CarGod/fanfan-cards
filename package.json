@@ -1,7 +1,7 @@
 {
   "name": "fanfan-cards",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.4.0",
   "type": "module",
   "description": "Lingua — turn real-world English reading into a personal, AI-explained vocabulary asset.",
   "scripts": {

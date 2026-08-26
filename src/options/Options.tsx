@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { Field, SegmentedControl, Toggle } from '@/components/index.tsx'
+import { Field, SegmentedControl, Select, Toggle } from '@/components/index.tsx'
 import { BrandMark } from '@/components/icons.tsx'
 import { useEntries, useSettings, useToast } from '@/components/hooks.ts'
 import { resolveProvider } from '@/ai/index.ts'
 import { requestOptionalApiAccess } from '@/ai/hostPermission.ts'
-import { AIError, AI_ERROR_MESSAGES } from '@/types/ai.ts'
+import { AIError, aiErrorMessage } from '@/types/ai.ts'
 import {
   PROVIDER_CATALOGUE,
+  providerLabel,
   providerMeta,
   type ProviderConfig,
-  type Settings,
 } from '@/types/settings.ts'
 import { clearCache } from '@/storage/repositories/cacheRepo.ts'
 import { clearTranslationCache } from '@/storage/repositories/translationCacheRepo.ts'
@@ -20,7 +20,8 @@ import {
   importSnapshot,
   snapshotFilename,
 } from '@/services/exportService.ts'
-import { APP_NAME } from '@/shared/constants.ts'
+import { useI18n } from '@/i18n/react.ts'
+import { UI_LANGUAGES, type MessageKey, type UiLanguage } from '@/i18n/index.ts'
 import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from '@/shared/language.ts'
 import { SyncSection } from './SyncSection.tsx'
 import { ReviewSection } from './ReviewSection.tsx'
@@ -29,13 +30,15 @@ import { truncate } from '@/shared/utils.ts'
 
 type Category = 'model' | 'reading' | 'review' | 'shortcut' | 'sync' | 'data'
 
-const CATEGORIES: ReadonlyArray<{ id: Category; label: string }> = [
-  { id: 'model', label: 'AI 模型' },
-  { id: 'reading', label: '划词与翻译' },
-  { id: 'review', label: '复习' },
-  { id: 'shortcut', label: '快捷键' },
-  { id: 'sync', label: 'GitHub 同步' },
-  { id: 'data', label: '我的数据' },
+// 存键而不是存文案：这个常量在模块加载时就求值了，那时用户的语言偏好还没读出来。
+// 真正的取词推迟到渲染里的 `t(item.labelKey)`，切换语言才跟得上。
+const CATEGORIES: ReadonlyArray<{ id: Category; labelKey: MessageKey }> = [
+  { id: 'model', labelKey: 'options.nav.model' },
+  { id: 'reading', labelKey: 'options.nav.reading' },
+  { id: 'review', labelKey: 'options.nav.review' },
+  { id: 'shortcut', labelKey: 'options.nav.shortcut' },
+  { id: 'sync', labelKey: 'options.nav.sync' },
+  { id: 'data', labelKey: 'options.nav.data' },
 ]
 
 type TestState =
@@ -65,7 +68,12 @@ const IS_MAC = /Mac|iPhone|iPad/i.test(navigator.userAgent)
 const TEST_QUOTES = [
   { text: 'Be water, my friend.', word: 'water', author: 'Bruce Lee' },
   { text: 'Little strokes fell great oaks.', word: 'fell', author: 'Benjamin Franklin' },
-  { text: 'Repetition is the mother of learning.', word: 'mother', author: '拉丁谚语' },
+  {
+    text: 'Repetition is the mother of learning.',
+    word: 'mother',
+    // 人名照原样显示；只有这一条作者是描述性的，需要跟着界面语言走。
+    authorKey: 'options.test.author_latin',
+  },
   {
     text: 'The roots of education are bitter, but the fruit is sweet.',
     word: 'roots',
@@ -89,6 +97,7 @@ const pickQuote = (previous?: TestQuote): TestQuote => {
  * that shows the actual contextual explanation the model produced.
  */
 export function Options() {
+  const { t } = useI18n()
   const { settings, update, loading } = useSettings()
   const { entries } = useEntries()
   const [toast, showToast] = useToast()
@@ -148,18 +157,21 @@ export function Options() {
       const result = await provider.explainWord({
         text: current.word,
         context: current.text,
-        pageTitle: current.author,
+        pageTitle: 'authorKey' in current ? t(current.authorKey) : current.author,
       })
       setTest({
         kind: 'ok',
         word: result.word,
         contextMeaning: result.contextMeaning,
-        model: `${provider.model} @ ${config.baseUrl.trim() || meta.defaultBaseUrl || '官方 SDK'}`,
+        model: `${provider.model} @ ${config.baseUrl.trim() || meta.defaultBaseUrl || t('options.test.official_sdk')}`,
       })
     } catch (error) {
       const message =
         error instanceof AIError
-          ? `${AI_ERROR_MESSAGES[error.code]}（${truncate(error.message, 120)}）`
+          ? t('options.test.error_detail', {
+              message: aiErrorMessage(error.code),
+              detail: truncate(error.message, 120),
+            })
           : error instanceof Error
             ? error.message
             : String(error)
@@ -170,25 +182,31 @@ export function Options() {
   const exportAll = async () => {
     const snapshot = await buildSnapshot()
     downloadText(snapshotFilename(), JSON.stringify(snapshot, null, 2))
-    showToast(`已导出 ${snapshot.counts.entries} 个词条`)
+    showToast(t('options.data.exported', { count: snapshot.counts.entries }))
   }
 
   const importFile = async (file: File) => {
     try {
       const result = await importSnapshot(JSON.parse(await file.text()))
-      showToast(`导入完成：新增 ${result.added}，合并 ${result.merged}，跳过 ${result.skipped}`)
+      showToast(
+        t('options.data.imported', {
+          added: result.added,
+          merged: result.merged,
+          skipped: result.skipped,
+        }),
+      )
     } catch (error) {
-      showToast(error instanceof Error ? error.message : '导入失败')
+      showToast(error instanceof Error ? error.message : t('options.data.import_failed'))
     }
   }
 
   const wipe = async () => {
-    if (!confirm(`确定要删除全部 ${entries.length} 个词条吗？此操作不可撤销，建议先导出备份。`)) return
+    if (!confirm(t('options.data.wipe_confirm', { count: entries.length }))) return
     await replaceAll([])
-    showToast('已清空词卡')
+    showToast(t('options.data.wiped'))
   }
 
-  if (loading) return <div className="options muted">加载中…</div>
+  if (loading) return <div className="options muted">{t('common.loading')}</div>
 
   const select = (next: Category) => {
     setCategory(next)
@@ -199,7 +217,21 @@ export function Options() {
     <div className="options">
       <div className="options-head">
         <BrandMark size={26} />
-        <h1 style={{ fontSize: 20 }}>{APP_NAME} 设置</h1>
+        <h1 style={{ fontSize: 20 }}>{t('options.title', { name: t('app.name') })}</h1>
+        {/*
+          界面语言放在页头，不放进某个分类里。
+          它是整个应用的外壳偏好——一个看不懂中文的人，恰恰没法在中文分类标签里
+          找到「界面语言」这一项。所以它必须在他打开设置页的第一眼就在那儿。
+        */}
+        <label className="options-lang" title={t('options.ui_language.hint')}>
+          <span className="faint">{t('options.ui_language')}</span>
+          <Select
+            value={settings.uiLanguage}
+            label={t('options.ui_language')}
+            options={UI_LANGUAGES.map((item) => ({ value: item.code, label: item.label }))}
+            onChange={(next) => void update({ uiLanguage: next as UiLanguage })}
+          />
+        </label>
       </div>
 
       <div className="options-body">
@@ -211,7 +243,7 @@ export function Options() {
             data-active={item.id === category}
             onClick={() => select(item.id)}
           >
-            {item.label}
+            {t(item.labelKey)}
           </button>
         ))}
       </nav>
@@ -219,20 +251,14 @@ export function Options() {
       <div>
       {welcome ? (
         <div className="banner">
-          <strong>欢迎使用！</strong>
-          扩展只在你主动划词或翻译时读取选中文字、附近上下文、页面标题和网址；
-          词卡、设置与 Key 默认只保存在本机。配置模型后，这些阅读内容会直接发送给你选择的模型服务商；
-          启用 GitHub 同步后，词卡会发送到你自己的仓库。开发者没有中转服务器，也不收集这些数据。
-          不配置 Key 也可以使用离线词典。
+          <strong>{t('options.welcome.title')}</strong> {t('options.welcome.privacy')}
         </div>
       ) : null}
 
       {category === 'model' ? (
       <section className="card section-card">
-        <div className="section-title">AI 模型</div>
-        <div className="section-desc">
-          所有请求都从扩展后台直接发往你选择的服务商，Key 只保存在本机 chrome.storage，不会经过任何第三方服务器。
-        </div>
+        <div className="section-title">{t('options.nav.model')}</div>
+        <div className="section-desc">{t('options.model.desc')}</div>
 
         <div className="provider-grid">
           {PROVIDER_CATALOGUE.map((item) => (
@@ -245,13 +271,10 @@ export function Options() {
                 setTest({ kind: 'idle' })
               }}
             >
-              {item.label}
+              {providerLabel(item)}
               {item.badge ? (
-                <span
-                  className="provider-badge"
-                  data-tone={item.badge === '推荐' ? 'recommend' : 'free'}
-                >
-                  {item.badge}
+                <span className="provider-badge" data-tone={item.badge.tone}>
+                  {t(item.badge.key)}
                 </span>
               ) : null}
             </button>
@@ -259,30 +282,38 @@ export function Options() {
         </div>
 
         {settings.provider === 'mock' ? (
-          <div className="banner">
-            离线词典模式：无需联网、无需 Key，但只能给出词典释义，无法结合上下文推断。
-          </div>
+          <div className="banner">{t('options.provider.mock_notice')}</div>
         ) : (
           <>
             <Field
-              label="API Key"
-              hint={meta.keyUrl ? `没有 Key？到 ${meta.keyUrl} 申请` : '如果你的网关不校验 Key，可以留空'}
+              label={t('options.model.api_key')}
+              hint={
+                meta.keyUrl
+                  ? t('options.model.api_key_hint', { url: meta.keyUrl })
+                  : t('options.model.api_key_hint_optional')
+              }
             >
               <input
                 type="password"
                 value={config.apiKey}
-                placeholder={meta.requiresKey ? '必填' : '可选'}
+                placeholder={
+                  meta.requiresKey
+                    ? t('options.model.placeholder_required')
+                    : t('options.model.placeholder_optional')
+                }
                 onChange={(event) => patchProvider({ apiKey: event.target.value })}
                 autoComplete="off"
               />
             </Field>
 
             <Field
-              label="模型"
+              label={t('options.model.model')}
               hint={
                 config.model.trim()
-                  ? `生效值：${config.model.trim()}`
-                  : `留空 → 使用默认值 ${meta.defaultModel || '（此服务商必须手动填写）'}`
+                  ? t('options.model.hint_active', { value: config.model.trim() })
+                  : t('options.model.hint_default', {
+                      value: meta.defaultModel || t('options.model.manual_required'),
+                    })
               }
             >
               <input
@@ -300,11 +331,13 @@ export function Options() {
             </Field>
 
             <Field
-              label="API 地址（可选）"
+              label={t('options.model.base_url')}
               hint={
                 config.baseUrl.trim()
-                  ? `生效值：${config.baseUrl.trim()}（覆盖了默认值）`
-                  : `留空 → 使用默认值 ${meta.defaultBaseUrl || '（此服务商必须手动填写）'}`
+                  ? t('options.model.base_url_hint_active', { value: config.baseUrl.trim() })
+                  : t('options.model.hint_default', {
+                      value: meta.defaultBaseUrl || t('options.model.manual_required'),
+                    })
               }
             >
               <input
@@ -319,18 +352,21 @@ export function Options() {
 
         <div className="row" style={{ gap: 10 }}>
           <button className="btn btn-primary" onClick={() => void runTest()} disabled={test.kind === 'running'}>
-            {test.kind === 'running' ? '测试中…' : '测试连接'}
+            {test.kind === 'running' ? t('options.test.running') : t('options.test.run')}
           </button>
           <span className="faint">
-            用 “{quote.text}” 真实调用一次 · {quote.author}
+            {t('options.test.quote', {
+              text: quote.text,
+              author: 'authorKey' in quote ? t(quote.authorKey) : quote.author,
+            })}
           </span>
         </div>
 
         {test.kind === 'ok' ? (
           <div className="banner banner-success" style={{ marginTop: 14, marginBottom: 0 }}>
-            <strong>连接正常（{test.model}）</strong>
+            <strong>{t('options.test.ok', { model: test.model })}</strong>
             <div style={{ marginTop: 4 }}>
-              「{test.word}」在这句里：{test.contextMeaning}
+              {t('options.test.meaning', { word: test.word, meaning: test.contextMeaning })}
             </div>
           </div>
         ) : null}
@@ -344,55 +380,63 @@ export function Options() {
 
       {category === 'reading' ? (
       <section className="card section-card">
-        <div className="section-title">划词行为</div>
-        <div className="section-desc">决定选中文字之后会发生什么。</div>
+        <div className="section-title">{t('options.reading.title')}</div>
+        <div className="section-desc">{t('options.reading.desc')}</div>
 
         <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
           <div style={{ flex: 1 }}>
-            <Field label="我在读的语言" hint="选「自动识别」时由模型判断；指定语言可以避免在别的语种上误触发。">
-              <select
+            <Field
+              label={t('options.reading.source_language')}
+              hint={t('options.reading.source_language.hint')}
+            >
+              <Select
                 value={settings.sourceLanguage}
-                onChange={(event) => void update({ sourceLanguage: event.target.value })}
-              >
-                {SOURCE_LANGUAGES.map((item) => (
-                  <option key={item.code} value={item.code}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
+                label={t('options.reading.source_language')}
+                options={SOURCE_LANGUAGES.map((item) => ({
+                  value: item.code,
+                  label: t(item.labelKey),
+                }))}
+                onChange={(next) => void update({ sourceLanguage: next })}
+              />
             </Field>
           </div>
           <div style={{ flex: 1 }}>
-            <Field label="解释用什么语言写" hint="固定不变——它是你思考用的语言，不该随页面变化。">
-              <select
+            <Field
+              label={t('options.reading.target_language')}
+              hint={t('options.reading.target_language.hint')}
+            >
+              <Select
                 value={settings.targetLanguage}
-                onChange={(event) => void update({ targetLanguage: event.target.value })}
-              >
-                {TARGET_LANGUAGES.map((item) => (
-                  <option key={item.code} value={item.code}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
+                label={t('options.reading.target_language')}
+                options={TARGET_LANGUAGES.map((item) => ({
+                  value: item.code,
+                  label: t(item.labelKey),
+                }))}
+                onChange={(next) => void update({ targetLanguage: next })}
+              />
             </Field>
           </div>
         </div>
 
         <div className="row-between" style={{ marginBottom: 16 }}>
           <div>
-            <div style={{ fontWeight: 600 }}>启用划词助手</div>
-            <div className="faint">关闭后所有网页都不再注入 UI</div>
+            <div style={{ fontWeight: 600 }}>{t('options.reading.enable')}</div>
+            <div className="faint">{t('options.reading.enable.hint')}</div>
           </div>
-          <Toggle checked={settings.enabled} onChange={(next) => void update({ enabled: next })} label="启用划词助手" />
+          <Toggle
+            checked={settings.enabled}
+            onChange={(next) => void update({ enabled: next })}
+            label={t('options.reading.enable')}
+          />
         </div>
 
-        <Field label="触发方式">
+        <Field label={t('options.reading.trigger')}>
           <SegmentedControl
             value={settings.triggerMode}
             options={[
-              { value: 'button', label: '显示小按钮' },
-              { value: 'auto', label: '立即解释' },
-              { value: 'hotkey', label: '按住 Alt 划词' },
+              { value: 'button', label: t('options.reading.trigger.button') },
+              { value: 'auto', label: t('options.reading.trigger.auto') },
+              { value: 'hotkey', label: t('options.reading.trigger.hotkey') },
             ]}
             onChange={(next) => void update({ triggerMode: next })}
           />
@@ -400,25 +444,32 @@ export function Options() {
 
         <div className="row-between" style={{ marginBottom: 16 }}>
           <div>
-            <div style={{ fontWeight: 600 }}>自动朗读</div>
-            <div className="faint">解释卡片出现时自动读一遍单词</div>
+            <div style={{ fontWeight: 600 }}>{t('options.reading.auto_speak')}</div>
+            <div className="faint">{t('options.reading.auto_speak.hint')}</div>
           </div>
-          <Toggle checked={settings.autoSpeak} onChange={(next) => void update({ autoSpeak: next })} label="自动朗读" />
+          <Toggle
+            checked={settings.autoSpeak}
+            onChange={(next) => void update({ autoSpeak: next })}
+            label={t('options.reading.auto_speak')}
+          />
         </div>
 
         <div className="row-between" style={{ marginBottom: 16 }}>
           <div>
-            <div style={{ fontWeight: 600 }}>显示英文释义</div>
-            <div className="faint">在卡片上同时给出 English definition</div>
+            <div style={{ fontWeight: 600 }}>{t('options.reading.english_definition')}</div>
+            <div className="faint">{t('options.reading.english_definition.hint')}</div>
           </div>
           <Toggle
             checked={settings.showEnglishDefinition}
             onChange={(next) => void update({ showEnglishDefinition: next })}
-            label="显示英文释义"
+            label={t('options.reading.english_definition')}
           />
         </div>
 
-        <Field label="最长划选长度（字符）" hint="超过这个长度就不再触发，避免整段文字被当成单词发给模型">
+        <Field
+          label={t('options.reading.max_length')}
+          hint={t('options.reading.max_length.hint')}
+        >
           <input
             type="number"
             min={10}
@@ -429,58 +480,101 @@ export function Options() {
         </Field>
 
         <Field
-          label="整页翻译范围"
-          hint="「仅正文」会跳过导航栏、页眉页脚和侧边栏——它们通常是界面文字而不是你要读的内容。"
+          label={t('options.reading.page_range')}
+          hint={t('options.reading.page_range.hint')}
         >
           <SegmentedControl
             value={settings.pageTranslationRange}
             options={[
-              { value: 'content' as const, label: '仅正文' },
-              { value: 'all' as const, label: '整页' },
+              { value: 'content' as const, label: t('options.reading.page_range.content') },
+              { value: 'all' as const, label: t('options.reading.page_range.all') },
             ]}
             onChange={(next) => void update({ pageTranslationRange: next })}
           />
         </Field>
 
         <Field
-          label="整段翻译"
-          hint="按住这个键并把鼠标停在某一段上，就只翻译那一段；再按一次收起。适合「整页都读得懂，就那一段卡住」。"
+          label={t('options.reading.display_mode')}
+          hint={t('options.reading.display_mode.hint')}
         >
-          <select
-            value={settings.paragraphTriggerKey}
-            onChange={(event) =>
-              void update({
-                paragraphTriggerKey: event.target
-                  .value as Settings['paragraphTriggerKey'],
-              })
-            }
-          >
-            <option value="backtick">按 ` 反引号（默认，不与任何组合键冲突）</option>
-            <option value="alt">按住 {IS_MAC ? 'Option' : 'Alt'}</option>
-            <option value="ctrl">按住 {IS_MAC ? 'Command' : 'Ctrl'}</option>
-            <option value="shift">按住 Shift</option>
-            <option value="off">关闭</option>
-          </select>
+          <SegmentedControl
+            value={settings.translationMode}
+            options={[
+              { value: 'bilingual', label: t('popup.display_mode.bilingual') },
+              { value: 'translationOnly', label: t('popup.display_mode.translation_only') },
+            ]}
+            onChange={(next) => void update({ translationMode: next })}
+          />
+        </Field>
+
+        {/*
+          翻翻模式放在阅读这一节，紧挨着显示方式：它们回答的是同一个问题——
+          「一个网页在我眼里应该长什么样」。
+        */}
+        <Field label={t('fanfan.mode.title')} hint={t('fanfan.options.hint')}>
+          <div className="row-between">
+            <span className="faint">
+              {settings.fanfanMode ? t('fanfan.mode.hint_on') : t('fanfan.mode.hint_off')}
+            </span>
+            <Toggle
+              checked={settings.fanfanMode}
+              onChange={(next) => void update({ fanfanMode: next })}
+              label={t('fanfan.mode.aria')}
+            />
+          </div>
         </Field>
 
         <Field
-          label="例句数量"
-          hint="0 表示不要例句——例句是查询里最费时间的部分，关掉能明显加快出结果。"
+          label={t('popup.paragraph.title')}
+          hint={t('options.reading.paragraph.hint')}
         >
-          <select
-            value={String(settings.exampleCount)}
-            onChange={(event) => void update({ exampleCount: Number(event.target.value) })}
-          >
-            <option value="0">不要例句</option>
-            {[1, 2, 3, 4, 5, 6].map((count) => (
-              <option key={count} value={String(count)}>
-                {count} 句{count === 3 ? '（默认）' : ''}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={settings.paragraphTriggerKey}
+            label={t('popup.paragraph.aria')}
+            options={[
+              { value: 'backtick', label: t('options.reading.paragraph.backtick') },
+              {
+                value: 'alt',
+                label: t('options.reading.paragraph.hold', { key: IS_MAC ? 'Option' : 'Alt' }),
+              },
+              {
+                value: 'ctrl',
+                label: t('options.reading.paragraph.hold', { key: IS_MAC ? 'Command' : 'Ctrl' }),
+              },
+              { value: 'shift', label: t('options.reading.paragraph.hold', { key: 'Shift' }) },
+              { value: 'off', label: t('common.off') },
+            ]}
+            onChange={(next) => void update({ paragraphTriggerKey: next })}
+          />
         </Field>
 
-        <Field label="解释缓存时长（小时）" hint="同一个词在同一句话里的解释会被缓存，0 表示不缓存">
+        <Field
+          label={t('options.reading.examples')}
+          hint={t('options.reading.examples.hint')}
+        >
+          <Select
+            value={String(settings.exampleCount)}
+            label={t('options.reading.examples')}
+            options={[
+              { value: '0', label: t('options.reading.examples.none') },
+              ...[1, 2, 3, 4, 5, 6].map((count) => ({
+                value: String(count),
+                // 英文的 1 不能跟着复数走，所以单数单独一条键。
+                label:
+                  (count === 1
+                    ? t('options.reading.examples.count_one')
+                    : t('options.reading.examples.count', { count })) +
+                  (count === 3 ? t('options.reading.examples.default_suffix') : ''),
+              })),
+            ]}
+            onChange={(next) => void update({ exampleCount: Number(next) })}
+          />
+        </Field>
+
+        <Field
+          label={t('options.reading.cache_ttl')}
+          hint={t('options.reading.cache_ttl.hint')}
+        >
           <input
             type="number"
             min={0}
@@ -491,7 +585,7 @@ export function Options() {
         </Field>
 
         {settings.blockedHosts.length > 0 ? (
-          <Field label="已禁用的网站">
+          <Field label={t('options.reading.blocked')}>
             <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
               {settings.blockedHosts.map((host) => (
                 <button
@@ -500,7 +594,7 @@ export function Options() {
                   onClick={() =>
                     void update({ blockedHosts: settings.blockedHosts.filter((item) => item !== host) })
                   }
-                  title="点击重新启用"
+                  title={t('options.reading.blocked.restore')}
                 >
                   {host} ✕
                 </button>
@@ -519,16 +613,14 @@ export function Options() {
 
       {category === 'data' ? (
       <section className="card section-card">
-        <div className="section-title">我的知识库</div>
-        <div className="section-desc">
-          共 {entries.length} 个词条，全部保存在本机。导出的 JSON 与同步到 GitHub 的格式完全一致。
-        </div>
+        <div className="section-title">{t('options.data.title')}</div>
+        <div className="section-desc">{t('options.data.desc', { count: entries.length })}</div>
         <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
           <button className="btn" onClick={() => void exportAll()}>
-            导出全部数据
+            {t('options.data.export')}
           </button>
           <button className="btn" onClick={() => fileRef.current?.click()}>
-            导入 JSON
+            {t('options.data.import')}
           </button>
           <input
             ref={fileRef}
@@ -546,21 +638,21 @@ export function Options() {
             onClick={() => {
               void clearCache()
               void clearTranslationCache()
-              showToast('已清空解释与翻译缓存')
+              showToast(t('options.data.cache_cleared'))
             }}
           >
-            清空缓存
+            {t('options.data.clear_cache')}
           </button>
           <div className="spacer" />
           <button className="btn btn-danger" onClick={() => void wipe()}>
-            清空词卡
+            {t('options.data.wipe')}
           </button>
         </div>
       </section>
       ) : null}
 
       <div className="faint" style={{ textAlign: 'center' }}>
-        {APP_NAME} · 本地优先 · 数据永远属于你
+        {t('options.footer', { name: t('app.name') })}
       </div>
       </div>
       </div>

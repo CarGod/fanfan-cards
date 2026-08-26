@@ -1,8 +1,15 @@
 /** Contracts between the app and any LLM behind it. */
 
-import type { CefrLevel, ExampleSentence, SelectionKind, Synonym } from './vocabulary.ts'
+import { t, type MessageKey } from '@/i18n/index.ts'
+import type {
+  CefrLevel,
+  ExampleSentence,
+  SelectionKind,
+  Synonym,
+  WordSense,
+} from './vocabulary.ts'
 
-export type { Synonym, CefrLevel, ExampleSentence }
+export type { Synonym, CefrLevel, ExampleSentence, WordSense }
 
 export type ProviderId = 'mock' | 'openai' | 'claude' | 'deepseek' | 'gemini' | 'custom'
 
@@ -15,8 +22,15 @@ export interface WordExplanation {
   partOfSpeech: string
   /** CEFR band of the word (A1-C2), or '' if the model will not commit. */
   cefr: CefrLevel
-  /** 基础中文释义（脱离语境的词典义）。 */
+  /** 基础中文释义（脱离语境的词典义）。一行，不带词性前缀。 */
   meaning: string
+  /**
+   * 按词性拆开的释义，只在**不同词性意思确实不同**时才有内容。
+   *
+   * 单义词、离线词典、以及没按格式回话的模型，这里都是空数组——
+   * 显示时退回 {@link meaning}。
+   */
+  senses: WordSense[]
   /** 结合当前网页上下文的解释——必须说明"在这里指什么"。 */
   contextMeaning: string
   /** English definition, learner-friendly. */
@@ -191,15 +205,26 @@ export class AIError extends Error {
   }
 }
 
-export const AI_ERROR_MESSAGES: Record<AIErrorCode, string> = {
-  no_api_key: '还没有配置 API Key，正在使用离线词典模式',
-  auth: 'API Key 无效或已过期，请到设置页检查',
-  rate_limit: '请求过于频繁，请稍后再试',
-  network: '网络连接失败，请检查网络或代理',
-  timeout: '请求超时，请重试',
-  bad_response: 'AI 返回的内容无法解析，请重试',
-  refused: '模型拒绝解释这段内容',
-  aborted: '请求已取消',
-  stale_context: '扩展刚刚更新过，这个页面上的旧脚本已失效——刷新页面即可恢复',
-  unknown: '出现未知错误，请重试',
+/**
+ * 错误码对应的界面文案。
+ *
+ * 表里存的是**键**，取文案是函数。写成 `Record<AIErrorCode, string>` 常量的话，
+ * 每条文案在模块加载那一刻就求值定死了，用户之后在设置页改界面语言，这张表还停在
+ * 旧语言上——而它偏偏是最少被人盯着看的一块界面。
+ */
+const AI_ERROR_KEYS: Record<AIErrorCode, MessageKey> = {
+  no_api_key: 'error.ai.no_api_key',
+  auth: 'error.ai.auth',
+  rate_limit: 'error.ai.rate_limit',
+  network: 'error.ai.network',
+  timeout: 'error.ai.timeout',
+  bad_response: 'error.ai.bad_response',
+  refused: 'error.ai.refused',
+  aborted: 'error.ai.aborted',
+  stale_context: 'error.ai.stale_context',
+  unknown: 'error.ai.unknown',
+}
+
+export function aiErrorMessage(code: AIErrorCode): string {
+  return t(AI_ERROR_KEYS[code] ?? AI_ERROR_KEYS.unknown)
 }

@@ -3,6 +3,7 @@ import { readActivity } from '@/storage/repositories/activityRepo.ts'
 import { listAllEntries, mergeEntries } from '@/storage/repositories/vocabularyRepo.ts'
 import { readReviewLog } from '@/storage/repositories/activityRepo.ts'
 import type { DailyActivity, ReviewLogEntry, VocabularyEntry } from '@/types/vocabulary.ts'
+import { t } from '@/i18n/index.ts'
 
 /**
  * The knowledge base must be portable, or "个人英语知识资产" is just marketing.
@@ -62,10 +63,11 @@ export interface ImportResult {
  */
 export async function importSnapshot(raw: unknown): Promise<ImportResult> {
   const snapshot = raw as Partial<KnowledgeSnapshot>
+  // 这两条会原样出现在设置页的错误条上，所以在抛出的那一刻取文案，而不是提前算好。
   if (!snapshot || snapshot.format !== 'ai-reader-assistant/knowledge') {
-    throw new Error('文件格式不正确：不是 翻翻词卡 导出的知识库')
+    throw new Error(t('data.import.bad_format', { name: t('app.name') }))
   }
-  if (!Array.isArray(snapshot.entries)) throw new Error('文件缺少 entries 字段')
+  if (!Array.isArray(snapshot.entries)) throw new Error(t('data.import.missing_entries'))
 
   /*
    * Read, merge and write happen inside one lock.

@@ -4,15 +4,23 @@ import { ArrowLeftIcon, ArrowRightIcon, SpeakerIcon } from '@/components/icons.t
 import { useEntries, useSettings } from '@/components/hooks.ts'
 import { speak } from '@/services/speech.ts'
 import { submitReview, undoReview, type ReviewRecord } from '@/services/reviewService.ts'
-import { REVIEW_GRADE_LABELS, type ReviewGrade, type VocabularyEntry } from '@/types/vocabulary.ts'
+import { type ReviewGrade, type VocabularyEntry } from '@/types/vocabulary.ts'
 import { formatDue, safeHostname } from '@/shared/utils.ts'
+import { useI18n } from '@/i18n/react.ts'
+import type { MessageKey } from '@/i18n/index.ts'
 import { buildReviewQueue, countDue, gradeCard } from './scheduler.ts'
 
-const GRADES: ReadonlyArray<{ grade: ReviewGrade; hint: string; className: string }> = [
-  { grade: 'forgot', hint: '重新开始', className: 'btn btn-ghost grade-btn' },
-  { grade: 'hard', hint: '降一级', className: 'btn btn-ghost grade-btn' },
-  { grade: 'good', hint: '升一级', className: 'btn btn-primary grade-btn' },
-  { grade: 'easy', hint: '直接掌握', className: 'btn btn-ghost grade-btn' },
+/**
+ * 存的是文案键，不是文案本身。
+ *
+ * 这个数组在模块加载时就求值了，真去调 `t()` 会把语言冻在那一刻——用户之后改设置
+ * 按钮上还是旧语言。键在使用处再翻。
+ */
+const GRADES: ReadonlyArray<{ grade: ReviewGrade; labelKey: MessageKey; className: string }> = [
+  { grade: 'forgot', labelKey: 'flashcard.grade.forgot', className: 'btn btn-ghost grade-btn' },
+  { grade: 'hard', labelKey: 'flashcard.grade.hard', className: 'btn btn-ghost grade-btn' },
+  { grade: 'good', labelKey: 'flashcard.grade.good', className: 'btn btn-primary grade-btn' },
+  { grade: 'easy', labelKey: 'flashcard.grade.easy', className: 'btn btn-ghost grade-btn' },
 ]
 
 /**
@@ -25,6 +33,7 @@ const GRADES: ReadonlyArray<{ grade: ReviewGrade; hint: string; className: strin
  * grind cards.
  */
 export function FlashcardPage({ onNavigate }: { onNavigate: (route: string) => void }) {
+  const { t } = useI18n()
   const { entries, loading } = useEntries()
   const { settings } = useSettings()
   const [session, setSession] = useState<VocabularyEntry[] | null>(null)
@@ -140,18 +149,18 @@ export function FlashcardPage({ onNavigate }: { onNavigate: (route: string) => v
     return () => window.removeEventListener('keydown', onKey)
   }, [session, current, flipped, grade, goNext, goPrevious])
 
-  if (loading) return <p className="muted">加载中…</p>
+  if (loading) return <p className="muted">{t('common.loading')}</p>
 
   if (entries.length === 0) {
     return (
       <div className="card">
         <Empty
           emoji="🃏"
-          title="还没有可复习的卡片"
-          hint="收藏的每个单词都会自动变成一张闪卡。"
+          title={t('flashcard.empty.title')}
+          hint={t('flashcard.empty.hint')}
           action={
             <button className="btn btn-primary" onClick={() => onNavigate('#/vocabulary')}>
-              去看看词卡
+              {t('flashcard.empty.action')}
             </button>
           }
         />
@@ -162,24 +171,23 @@ export function FlashcardPage({ onNavigate }: { onNavigate: (route: string) => v
   if (session === null) {
     return (
       <div className="flash-wrap">
-        <h1 className="page-title">闪卡复习</h1>
+        <h1 className="page-title">{t('flashcard.title')}</h1>
         <p className="page-sub">
           {dueCount > 0
-            ? `有 ${dueCount} 张卡片到期了，本次最多复习 ${settings.dailyReviewGoal} 张。`
-            : '今天没有到期的卡片——你可以提前复习最接近到期的那些。'}
+            ? t('flashcard.start.due_sub', { count: dueCount, limit: settings.dailyReviewGoal })
+            : t('flashcard.start.clear_sub')}
         </p>
         <div className="card card-pad">
           <div className="row" style={{ gap: 10 }}>
             <button className="btn btn-primary btn-lg" onClick={() => start(false)} disabled={dueCount === 0}>
-              开始复习（{Math.min(dueCount, settings.dailyReviewGoal)} 张）
+              {t('flashcard.start.begin', { count: Math.min(dueCount, settings.dailyReviewGoal) })}
             </button>
             <button className="btn btn-ghost btn-lg" onClick={() => start(true)}>
-              提前复习
+              {t('flashcard.start.ahead')}
             </button>
           </div>
           <div className="faint" style={{ marginTop: 12 }}>
-            快捷键：空格翻面 · 回车确认（记得）· ← 上一张（撤销评分）· → 跳过 ·
-            1 忘记 · 2 模糊 · 3 记得 · 4 掌握
+            {t('flashcard.start.shortcuts')}
           </div>
         </div>
       </div>
@@ -192,15 +200,17 @@ export function FlashcardPage({ onNavigate }: { onNavigate: (route: string) => v
         <div className="card">
           <Empty
             emoji="🎉"
-            title={graded > 0 ? `本轮完成，复习了 ${graded} 张` : '当前没有需要复习的卡片'}
-            hint={graded > 0 ? '记忆最牢的时机是刚好快要忘记的时候，明天再来。' : undefined}
+            title={
+              graded > 0 ? t('flashcard.done.title', { count: graded }) : t('flashcard.done.empty_title')
+            }
+            hint={graded > 0 ? t('flashcard.done.hint') : undefined}
             action={
               <div className="row" style={{ gap: 8 }}>
                 <button className="btn btn-ghost" onClick={() => setSession(null)}>
-                  返回
+                  {t('flashcard.done.back')}
                 </button>
                 <button className="btn btn-primary" onClick={() => onNavigate('#/dashboard')}>
-                  看看数据
+                  {t('flashcard.done.dashboard')}
                 </button>
               </div>
             }
@@ -227,21 +237,21 @@ export function FlashcardPage({ onNavigate }: { onNavigate: (route: string) => v
           className="btn btn-ghost btn-sm"
           onClick={goPrevious}
           disabled={index === 0}
-          title="上一张（←）——已评分的会撤销"
-          aria-label="上一张"
+          title={t('flashcard.nav.previous_title')}
+          aria-label={t('flashcard.nav.previous')}
         >
           <ArrowLeftIcon size={14} />
         </button>
         <button
           className="btn btn-ghost btn-sm"
           onClick={goNext}
-          title="下一张（→）——跳过，不评分"
-          aria-label="下一张"
+          title={t('flashcard.nav.next_title')}
+          aria-label={t('flashcard.nav.next')}
         >
           <ArrowRightIcon size={14} />
         </button>
         <button className="btn btn-ghost btn-sm" onClick={() => setSession(null)}>
-          结束
+          {t('flashcard.nav.end')}
         </button>
       </div>
 
@@ -263,31 +273,31 @@ export function FlashcardPage({ onNavigate }: { onNavigate: (route: string) => v
               }}
             >
               <SpeakerIcon size={15} />
-              朗读
+              {t('flashcard.card.speak')}
             </button>
-            <div className="flash-hint">先想一想它在原句里的意思 · 空格或回车翻面</div>
+            <div className="flash-hint">{t('flashcard.card.front_hint')}</div>
           </div>
         ) : (
           <div className="flash-back">
             <div>
-              <div className="detail-label">基础释义</div>
-              <div style={{ fontSize: 16 }}>{card.meaning || '（无）'}</div>
+              <div className="detail-label">{t('flashcard.card.meaning')}</div>
+              <div style={{ fontSize: 16 }}>{card.meaning || t('flashcard.card.no_meaning')}</div>
             </div>
             {card.aiExplanation ? (
               <div>
-                <div className="detail-label">语境含义</div>
+                <div className="detail-label">{t('flashcard.card.context_meaning')}</div>
                 <div className="context-block">{card.aiExplanation}</div>
               </div>
             ) : null}
             {card.englishDefinition ? (
               <div>
-                <div className="detail-label">English</div>
+                <div className="detail-label">{t('flashcard.card.english')}</div>
                 <div className="muted">{card.englishDefinition}</div>
               </div>
             ) : null}
             {card.examples.length ? (
               <div>
-                <div className="detail-label">例句</div>
+                <div className="detail-label">{t('flashcard.card.examples')}</div>
                 <ol className="example-list">
                   {card.examples.map((item) => (
                     <li key={item.sentence}>
@@ -300,7 +310,7 @@ export function FlashcardPage({ onNavigate }: { onNavigate: (route: string) => v
             ) : null}
             {card.source.context ? (
               <div>
-                <div className="detail-label">当时的原文</div>
+                <div className="detail-label">{t('flashcard.card.source_context')}</div>
                 <div className="quote">{card.source.context}</div>
                 {card.sentenceTranslation ? (
                   <div className="faint" style={{ marginTop: 4 }}>{card.sentenceTranslation}</div>
@@ -323,9 +333,9 @@ export function FlashcardPage({ onNavigate }: { onNavigate: (route: string) => v
                 key={option.grade}
                 className={option.className}
                 onClick={() => void grade(option.grade)}
-                title={`快捷键 ${position + 1}`}
+                title={t('flashcard.grade.shortcut', { key: position + 1 })}
               >
-                {REVIEW_GRADE_LABELS[option.grade]}
+                {t(option.labelKey)}
                 <small>{formatDue(preview.dueAt)}</small>
               </button>
             )
@@ -333,7 +343,7 @@ export function FlashcardPage({ onNavigate }: { onNavigate: (route: string) => v
         </div>
       ) : (
         <div className="faint" style={{ textAlign: 'center', marginTop: 16 }}>
-          空格 / 回车翻面 · ← 上一张 · → 跳过
+          {t('flashcard.card.flip_hint')}
         </div>
       )}
     </div>

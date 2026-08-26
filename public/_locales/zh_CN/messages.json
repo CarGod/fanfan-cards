@@ -1,0 +1,23 @@
+{
+  "extName": {
+    "message": "翻翻词卡 — AI 英语阅读助手",
+    "description": "Chrome 应用商店与 chrome://extensions 里显示的扩展名称。"
+  },
+  "extDescription": {
+    "message": "在真实英文网页上阅读，AI 结合上下文解释你不认识的词，一键收藏成你自己的英语知识资产，并按记忆曲线复习。",
+    "description": "商店列表里的一句话简介。"
+  },
+  "actionTitle": {
+    "message": "翻翻词卡",
+    "description": "工具栏图标的悬停提示。"
+  },
+  "commandExplainSelection": {
+    "message": "解释当前选中的英文"
+  },
+  "commandTranslatePage": {
+    "message": "翻译/还原整个页面"
+  },
+  "commandOpenApp": {
+    "message": "打开词卡与复习"
+  }
+}

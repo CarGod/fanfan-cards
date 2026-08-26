@@ -102,13 +102,83 @@ const mainWorldScripts = (manifest.content_scripts ?? [])
   .filter((entry) => entry.world === 'MAIN')
   .flatMap((entry) => entry.js ?? [])
 
+/*
+ * `chrome?.i18n` 和 `typeof chrome` 也要算。
+ *
+ * 第一版只认 `chrome.` 和 `chrome[`，可这个仓库自己就在用可选链写法
+ * （`src/i18n/index.ts` 里的 `chrome?.i18n?.getUILanguage?.()`）——也就是说，
+ * 这道闸声称守住的那条边界，恰恰对本仓库最常见的写法是敞开的。
+ */
+const CHROME_API = /\bchrome\s*(?:[.[?]|\))|\btypeof\s+chrome\b/
+
 const withChromeApi = mainWorldScripts.filter((relative) =>
-  /\bchrome\s*[.[]/.test(readFileSync(join(distDir, relative), 'utf8')),
+  CHROME_API.test(readFileSync(join(distDir, relative), 'utf8')),
 )
 if (withChromeApi.length > 0) {
   console.error('MAIN-world scripts reference the chrome API, which is undefined there:')
   for (const path of withChromeApi) console.error(`  - ${path}`)
   process.exit(1)
+}
+
+/*
+ * MV3 禁止执行远程代码，`eval` / `new Function` / `importScripts` 是审核最常拿来判定
+ * 这一条的三个特征。
+ *
+ * 它们几乎不会是我们自己写的，而是从某个依赖的打包产物里混进来的——也就是说，
+ * 它会在某次 `npm update` 之后悄悄出现，然后在提交审核时才被人告知。
+ * 那时距离引入它的那次改动已经过去很久了。
+ */
+const REMOTE_CODE = /\beval\s*\(|\bnew\s+Function\s*\(|\bimportScripts\s*\(/
+
+const remoteCode = []
+for (const file of walk(distDir)) {
+  if (!file.endsWith('.js')) continue
+  const match = REMOTE_CODE.exec(readFileSync(file, 'utf8'))
+  if (match) remoteCode.push(`${file.slice(distDir.length + 1)}: ${match[0]}`)
+}
+if (remoteCode.length > 0) {
+  console.error('Build output executes code from a string, which MV3 forbids:')
+  for (const hit of remoteCode) console.error(`  - ${hit}`)
+  process.exit(1)
+}
+
+/*
+ * 每一个 `__MSG_x__` 都必须在每一种语言里解析得到。
+ *
+ * 少一条的后果不是「那一处显示成英文」，是 Chrome **拒绝加载整个扩展**，
+ * 报一句不告诉你缺哪个键的错。而漏译几乎必然发生在加第二种语言之后的某次改动里，
+ * 那时没人会去逐条比对两个 messages.json。
+ */
+const localesDir = join(distDir, '_locales')
+if (manifest.default_locale) {
+  const locales = existsSync(localesDir) ? readdirSync(localesDir) : []
+  if (!locales.includes(manifest.default_locale)) {
+    console.error(`default_locale is "${manifest.default_locale}" but _locales/${manifest.default_locale}/ was not built.`)
+    process.exit(1)
+  }
+
+  const placeholders = [...new Set(
+    [...JSON.stringify(manifest).matchAll(/__MSG_([A-Za-z0-9_@]+)__/g)].map((match) => match[1]),
+  )]
+
+  const gaps = []
+  for (const locale of locales) {
+    const file = join(localesDir, locale, 'messages.json')
+    if (!existsSync(file)) {
+      gaps.push(`${locale}: messages.json missing`)
+      continue
+    }
+    const messages = JSON.parse(readFileSync(file, 'utf8'))
+    for (const name of placeholders) {
+      if (!messages[name]) gaps.push(`${locale}: ${name}`)
+    }
+  }
+  if (gaps.length > 0) {
+    console.error('Manifest placeholders with no message behind them:')
+    for (const gap of gaps) console.error(`  - ${gap}`)
+    process.exit(1)
+  }
+  console.log(`locales ok - ${locales.length} locale(s), ${placeholders.length} placeholder(s) resolved in each`)
 }
 
 writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
