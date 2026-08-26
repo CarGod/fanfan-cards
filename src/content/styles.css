@@ -42,6 +42,28 @@
 
 /* ---------- trigger pill ---------- */
 
+/*
+ * 小按钮上的回车标记。
+ *
+ * 画成一个键帽而不是写「回车」两个字：读者要找的是键盘上那个键，
+ * 图形比文字更快对上号，也不用为中英文各写一版。
+ */
+.trigger-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  margin-left: 2px;
+  font: 500 11px/1 inherit;
+  color: var(--text-faint);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+}
+
 .trigger {
   display: inline-flex;
   align-items: center;
@@ -213,6 +235,26 @@
   padding: 0;
 }
 
+/*
+ * 收藏按钮的两种状态。
+ *
+ * 形状（空心/实心）已经分得开了，颜色只是加强——单靠颜色区分状态，
+ * 对辨色能力弱的人等于没有区分，而「这个词收了没有」是这张卡上最该一眼看清的事。
+ */
+.icon-btn[data-saved='true'] {
+  color: var(--primary);
+}
+
+.icon-btn[data-saved='true']:hover {
+  color: var(--primary-strong);
+  background: var(--primary-soft);
+}
+
+.icon-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .icon-btn:hover {
   background: var(--surface-soft);
   color: var(--text);
@@ -357,6 +399,20 @@
   font-weight: 650;
 }
 
+/*
+ * 「来自某某页面」。
+ *
+ * 比译文再退一档：读者要的是那句话本身，出处只是在他想不起来「我在哪儿见过它」
+ * 时才有用。放得太重会和例句抢注意力。
+ */
+.source-from {
+  margin-top: 6px;
+  font-size: 11px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .sentence-translation {
   margin-top: 6px;
   font-size: 13px;
@@ -408,13 +464,27 @@
 
 /* ---------- footer ---------- */
 
+/*
+ * 卡片底部那一排按钮。
+ *
+ * 允许换行，并且允许按钮被压窄——错误态那一排有三个按钮，而英文的
+ * 「Retry / Offline dictionary / Settings」比中文长得多，撑不下时第三个会被
+ * 整个切掉。切掉的按钮不是「不好看」，是**读者根本不知道那里还有一条出路**。
+ *
+ * 缩短文案已经先做了一轮；这里是兜底：再长也只会换行，不会消失。
+ */
 .card-foot {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 10px 14px;
   border-top: 1px solid var(--border);
   background: var(--surface-soft);
+}
+
+.card-foot .btn {
+  min-width: 0;
 }
 
 .btn {
@@ -572,4 +642,36 @@
   font-weight: 500;
   box-shadow: var(--shadow-float);
   animation: ara-pop 140ms ease-out;
+}
+
+/*
+ * 按词性分行的释义。
+ *
+ * 词性做成右对齐的一列：几个词性的字宽不一样（「名词」两字、「形容词」三字），
+ * 左对齐会让后面的释义参差不齐，眼睛每行都要重新找起点。右对齐之后释义那一列
+ * 是齐的，而这一列才是要读的东西。
+ */
+.sense-list {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.sense-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.sense-pos {
+  margin: 0;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.sense-meaning {
+  margin: 0;
 }

@@ -10,6 +10,7 @@ const GOOD = {
   partOfSpeech: 'verb',
   cefr: 'B2',
   meaning: '指控，控告',
+  senses: [],
   contextMeaning: '此处为被动结构，表示“被指控”。',
   englishDefinition: 'to say that someone has done something wrong',
   sentenceTranslation: '试管婴儿机构的工作人员被指误导英国父母。',

@@ -3,6 +3,7 @@ import { listEntries } from '@/storage/repositories/vocabularyRepo.ts'
 import { readActivity, todayActivity } from '@/storage/repositories/activityRepo.ts'
 import { countDue } from '@/flashcard/scheduler.ts'
 import { APP_PAGE } from '@/shared/constants.ts'
+import { t } from '@/i18n/index.ts'
 
 /**
  * Daily review reminder.
@@ -71,14 +72,18 @@ async function fireReminder(): Promise<void> {
   const reviewedToday = todayActivity(activity).reviewed
   if (reviewedToday >= settings.dailyReviewGoal) return
 
+  // 文案在这里取，不在模块顶层：service worker 会被反复唤醒，而语言是这一刻的设置说了算。
   chrome.notifications?.create(`${ALARM}:${Date.now()}`, {
     type: 'basic',
     iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
-    title: `有 ${due} 张卡片等你复习`,
+    title: t('reminder.notification.title', { count: due }),
     message:
       reviewedToday > 0
-        ? `今天已复习 ${reviewedToday} 张，还差 ${Math.max(0, settings.dailyReviewGoal - reviewedToday)} 张到目标。`
-        : '花几分钟，把今天遇到的词变成记得住的词。',
+        ? t('reminder.notification.progress', {
+            done: reviewedToday,
+            remaining: Math.max(0, settings.dailyReviewGoal - reviewedToday),
+          })
+        : t('reminder.notification.start'),
     priority: 0,
   })
 }

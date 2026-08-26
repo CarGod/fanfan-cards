@@ -1,5 +1,6 @@
 import { createRoot, type Root } from 'react-dom/client'
 import { CONTENT_HOST_ID } from '@/shared/constants.ts'
+import { initI18n } from '@/i18n/bootstrap.ts'
 import { warmUpVoices } from '@/services/speech.ts'
 import styles from './styles.css?inline'
 import { App } from './ui/App.tsx'
@@ -62,6 +63,17 @@ function mountYouTube(): YouTubeSubtitles | null {
   void subtitles.start()
   return subtitles
 }
+
+/*
+ * 内容脚本这边不 await，直接挂载。
+ *
+ * 和扩展页面不同：划词卡在读者选中文字之前渲染的是 `null`，等它真的要显示时
+ * 设置早就读回来了。为了一个此刻不可见的界面，去给每一个网页的加载多加一次
+ * storage 往返，不划算。
+ *
+ * 每个上下文都要各自初始化一次——内容脚本读不到扩展页面那边的模块状态。
+ */
+void initI18n()
 
 const root = mount()
 if (root) {

@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMemoryAdapter, setStorageAdapter } from '@/storage/area.ts'
 import { importSnapshot, buildSnapshot } from '@/services/exportService.ts'
-import { keepOnly, listAllEntries, saveEntry } from '@/storage/repositories/vocabularyRepo.ts'
+import {
+  getEntry,
+  keepOnly,
+  listAllEntries,
+  removeEntry,
+  saveEntry,
+  updateEntry,
+} from '@/storage/repositories/vocabularyRepo.ts'
 
 /**
  * Words saved while a sync is running must survive it.
@@ -21,6 +28,7 @@ function input(word: string) {
     partOfSpeech: '',
     cefr: '' as const,
     meaning: `${word} 的意思`,
+    senses: [],
     aiExplanation: '',
     englishDefinition: '',
     sentenceTranslation: '',
@@ -98,5 +106,73 @@ describe('forcePull 的时间窗口', () => {
     await keepOnly(new Set(['alpha']), Date.now())
 
     expect((await listAllEntries()).map((entry) => entry.word)).toEqual(['alpha'])
+  })
+})
+
+describe('按词性拆开的释义要存得住', () => {
+  /**
+   * 这条走的是完整链路：存进去、读出来、再存一次同一个词。
+   *
+   * 「再存一次」是关键：重复收藏同一个词是**学习信号**而不是错误，仓库会合并而不是
+   * 覆盖。合并时如果把 senses 漏掉，用户会发现某个词重新查过之后，按词性拆开的那份
+   * 悄悄没了——而 meaning 那一行还在，所以界面上几乎看不出来。
+   */
+  it('存得住，重复收藏也不会把它弄丢', async () => {
+    setStorageAdapter(createMemoryAdapter())
+    const senses = [
+      { partOfSpeech: 'adjective', meaning: '独有的' },
+      { partOfSpeech: 'noun', meaning: '独家新闻' },
+    ]
+
+    await saveEntry({ ...input('exclusive'), senses })
+    const [first] = await listAllEntries()
+    expect(first!.senses).toEqual(senses)
+
+    // 第二次查这个词，模型这回没给结构化释义。
+    await saveEntry({ ...input('exclusive'), senses: [] })
+    const [again] = await listAllEntries()
+    expect(again!.senses).toEqual(senses)
+  })
+
+  it('给不出的时候是空数组，而不是缺字段', async () => {
+    setStorageAdapter(createMemoryAdapter())
+    await saveEntry({ ...input('plain'), senses: [] })
+    const [entry] = await listAllEntries()
+    expect(entry!.senses).toEqual([])
+  })
+})
+
+describe('取消收藏是可以撤销的', () => {
+  /**
+   * 这条钉的是「撤销」两个字有没有说谎。
+   *
+   * `removeEntry` 是软删除（留墓碑），`saveEntry` 遇到墓碑会复活它。如果哪天有人
+   * 把软删除改成硬删，或者复活路径把 review 重置了，界面上那颗书签还是会照常
+   * 从空心变回实心——读者以为撤销了，其实攒了几十次的复习进度已经没了。
+   */
+  it('移出再收回来，复习进度还在', async () => {
+    setStorageAdapter(createMemoryAdapter())
+    const { entry } = await saveEntry({ ...input('resilience'), senses: [] })
+    await updateEntry(entry.id, {
+      review: {
+        level: 2,
+        status: 'familiar',
+        dueAt: 0,
+        lastReviewedAt: 12345,
+        reviewCount: 9,
+        lapses: 2,
+        streak: 4,
+      },
+    })
+
+    expect(await removeEntry(entry.id)).toBe(true)
+    expect(await getEntry(entry.id)).toBeNull()
+
+    // 收回来：走的是和收藏同一条路。
+    await saveEntry({ ...input('resilience'), senses: [] })
+    const back = await getEntry(entry.id)
+    expect(back).not.toBeNull()
+    expect(back!.review.reviewCount).toBe(9)
+    expect(back!.review.level).toBe(2)
   })
 })

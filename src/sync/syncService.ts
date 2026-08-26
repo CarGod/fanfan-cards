@@ -8,6 +8,7 @@ import {
 import { readSyncState, writeSyncState } from '@/storage/repositories/syncStateRepo.ts'
 import { mergeActivity, mergeReviewLog } from '@/storage/repositories/activityRepo.ts'
 import { SyncError, type SyncState } from '@/types/sync.ts'
+import { t } from '@/i18n/index.ts'
 import type { Settings } from '@/types/settings.ts'
 import type { DailyActivity, ReviewLogEntry, VocabularyEntry } from '@/types/vocabulary.ts'
 import { GitHubClient, gitBlobSha, type CommitFile, type GitHubRepo } from './githubClient.ts'
@@ -216,7 +217,7 @@ async function performSync(
 
   const repo = await client.getRepo(owner, repoName, signal)
   if (!repo) {
-    throw new SyncError('not_found', `仓库 ${owner}/${repoName} 不存在，请先点「连接并创建仓库」`)
+    throw new SyncError('not_found', t('error.sync.repo_missing', { repo: `${owner}/${repoName}` }))
   }
   const branch = config.branch || repo.default_branch || 'main'
   const repoFullName = `${owner}/${repoName}`
@@ -275,7 +276,7 @@ async function performSync(
           if (entry?.normalized) remoteWords.add(entry.normalized)
         }
       } catch {
-        throw new SyncError('conflict', `远端 ${path} 不是合法 JSON，已停止以免误删本地词卡`)
+        throw new SyncError('conflict', t('error.sync.bad_json_force_pull', { path }))
       }
     }
 
@@ -286,10 +287,7 @@ async function performSync(
      * the whole library, with no tombstones and nothing to restore from.
      */
     if (remoteWords.size === 0 && (await listAllEntries()).some((entry) => !entry.deletedAt)) {
-      throw new SyncError(
-        'conflict',
-        '远端仓库里没有读到任何词卡，已中止「用远端覆盖本地」以免清空本机。请先确认仓库内容，或改用「用本地覆盖远端」。',
-      )
+      throw new SyncError('conflict', t('error.sync.remote_empty'))
     }
 
     const dropped = await dropLocalOnly(remoteWords, decidedAt)
@@ -388,7 +386,7 @@ async function pullRemote(
       parsed = JSON.parse(text)
     } catch {
       // Overwriting a file we cannot read would destroy whatever it holds.
-      throw new SyncError('conflict', `远端 ${path} 不是合法 JSON，已停止同步以免覆盖它`)
+      throw new SyncError('conflict', t('error.sync.bad_json_pull', { path }))
     }
 
     // A shard is a bare entry array; the legacy file is a whole snapshot.

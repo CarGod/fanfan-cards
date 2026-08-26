@@ -9,6 +9,7 @@ import type {
 import { SyncError, type SyncErrorCode } from '@/types/sync.ts'
 import { AIError, type AIErrorCode } from '@/types/ai.ts'
 import { isContextInvalidated } from '@/shared/extensionContext.ts'
+import { t } from '@/i18n/index.ts'
 
 /**
  * Typed `chrome.runtime` messaging.
@@ -34,12 +35,12 @@ export async function sendMessage<T extends MessageType>(
     }
     throw new AIError(
       'network',
-      error instanceof Error ? error.message : '扩展后台未响应，请刷新页面重试',
+      error instanceof Error ? error.message : t('error.messaging.no_response'),
       'mock',
     )
   }
 
-  if (!reply) throw new AIError('unknown', '后台没有返回结果', 'mock')
+  if (!reply) throw new AIError('unknown', t('error.messaging.empty_reply'), 'mock')
   if (!reply.ok) throw rebuild(reply.error)
   return reply.data
 }

@@ -1,15 +1,18 @@
 import { BrandMark } from '@/components/icons.tsx'
 import { useHashRoute } from '@/components/hooks.ts'
-import { APP_SHORT_NAME } from '@/shared/constants.ts'
 import { Dashboard } from '@/dashboard/Dashboard.tsx'
 import { VocabularyPage } from '@/vocabulary/VocabularyPage.tsx'
 import { FlashcardPage } from '@/flashcard/FlashcardPage.tsx'
+import { useI18n } from '@/i18n/react.ts'
+import { type MessageKey } from '@/i18n/index.ts'
 
-const ROUTES = [
-  { hash: '#/dashboard', label: '学习面板' },
-  { hash: '#/vocabulary', label: '词卡' },
-  { hash: '#/flashcard', label: '闪卡复习' },
-] as const
+// 存键而不是存文案：这个常量在模块加载时就求值了，那时用户的语言偏好还没读出来。
+// 真正的取词推迟到渲染里的 `t(item.labelKey)`，切换语言才跟得上。
+const ROUTES: ReadonlyArray<{ hash: string; labelKey: MessageKey }> = [
+  { hash: '#/dashboard', labelKey: 'common.dashboard' },
+  { hash: '#/vocabulary', labelKey: 'app.nav.vocabulary' },
+  { hash: '#/flashcard', labelKey: 'app.nav.flashcard' },
+]
 
 /**
  * The learning app: one tab, three surfaces.
@@ -19,6 +22,7 @@ const ROUTES = [
  * between them keeps state and costs no reload.
  */
 export function App() {
+  const { t } = useI18n()
   const [route, navigate] = useHashRoute('#/dashboard')
 
   return (
@@ -26,7 +30,7 @@ export function App() {
       <header className="app-header">
         <div className="brand">
           <BrandMark size={26} />
-          {APP_SHORT_NAME}
+          {t('app.name')}
         </div>
         <nav className="nav">
           {ROUTES.map((item) => (
@@ -39,13 +43,13 @@ export function App() {
                 navigate(item.hash)
               }}
             >
-              {item.label}
+              {t(item.labelKey)}
             </a>
           ))}
         </nav>
         <div className="spacer" />
         <button className="btn btn-ghost btn-sm" onClick={() => void chrome.runtime.openOptionsPage()}>
-          设置
+          {t('common.settings')}
         </button>
       </header>
 

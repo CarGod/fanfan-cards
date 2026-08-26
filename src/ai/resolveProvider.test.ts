@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveProvider } from './index.ts'
+import { t } from '@/i18n/index.ts'
 import { DEFAULT_SETTINGS, providerMeta, type Settings } from '@/types/settings.ts'
 
 function settingsFor(provider: Settings['provider'], patch: Partial<{ apiKey: string; model: string; baseUrl: string }> = {}): Settings {
@@ -33,10 +34,16 @@ describe('resolveProvider', () => {
   })
 
   // A missing key must never surface as a crash mid-reading.
+  //
+  // 比的是 `t()` 的返回值而不是写死的中文片段：这条消息现在有中英两版，断言任何
+  // 一版的字面量都会在另一种界面语言下变成假失败。这样写还顺带把「用了哪个键、
+  // 填了哪个占位符」也一起断言了，比原来的 `toContain('API Key')` 更严。
   it('downgrades to the offline dictionary instead of throwing when the key is missing', () => {
     const { provider, downgradeReason } = resolveProvider(settingsFor('deepseek', { apiKey: '' }))
     expect(provider.id).toBe('mock')
-    expect(downgradeReason).toContain('API Key')
+    expect(downgradeReason).toBe(
+      t('error.provider.no_key_offline', { provider: providerMeta('deepseek').label }),
+    )
   })
 
   it('never throws for a provider that needs a base URL it does not have', () => {

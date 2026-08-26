@@ -4,21 +4,13 @@ import { useEntries, useToast } from '@/components/hooks.ts'
 import { removeEntry } from '@/storage/repositories/vocabularyRepo.ts'
 import { buildSnapshot, downloadText, snapshotFilename, toCsv } from '@/services/exportService.ts'
 import { isDue } from '@/flashcard/scheduler.ts'
-import { FAMILIARITY_LABELS, type FamiliarityLevel, type VocabularyEntry } from '@/types/vocabulary.ts'
+import { useI18n } from '@/i18n/react.ts'
+import { familiarityLabel, type FamiliarityLevel, type VocabularyEntry } from '@/types/vocabulary.ts'
 import { formatDue, formatRelative, safeHostname, truncate } from '@/shared/utils.ts'
 import { WordDetail } from './WordDetail.tsx'
 
 type Filter = 'all' | 'due' | '0' | '1' | '2' | '3'
 type SortKey = 'recent' | 'alpha' | 'due'
-
-const FILTERS: ReadonlyArray<{ value: Filter; label: string }> = [
-  { value: 'all', label: '全部' },
-  { value: 'due', label: '待复习' },
-  { value: '0', label: FAMILIARITY_LABELS[0] },
-  { value: '1', label: FAMILIARITY_LABELS[1] },
-  { value: '2', label: FAMILIARITY_LABELS[2] },
-  { value: '3', label: FAMILIARITY_LABELS[3] },
-]
 
 /**
  * The vocabulary book — the asset the whole product exists to build.
@@ -27,12 +19,26 @@ const FILTERS: ReadonlyArray<{ value: Filter; label: string }> = [
  * people remember "the one from that Postgres post" more often than the word.
  */
 export function VocabularyPage() {
+  const { t } = useI18n()
   const { entries, loading } = useEntries()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [sort, setSort] = useState<SortKey>('recent')
   const [selected, setSelected] = useState<string | null>(null)
   const [toast, showToast] = useToast()
+
+  /*
+   * 筛选项在渲染里构造，不再是模块级常量：模块顶层求值会把语言冻结在加载那一刻，
+   * 用户之后换界面语言，这排按钮就还是旧的。
+   */
+  const filters: ReadonlyArray<{ value: Filter; label: string }> = [
+    { value: 'all', label: t('vocabulary.filter.all') },
+    { value: 'due', label: t('vocabulary.filter.due') },
+    { value: '0', label: familiarityLabel(0) },
+    { value: '1', label: familiarityLabel(1) },
+    { value: '2', label: familiarityLabel(2) },
+    { value: '3', label: familiarityLabel(3) },
+  ]
 
   const visible = useMemo(() => {
     const now = Date.now()
@@ -61,50 +67,52 @@ export function VocabularyPage() {
   const remove = async (id: string) => {
     await removeEntry(id)
     setSelected(null)
-    showToast('已删除')
+    showToast(t('vocabulary.toast.deleted'))
   }
 
   const exportJson = async () => {
     const snapshot = await buildSnapshot()
     downloadText(snapshotFilename(), JSON.stringify(snapshot, null, 2))
-    showToast(`已导出 ${snapshot.counts.entries} 个词条`)
+    showToast(t('vocabulary.toast.exported_entries', { count: snapshot.counts.entries }))
   }
 
   const exportCsv = () => {
     downloadText(snapshotFilename().replace('.json', '.csv'), toCsv(visible), 'text/csv')
-    showToast(`已导出 ${visible.length} 行 CSV`)
+    showToast(t('vocabulary.toast.exported_csv', { count: visible.length }))
   }
 
   return (
     <div>
-      <h1 className="page-title">我的词卡</h1>
+      <h1 className="page-title">{t('vocabulary.title')}</h1>
       <p className="page-sub">
-        {loading ? '加载中…' : `共 ${entries.length} 个词条，当前显示 ${visible.length} 个`}
+        {loading
+          ? t('vocabulary.loading')
+          : t('vocabulary.count', { total: entries.length, shown: visible.length })}
       </p>
 
       <div className="toolbar">
         <input
           type="search"
           value={query}
-          placeholder="搜索单词、释义或原句…"
+          placeholder={t('vocabulary.search.placeholder')}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <SegmentedControl value={filter} options={FILTERS} onChange={setFilter} />
+        <SegmentedControl value={filter} options={filters} onChange={setFilter} />
         <div className="spacer" />
         <SegmentedControl
           value={sort}
           options={[
-            { value: 'recent', label: '最新' },
+            { value: 'recent', label: t('vocabulary.sort.recent') },
             { value: 'alpha', label: 'A-Z' },
-            { value: 'due', label: '复习顺序' },
+            { value: 'due', label: t('vocabulary.sort.due') },
           ]}
           onChange={setSort}
         />
         <button className="btn btn-ghost btn-sm" onClick={() => void exportJson()}>
-          导出 JSON
+          {t('vocabulary.export.json')}
         </button>
         <button className="btn btn-ghost btn-sm" onClick={exportCsv}>
-          导出 CSV
+          {t('vocabulary.export.csv')}
         </button>
       </div>
 
@@ -112,12 +120,8 @@ export function VocabularyPage() {
         <div className="card">
           <Empty
             emoji={entries.length === 0 ? '📚' : '🔍'}
-            title={entries.length === 0 ? '词卡还是空的' : '没有匹配的词条'}
-            hint={
-              entries.length === 0
-                ? '在任意英文网页上划词 → 点击「解释」→ 收藏，词条就会出现在这里。'
-                : '换一个关键词或筛选条件试试。'
-            }
+            title={entries.length === 0 ? t('vocabulary.empty.title') : t('vocabulary.no_match.title')}
+            hint={entries.length === 0 ? t('vocabulary.empty.hint') : t('vocabulary.no_match.hint')}
           />
         </div>
       ) : (
@@ -137,6 +141,7 @@ export function VocabularyPage() {
 }
 
 function WordRow({ entry, onOpen }: { entry: VocabularyEntry; onOpen: () => void }) {
+  const { t } = useI18n()
   return (
     <div className="card word-row" onClick={onOpen} role="button" tabIndex={0}
       onKeyDown={(event) => {
@@ -162,7 +167,7 @@ function WordRow({ entry, onOpen }: { entry: VocabularyEntry; onOpen: () => void
           {entry.aiExplanation ? ` — ${truncate(entry.aiExplanation.split('\n')[0] ?? '', 80)}` : ''}
         </div>
         <div className="faint" style={{ marginTop: 4 }}>
-          {safeHostname(entry.source.url) || '未知来源'} · {formatRelative(entry.createdAt)}
+          {safeHostname(entry.source.url) || t('vocabulary.source.unknown')} · {formatRelative(entry.createdAt)}
         </div>
       </div>
       <div className="word-side">

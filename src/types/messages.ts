@@ -52,6 +52,13 @@ export interface MessageMap {
   /** Matches any of the given forms, so an inflected selection still hits. */
   'vocab/lookup': { req: { words: string[] }; res: { entry: VocabularyEntry | null } }
   'vocab/remove': { req: { id: string }; res: { removed: boolean } }
+  /**
+   * 把词卡上缺的那几项补回来（整句翻译、例句、近义词）。
+   *
+   * `filled` 说的是**这次真的补上了哪几项**，不是「缺哪几项」——补不上时是空数组，
+   * 界面据此区分「补好了」和「试过了但没拿到」，而不是一直转圈。
+   */
+  'vocab/enrich': { req: { id: string }; res: { entry: VocabularyEntry | null; filled: string[] } }
   'settings/get': { req: Record<string, never>; res: { settings: Settings } }
   'app/open': { req: { route?: string }; res: { opened: true } }
   'options/open': { req: Record<string, never>; res: { opened: true } }

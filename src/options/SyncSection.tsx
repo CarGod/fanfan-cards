@@ -4,8 +4,9 @@ import { useSettings } from '@/components/hooks.ts'
 import { readSyncState, watchSyncState } from '@/storage/repositories/syncStateRepo.ts'
 import { connectGitHub, sanitizeRepoName, type SyncMode } from '@/sync/syncService.ts'
 import { sendMessage } from '@/services/messaging.ts'
-import { EMPTY_SYNC_STATE, SYNC_ERROR_MESSAGES, SyncError, type SyncState } from '@/types/sync.ts'
+import { EMPTY_SYNC_STATE, syncErrorMessage, SyncError, type SyncState } from '@/types/sync.ts'
 import { formatRelative, truncate } from '@/shared/utils.ts'
+import { useI18n } from '@/i18n/react.ts'
 
 type Busy = 'idle' | 'connecting' | 'syncing'
 
@@ -30,6 +31,7 @@ const TOKEN_URL =
  * keeps the whole thing between the user's browser and api.github.com.
  */
 export function SyncSection({ onToast }: { onToast: (message: string) => void }) {
+  const { t } = useI18n()
   const { settings, update } = useSettings()
   const [state, setState] = useState<SyncState>(EMPTY_SYNC_STATE)
   const [busy, setBusy] = useState<Busy>('idle')
@@ -46,7 +48,10 @@ export function SyncSection({ onToast }: { onToast: (message: string) => void })
 
   const describe = (thrown: unknown): string => {
     if (thrown instanceof SyncError) {
-      return `${SYNC_ERROR_MESSAGES[thrown.code]}（${truncate(thrown.message, 140)}）`
+      return t('options.sync.error.detail', {
+        message: syncErrorMessage(thrown.code),
+        detail: truncate(thrown.message, 140),
+      })
     }
     return thrown instanceof Error ? thrown.message : String(thrown)
   }
@@ -58,15 +63,15 @@ export function SyncSection({ onToast }: { onToast: (message: string) => void })
       const result = await connectGitHub()
       onToast(
         result.created
-          ? `已创建私有仓库 ${result.repo}`
+          ? t('options.sync.toast.created', { repo: result.repo })
           : result.adopted
-            ? `发现已有的知识库 ${result.owner}/${result.repo}，已自动关联`
-            : `已连接 ${result.owner}/${result.repo}`,
+            ? t('options.sync.toast.adopted', { repo: `${result.owner}/${result.repo}` })
+            : t('options.sync.toast.connected', { repo: `${result.owner}/${result.repo}` }),
       )
       // A freshly created repo is empty; push straight away so the user sees
       // their words on GitHub instead of an empty repo.
       await sendMessage('sync/run', {})
-      onToast('首次同步完成')
+      onToast(t('options.sync.toast.first_sync'))
     } catch (thrown) {
       setError(describe(thrown))
     } finally {
@@ -94,8 +99,8 @@ export function SyncSection({ onToast }: { onToast: (message: string) => void })
   const confirmForce = async (mode: SyncMode) => {
     const message =
       mode === 'forcePull'
-        ? '用远端覆盖本地：本机上远端没有的词卡会被删除，且不会再同步回去。确定吗？'
-        : '用本地覆盖远端：仓库里这台设备没有的词卡会被覆盖。确定吗？'
+        ? t('options.sync.confirm.force_pull')
+        : t('options.sync.confirm.force_push')
     if (!window.confirm(message)) return
     await syncNow(mode)
   }
@@ -107,12 +112,17 @@ export function SyncSection({ onToast }: { onToast: (message: string) => void })
       const result = await sendMessage('sync/run', mode === 'merge' ? {} : { mode })
       onToast(
         mode === 'forcePull'
-          ? `已用远端内容覆盖本地，本地现有 ${result.pulled} 条变动`
+          ? t('options.sync.toast.force_pulled', { count: result.pulled })
           : mode === 'forcePush'
-            ? `已用本地内容覆盖远端，提交了 ${result.filesChanged} 个文件`
+            ? t('options.sync.toast.force_pushed', { count: result.filesChanged })
             : result.changed
-              ? `已同步 ${result.pushed} 个词条${result.pulled ? `，并合并了远端 ${result.pulled} 条` : ''}`
-              : '远端已是最新，无需提交',
+              ? result.pulled
+                ? t('options.sync.toast.pushed_and_merged', {
+                    count: result.pushed,
+                    pulled: result.pulled,
+                  })
+                : t('options.sync.toast.pushed', { count: result.pushed })
+              : t('options.sync.toast.up_to_date'),
       )
     } catch (thrown) {
       setError(describe(thrown))
@@ -125,16 +135,10 @@ export function SyncSection({ onToast }: { onToast: (message: string) => void })
 
   return (
     <section className="card section-card">
-      <div className="section-title">同步到 GitHub 私有仓库</div>
-      <div className="section-desc">
-        把词卡变成你自己的 Git 仓库：每次同步都是一次提交，commit 历史就是你的学习记录。
-        数据只在你的浏览器和 GitHub 之间流动，没有任何中间服务器。
-      </div>
+      <div className="section-title">{t('options.sync.title')}</div>
+      <div className="section-desc">{t('options.sync.desc')}</div>
 
-      <Field
-        label="GitHub Personal Access Token"
-        hint="Token 只保存在本机，只在扩展后台使用，不会发给除 GitHub 之外的任何一方。"
-      >
+      <Field label={t('options.sync.token.label')} hint={t('options.sync.token.hint')}>
         <input
           type="password"
           value={config.token}
@@ -145,19 +149,16 @@ export function SyncSection({ onToast }: { onToast: (message: string) => void })
       </Field>
       <div className="faint" style={{ marginTop: -8, marginBottom: 16, lineHeight: 1.7 }}>
         <a href={TOKEN_URL} target="_blank" rel="noreferrer">
-          点这里生成（已预选 repo 权限与「永不过期」）→
+          {t('options.sync.token.generate')}
         </a>
         <br />
-        选「永不过期」是有意的：会过期的 Token 会让几个月后的后台自动同步<strong>静默失败</strong>。
+        {t('options.sync.expiry.note_lead')}
+        <strong>{t('options.sync.expiry.note_em')}</strong>
         <br />
-        想要最小权限？先在 GitHub 手动建好私有仓库，再用 fine-grained token
-        只授予该仓库的 Contents 读写——本扩展检测到仓库已存在就不会请求创建权限。
+        {t('options.sync.token.fine_grained')}
       </div>
 
-      <Field
-        label="仓库名"
-        hint="不存在就自动创建为私有仓库。换设备时会先在你的账号里找已有的知识库（认仓库描述里的标记，改过名也能认出来），找到就直接关联，不会重复创建。"
-      >
+      <Field label={t('options.sync.repo.label')} hint={t('options.sync.repo.hint')}>
         <input
           type="text"
           value={config.repo}
@@ -173,18 +174,22 @@ export function SyncSection({ onToast }: { onToast: (message: string) => void })
           onClick={() => void connect()}
           disabled={busy !== 'idle' || !config.token.trim()}
         >
-          {busy === 'connecting' ? '连接中…' : connected ? '重新连接' : '连接并创建仓库'}
+          {busy === 'connecting'
+            ? t('options.sync.action.connecting')
+            : connected
+              ? t('options.sync.action.reconnect')
+              : t('options.sync.action.connect')}
         </button>
         <button
           className="btn"
           onClick={() => void syncNow()}
           disabled={busy !== 'idle' || !connected}
         >
-          {busy === 'syncing' ? '同步中…' : '立即同步'}
+          {busy === 'syncing' ? t('options.sync.action.syncing') : t('options.sync.action.sync_now')}
         </button>
         {state.repoUrl ? (
           <a className="btn btn-ghost" href={state.repoUrl} target="_blank" rel="noreferrer">
-            打开仓库 ↗
+            {t('options.sync.action.open_repo')}
           </a>
         ) : null}
       </div>
@@ -193,20 +198,18 @@ export function SyncSection({ onToast }: { onToast: (message: string) => void })
         <>
           <div className="row-between" style={{ marginTop: 18 }}>
             <div>
-              <div style={{ fontWeight: 600 }}>自动同步</div>
-              <div className="faint">
-                收藏或删除单词后约 30 秒自动提交一次；此外按下面的间隔兜底轮询
-              </div>
+              <div style={{ fontWeight: 600 }}>{t('options.sync.auto.title')}</div>
+              <div className="faint">{t('options.sync.auto.desc')}</div>
             </div>
             <Toggle
               checked={config.autoSync}
               onChange={(next) => patch({ autoSync: next })}
-              label="自动同步"
+              label={t('options.sync.auto.title')}
             />
           </div>
 
           {config.autoSync ? (
-            <Field label="同步间隔（分钟）">
+            <Field label={t('options.sync.interval.label')}>
               <input
                 type="number"
                 min={5}
@@ -234,8 +237,10 @@ export function SyncSection({ onToast }: { onToast: (message: string) => void })
         >
           {state.outcome === 'failed' ? (
             <>
-              上次同步失败（{formatRelative(state.lastAttemptAt)}）：
-              {truncate(state.error, 160)}
+              {t('options.sync.status.failed', {
+                when: formatRelative(state.lastAttemptAt),
+                reason: truncate(state.error, 160),
+              })}
               {/*
                 A conflict is the one failure the user can actually resolve, and
                 the only one where the product must not choose for them: both
@@ -245,8 +250,8 @@ export function SyncSection({ onToast }: { onToast: (message: string) => void })
               {state.errorCode === 'stale_head' || state.errorCode === 'conflict' ? (
                 <div className="stack" style={{ gap: 8, marginTop: 12 }}>
                   <div>
-                    两台设备各自改过词卡，自动合并没能对上。先试一次重新合并——它不会删任何东西。
-                    仍然失败，再选一边覆盖，<strong>被覆盖的那一边会丢掉对方没有的词卡</strong>。
+                    {t('options.sync.conflict.explain_lead')}
+                    <strong>{t('options.sync.conflict.explain_em')}</strong>
                   </div>
                   <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
                     <button
@@ -254,33 +259,34 @@ export function SyncSection({ onToast }: { onToast: (message: string) => void })
                       disabled={busy !== 'idle'}
                       onClick={() => void syncNow()}
                     >
-                      重新合并（安全）
+                      {t('options.sync.conflict.retry')}
                     </button>
                     <button
                       className="btn btn-sm"
                       disabled={busy !== 'idle'}
-                      title="丢弃本机上远端没有的词卡，改用仓库里的内容"
+                      title={t('options.sync.conflict.force_pull_title')}
                       onClick={() => void confirmForce('forcePull')}
                     >
-                      用远端覆盖本地
+                      {t('options.sync.conflict.force_pull')}
                     </button>
                     <button
                       className="btn btn-sm"
                       disabled={busy !== 'idle'}
-                      title="用本机内容整体提交，覆盖仓库里这台设备没有的改动"
+                      title={t('options.sync.conflict.force_push_title')}
                       onClick={() => void confirmForce('forcePush')}
                     >
-                      用本地覆盖远端
+                      {t('options.sync.conflict.force_push')}
                     </button>
                   </div>
                 </div>
               ) : null}
             </>
           ) : (
-            <>
-              上次同步 {formatRelative(state.lastSuccessAt)} · {state.repoFullName} ·{' '}
-              {state.entriesPushed} 个词条
-            </>
+            t('options.sync.status.ok', {
+              when: formatRelative(state.lastSuccessAt),
+              repo: state.repoFullName,
+              count: state.entriesPushed,
+            })
           )}
         </div>
       ) : null}

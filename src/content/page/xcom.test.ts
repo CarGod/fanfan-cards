@@ -39,8 +39,22 @@ const settle = async (ms: number) => {
 beforeEach(() => {
   vi.useFakeTimers()
   translate.mockReset()
+  /*
+   * 桩要像一个**守规矩的模型**：原文几行，译文就几行。
+   *
+   * 从前的桩不管输入多少行都回一行，于是每一段都会触发「换行被压平」的补救重译，
+   * 这几条用例测的东西（展开后重新翻译）就被那次额外请求盖住了。
+   * 补救逻辑本身有它自己的用例。
+   */
   translate.mockImplementation((_t: string, payload: { texts: string[] }) =>
-    Promise.resolve({ translations: payload.texts.map((text) => `[译]${text.length}`) }),
+    Promise.resolve({
+      translations: payload.texts.map((text) =>
+        text
+          .split('\n')
+          .map((line) => (line.trim() ? `[译]${line.length}` : ''))
+          .join('\n'),
+      ),
+    }),
   )
   document.body.innerHTML = `<article><div data-testid="tweetText">${COLLAPSED}</div></article>`
 })

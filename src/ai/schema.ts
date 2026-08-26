@@ -7,8 +7,11 @@ import {
   type ProviderId,
   type Synonym,
   type WordExplanation,
+  type WordSense,
 } from '@/types/ai.ts'
 import { classifySelection, isPhrase, normalizeWord, truncate } from '@/shared/utils.ts'
+import { t } from '@/i18n/index.ts'
+import { partOfSpeechLabel } from '@/types/vocabulary.ts'
 
 /**
  * Two representations of the same contract:
@@ -45,6 +48,37 @@ export const wordExplanationSchema = z.object({
   phonetic: stringOrEmpty,
   partOfSpeech: stringOrEmpty,
   meaning: stringOrEmpty,
+  /*
+   * 按词性拆开的释义。
+   *
+   * 和 synonyms 一样容忍模型给出别的形状：漏字段、给成字符串数组、整个不给。
+   * 拿不到就是空数组，显示时退回 meaning——这个字段是锦上添花，
+   * 不该因为它没给对形状就让整次查询失败。
+   */
+  senses: z
+    .union([
+      z.array(
+        z.union([
+          z.string(),
+          z.object({ partOfSpeech: z.string().optional(), meaning: z.string().optional() }),
+        ]),
+      ),
+      z.null(),
+      z.undefined(),
+    ])
+    .transform((value) => {
+      if (!Array.isArray(value)) return []
+      return value
+        .map((item) =>
+          typeof item === 'string'
+            ? { partOfSpeech: '', meaning: item.trim() }
+            : {
+                partOfSpeech: (item.partOfSpeech ?? '').trim(),
+                meaning: (item.meaning ?? '').trim(),
+              },
+        )
+        .filter((item) => item.meaning.length > 0)
+    }),
   contextMeaning: stringOrEmpty,
   englishDefinition: stringOrEmpty,
   sentenceTranslation: stringOrEmpty,
@@ -76,6 +110,7 @@ export const WORD_EXPLANATION_KEYS = [
   'kind',
   'phonetic',
   'partOfSpeech',
+  'senses',
   'cefr',
   'meaning',
   'contextMeaning',
@@ -93,6 +128,7 @@ export const CORE_KEYS = [
   'kind',
   'phonetic',
   'partOfSpeech',
+  'senses',
   'cefr',
   'meaning',
   'contextMeaning',
@@ -111,13 +147,41 @@ export const WORD_EXPLANATION_JSON_SCHEMA = {
     lemma: { type: 'string', description: 'Dictionary form, e.g. "migrations" -> "migration".' },
     kind: { type: 'string', enum: ['word', 'phrase', 'sentence'] },
     phonetic: { type: 'string', description: 'IPA of the lemma, wrapped in slashes. "" if unknown.' },
-    partOfSpeech: { type: 'string', description: 'noun / verb / adjective / phrase ...' },
+    partOfSpeech: {
+      type: 'string',
+      description:
+        'Part of speech IN THIS SENTENCE — exactly one, never a list. noun / verb / adjective ...',
+    },
     cefr: {
       type: 'string',
       enum: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2', ''],
       description: 'CEFR band of this word. Empty string if genuinely unsure — never guess.',
     },
-    meaning: { type: 'string', description: 'Context-free Chinese dictionary sense, short.' },
+    meaning: {
+      type: 'string',
+      description: 'Context-free dictionary sense, short. One line, no part-of-speech prefix.',
+    },
+    senses: {
+      type: 'array',
+      description:
+        'One entry per part of speech, ONLY when the word means genuinely different things ' +
+        'as different parts of speech. A word with a single sense returns an empty array. ' +
+        'At most three entries.',
+      items: {
+        type: 'object',
+        properties: {
+          partOfSpeech: {
+            type: 'string',
+            description: 'Lowercase English tag: noun / verb / adjective / adverb / ...',
+          },
+          meaning: {
+            type: 'string',
+            description: 'What it means as that part of speech. No part-of-speech prefix.',
+          },
+        },
+        required: ['partOfSpeech', 'meaning'],
+      },
+    },
     contextMeaning: {
       type: 'string',
       description: 'Chinese explanation of what the word means IN THIS SENTENCE.',
@@ -327,7 +391,15 @@ export function coerceExplanation(
     return ''
   }
 
-  const meaning = text('meaning')
+  const senses = coerceSenses(source['senses'])
+  /*
+   * 有结构化释义时，那一行展示文本由它拼出来，而**不是**用模型给的 meaning。
+   *
+   * 两个字段各自由模型填，就迟早会对不上：卡片上写「形容词：独有的」，
+   * 而按词性筛选时那条词卡却归在名词下。让其中一个从另一个推导出来，
+   * 这种矛盾就没有存在的余地。
+   */
+  const meaning = senses.length > 0 ? joinSenses(senses) : text('meaning')
   const contextMeaning = text('contextMeaning')
   const englishDefinition = text('englishDefinition')
 
@@ -336,7 +408,7 @@ export function coerceExplanation(
     console.warn('[fanfan] model returned no usable fields:', raw)
     throw new AIError(
       'bad_response',
-      `模型返回的字段与约定不符：${truncate(JSON.stringify(raw ?? null), 200)}`,
+      t('error.schema.field_mismatch', { body: truncate(JSON.stringify(raw ?? null), 200) }),
       providerId,
     )
   }
@@ -365,12 +437,44 @@ export function coerceExplanation(
     partOfSpeech: text('partOfSpeech'),
     cefr: coerceCefr(text('cefr')),
     meaning,
+    senses,
     contextMeaning,
     englishDefinition,
     sentenceTranslation: text('sentenceTranslation'),
     examples: coerceExamples(source['examples'], text('example'), text('exampleTranslation')),
     synonyms: coerceSynonyms(source['synonyms']),
   }
+}
+
+/** 模型给的 senses 可能缺形状。拿不到就是空数组，显示时退回 meaning。 */
+function coerceSenses(value: unknown): WordSense[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item) => {
+      if (typeof item === 'string') return { partOfSpeech: '', meaning: item.trim() }
+      if (!item || typeof item !== 'object') return null
+      const record = item as Record<string, unknown>
+      const partOfSpeech =
+        typeof record['partOfSpeech'] === 'string' ? record['partOfSpeech'].trim().toLowerCase() : ''
+      const meaning = typeof record['meaning'] === 'string' ? record['meaning'].trim() : ''
+      return meaning ? { partOfSpeech, meaning } : null
+    })
+    .filter((item): item is WordSense => item !== null)
+    .slice(0, 3)
+}
+
+/**
+ * 拼成一行展示文本。
+ *
+ * 词性译名在**取用时**才解析（`partOfSpeechLabel` 走 i18n），所以这一行会跟着
+ * 界面语言变——而存起来的那份始终是英文标签，筛选和分组不受影响。
+ */
+export function joinSenses(senses: readonly WordSense[]): string {
+  return senses
+    .map((sense) =>
+      sense.partOfSpeech ? `${partOfSpeechLabel(sense.partOfSpeech)}：${sense.meaning}` : sense.meaning,
+    )
+    .join('；')
 }
 
 /**

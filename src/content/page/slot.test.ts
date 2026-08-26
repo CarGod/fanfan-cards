@@ -35,7 +35,7 @@ describe('slot', () => {
     const source = paragraph()
     source.after(createSlot(source))
 
-    expect(fillSlot(source, source.textContent!, '一次迁移可能把表锁住好几分钟。')).toBe(true)
+    expect(fillSlot(source, source.textContent!, '一次迁移可能把表锁住好几分钟。')).toBe('filled')
     expect(slotFor(source)?.textContent).toBe('一次迁移可能把表锁住好几分钟。')
     expect(source.getAttribute(TRANSLATED_MARK)).toBe('done')
   })
@@ -44,7 +44,7 @@ describe('slot', () => {
     const source = paragraph('中文内容不该被"翻译"成同样的中文')
     source.after(createSlot(source))
 
-    expect(fillSlot(source, source.textContent!, source.textContent!)).toBe(false)
+    expect(fillSlot(source, source.textContent!, source.textContent!)).toBe('rejected')
     expect(slotFor(source)).toBeNull()
     expect(source.hasAttribute(TRANSLATED_MARK)).toBe(false)
   })

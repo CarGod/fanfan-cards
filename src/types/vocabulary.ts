@@ -7,6 +7,16 @@
  * history that follows).
  */
 
+import { t, type MessageKey } from '@/i18n/index.ts'
+
+/*
+ * 这里的标签存的是**文案键**，取值走下面那几个函数。
+ *
+ * 直接写 `{ A1: t('...') }` 会在模块加载那一刻就把语言定死——之后用户在设置页
+ * 换成英文，这些标签还是旧的，而且因为它们散在词卡、面板、词库三处，测试里几乎
+ * 看不出来。存键、用的时候再取，是唯一不会踩这个坑的写法。
+ */
+
 /**
  * CEFR band, or '' when the model would not commit to one.
  *
@@ -16,19 +26,69 @@
  */
 export type CefrLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2' | ''
 
-export const CEFR_HINTS: Record<Exclude<CefrLevel, ''>, string> = {
-  A1: '入门',
-  A2: '基础',
-  B1: '中级',
-  B2: '中高级',
-  C1: '高级',
-  C2: '精通',
+export const CEFR_HINT_KEYS: Record<Exclude<CefrLevel, ''>, MessageKey> = {
+  A1: 'vocabulary.cefr.a1',
+  A2: 'vocabulary.cefr.a2',
+  B1: 'vocabulary.cefr.b1',
+  B2: 'vocabulary.cefr.b2',
+  C1: 'vocabulary.cefr.c1',
+  C2: 'vocabulary.cefr.c2',
+}
+
+/** Plain-language gloss for a CEFR band, in the current interface language. */
+export function cefrHint(level: Exclude<CefrLevel, ''>): string {
+  return t(CEFR_HINT_KEYS[level])
 }
 
 /** One example sentence and its translation. */
 export interface ExampleSentence {
   sentence: string
   translation: string
+}
+
+/**
+ * 一个词性下的释义。
+ *
+ * 分开存，而不是存一串「形容词：独有的；名词：独家新闻」。字符串好看，但一旦想
+ * 「只复习它作动词时的用法」「按词性给词库分组」，就得回头去解析那个分号——
+ * 而解析自己拼出来的字符串，是把已经有的结构又丢掉一次。
+ */
+export interface WordSense {
+  /**
+   * 词性，存**英文规范标签**（noun / verb / adjective …），不是「形容词」。
+   *
+   * 存标签而不是存译名，是为了让筛选和分组不受界面语言影响：读者把界面切成英文，
+   * 他按词性分的那些组不该跟着散架。译名在显示时由 {@link partOfSpeechLabel} 给。
+   * 模型给了个归不了类的词性时原样保留——显示得出来，总比丢掉强。
+   */
+  partOfSpeech: string
+  /** 这个词性下的意思，用目标语言书写，**不带**词性前缀。 */
+  meaning: string
+}
+
+/**
+ * 词性标签 → 界面语言里的说法。
+ *
+ * 只覆盖常见的那些。表里没有的原样显示：模型偶尔会给出 "phrasal verb" 这类东西，
+ * 显示成它本来的样子，比显示成空白或者硬塞进某一类要诚实。
+ */
+const PART_OF_SPEECH_KEYS: Record<string, MessageKey> = {
+  noun: 'pos.noun',
+  verb: 'pos.verb',
+  adjective: 'pos.adjective',
+  adverb: 'pos.adverb',
+  pronoun: 'pos.pronoun',
+  preposition: 'pos.preposition',
+  conjunction: 'pos.conjunction',
+  interjection: 'pos.interjection',
+  determiner: 'pos.determiner',
+  numeral: 'pos.numeral',
+  phrase: 'pos.phrase',
+}
+
+export function partOfSpeechLabel(partOfSpeech: string): string {
+  const key = PART_OF_SPEECH_KEYS[partOfSpeech.trim().toLowerCase()]
+  return key ? t(key) : partOfSpeech
 }
 
 /** A related word plus what it means — a bare list of words teaches nothing. */
@@ -43,11 +103,16 @@ export type FamiliarityLevel = 0 | 1 | 2 | 3
 /** Human-readable projection of {@link FamiliarityLevel}. */
 export type ReviewStatus = 'new' | 'learning' | 'familiar' | 'mastered'
 
-export const FAMILIARITY_LABELS: Record<FamiliarityLevel, string> = {
-  0: '陌生',
-  1: '学习中',
-  2: '熟悉',
-  3: '掌握',
+export const FAMILIARITY_LABEL_KEYS: Record<FamiliarityLevel, MessageKey> = {
+  0: 'vocabulary.familiarity.new',
+  1: 'vocabulary.familiarity.learning',
+  2: 'vocabulary.familiarity.familiar',
+  3: 'vocabulary.familiarity.mastered',
+}
+
+/** Label for a familiarity level, in the current interface language. */
+export function familiarityLabel(level: FamiliarityLevel): string {
+  return t(FAMILIARITY_LABEL_KEYS[level])
 }
 
 export const REVIEW_STATUS_BY_LEVEL: Record<FamiliarityLevel, ReviewStatus> = {
@@ -120,8 +185,21 @@ export interface VocabularyEntry {
   partOfSpeech: string
   /** CEFR difficulty of the word itself; '' when unknown. */
   cefr: CefrLevel
-  /** 基础中文释义 — the context-free dictionary sense. */
+  /**
+   * 基础中文释义 — the context-free dictionary sense.
+   *
+   * 有 {@link VocabularyEntry.senses} 时，这一条是由它拼出来的。保留它不是冗余：
+   * 词库列表、闪卡背面、导出的 Markdown、搜索，全都只需要一行能读的字，
+   * 让它们各自去拼一遍才是重复。
+   */
   meaning: string
+  /**
+   * 按词性拆开的释义。
+   *
+   * 旧词卡和离线词典给不出这个，所以可能是空数组——调用方必须能只靠
+   * {@link VocabularyEntry.meaning} 活下去。
+   */
+  senses: WordSense[]
   /** 结合上下文的 AI 解释 — the product's core value. */
   aiExplanation: string
   /** English-to-English definition, for learners past the beginner stage. */
@@ -166,15 +244,13 @@ export interface ReviewLogEntry {
   reviewedAt: number
 }
 
-/** Self-graded recall quality, Anki-style but reduced to four buttons. */
+/**
+ * Self-graded recall quality, Anki-style but reduced to four buttons.
+ *
+ * 四个档位的按钮文案不在这里：它们只出现在闪卡页，和各自的按钮样式绑在一起，
+ * 所以键写在 `flashcard/FlashcardPage.tsx` 的 `GRADES` 里（`flashcard.grade.*`）。
+ */
 export type ReviewGrade = 'forgot' | 'hard' | 'good' | 'easy'
-
-export const REVIEW_GRADE_LABELS: Record<ReviewGrade, string> = {
-  forgot: '忘记了',
-  hard: '有点模糊',
-  good: '记得',
-  easy: '完全掌握',
-}
 
 /** Per-day rollup powering the streak counter and the dashboard chart. */
 export interface DailyActivity {

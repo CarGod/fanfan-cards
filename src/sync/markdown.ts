@@ -1,4 +1,4 @@
-import { FAMILIARITY_LABELS, type FamiliarityLevel, type VocabularyEntry } from '@/types/vocabulary.ts'
+import { type FamiliarityLevel, type VocabularyEntry } from '@/types/vocabulary.ts'
 import type { KnowledgeSnapshot } from '@/services/exportService.ts'
 import { safeHostname } from '@/shared/utils.ts'
 
@@ -17,6 +17,20 @@ const LEVEL_ICON: Record<FamiliarityLevel, string> = {
   1: '🟡',
   2: '🔵',
   3: '🟢',
+}
+
+/*
+ * 熟悉度标签在这里写死中文，**不走界面语言**。
+ *
+ * 这些字进的是用户自己的 GitHub 仓库，是文件内容而不是界面外壳。跟着界面语言变，
+ * 意味着他在设置页点一下「English」，下一次同步就会把仓库里每一行都改写一遍——
+ * 一个纯粹由界面偏好触发的巨型 diff，而且历史从此对不上。
+ */
+const LEVEL_LABEL: Record<FamiliarityLevel, string> = {
+  0: '陌生',
+  1: '学习中',
+  2: '熟悉',
+  3: '掌握',
 }
 
 /** One readable page per shard, so a letter's diff shows only that letter. */
@@ -40,7 +54,7 @@ function renderEntry(entry: VocabularyEntry): string[] {
     entry.phonetic ? `\`${entry.phonetic}\`` : '',
     entry.partOfSpeech,
     entry.cefr ? `CEFR ${entry.cefr}` : '',
-    `${LEVEL_ICON[entry.review.level]} ${FAMILIARITY_LABELS[entry.review.level]}`,
+    `${LEVEL_ICON[entry.review.level]} ${LEVEL_LABEL[entry.review.level]}`,
   ]
     .filter(Boolean)
     .join(' · ')
@@ -109,10 +123,10 @@ export function renderReadme(
 
 | 等级 | 数量 |
 |---|---|
-| 🔴 ${FAMILIARITY_LABELS[0]} | ${histogram[0]} |
-| 🟡 ${FAMILIARITY_LABELS[1]} | ${histogram[1]} |
-| 🔵 ${FAMILIARITY_LABELS[2]} | ${histogram[2]} |
-| 🟢 ${FAMILIARITY_LABELS[3]} | ${histogram[3]} |
+| 🔴 ${LEVEL_LABEL[0]} | ${histogram[0]} |
+| 🟡 ${LEVEL_LABEL[1]} | ${histogram[1]} |
+| 🔵 ${LEVEL_LABEL[2]} | ${histogram[2]} |
+| 🟢 ${LEVEL_LABEL[3]} | ${histogram[3]} |
 
 ${topSources.length ? `## 主要来源\n\n${topSources.map(([host, count]) => `- ${host} — ${count} 个词`).join('\n')}\n` : ''}
 ## 按字母浏览

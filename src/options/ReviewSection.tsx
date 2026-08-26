@@ -2,6 +2,9 @@ import { Field, SegmentedControl, Toggle } from '@/components/index.tsx'
 import { INTENSITY_SCALE, BASE_INTERVALS } from '@/flashcard/scheduler.ts'
 import type { Settings } from '@/types/settings.ts'
 import { DAY_MS } from '@/shared/utils.ts'
+import { useI18n } from '@/i18n/react.ts'
+
+type Translate = ReturnType<typeof useI18n>['t']
 
 /**
  * Review settings.
@@ -12,26 +15,37 @@ import { DAY_MS } from '@/shared/utils.ts'
  * you meet the due cards in, and how aggressive the intervals are. So those are
  * the two knobs, and the copy says which one is doing the real work.
  */
+/*
+ * 表里存的是键，不是文案：这个数组在模块加载时就求值了，直接放 `t()` 的结果会
+ * 把语言冻结在那一刻，之后用户改设置也不再变。取文案的动作留到渲染里。
+ */
 const MODES = [
   {
-    value: 'curve' as const,
-    label: '记忆曲线',
-    hint: '按遗忘曲线到期顺序，最生疏的先来。这是真正的间隔重复，默认。',
+    value: 'curve',
+    label: 'options.review.mode.curve',
+    hint: 'options.review.mode.curve_hint',
   },
-  { value: 'recent' as const, label: '最新优先', hint: '最近收藏的先复习——“今天读到的那些词”。' },
-  { value: 'hardest' as const, label: '最难优先', hint: '按遗忘次数排序，专攻反复记不住的。' },
-  { value: 'random' as const, label: '随机', hint: '打乱顺序，避免靠位置记住答案。' },
-]
+  { value: 'recent', label: 'options.review.mode.recent', hint: 'options.review.mode.recent_hint' },
+  {
+    value: 'hardest',
+    label: 'options.review.mode.hardest',
+    hint: 'options.review.mode.hardest_hint',
+  },
+  { value: 'random', label: 'options.review.mode.random', hint: 'options.review.mode.random_hint' },
+] as const
 
 const INTENSITIES = [
-  { value: 'relaxed' as const, label: '宽松' },
-  { value: 'standard' as const, label: '标准' },
-  { value: 'intensive' as const, label: '紧凑' },
-]
+  { value: 'relaxed', label: 'options.review.intensity.relaxed' },
+  { value: 'standard', label: 'options.review.intensity.standard' },
+  { value: 'intensive', label: 'options.review.intensity.intensive' },
+] as const
 
-function describeIntensity(intensity: Settings['reviewIntensity']): string {
+function describeIntensity(t: Translate, intensity: Settings['reviewIntensity']): string {
   const days = (ms: number) => Math.max(1, Math.round((ms * INTENSITY_SCALE[intensity]) / DAY_MS))
-  return `掌握后约 ${days(BASE_INTERVALS[3])} 天后再见，熟悉约 ${days(BASE_INTERVALS[2])} 天`
+  return t('options.review.intensity.hint', {
+    mastered: days(BASE_INTERVALS[3]),
+    familiar: days(BASE_INTERVALS[2]),
+  })
 }
 
 export function ReviewSection({
@@ -41,36 +55,39 @@ export function ReviewSection({
   settings: Settings
   update: (patch: Partial<Settings>) => Promise<void>
 }) {
+  const { t } = useI18n()
   const activeMode = MODES.find((mode) => mode.value === settings.reviewMode) ?? MODES[0]!
 
   return (
     <>
       <section className="card section-card">
-        <div className="section-title">复习方式</div>
+        <div className="section-title">{t('options.review.title')}</div>
         <div className="section-desc">
-          所有模式都只从<strong>已经到期</strong>的卡片里选——那才是间隔重复的含义。模式决定的是你按什么顺序遇到它们。
+          {t('options.review.desc_lead')}
+          <strong>{t('options.review.desc_em')}</strong>
+          {t('options.review.desc_tail')}
         </div>
 
-        <Field label="排序模式" hint={activeMode.hint}>
+        <Field label={t('options.review.mode.label')} hint={t(activeMode.hint)}>
           <SegmentedControl
             value={settings.reviewMode}
-            options={MODES.map((mode) => ({ value: mode.value, label: mode.label }))}
+            options={MODES.map((mode) => ({ value: mode.value, label: t(mode.label) }))}
             onChange={(next) => void update({ reviewMode: next })}
           />
         </Field>
 
-        <Field label="间隔强度" hint={describeIntensity(settings.reviewIntensity)}>
+        <Field
+          label={t('options.review.intensity.label')}
+          hint={describeIntensity(t, settings.reviewIntensity)}
+        >
           <SegmentedControl
             value={settings.reviewIntensity}
-            options={INTENSITIES}
+            options={INTENSITIES.map((item) => ({ value: item.value, label: t(item.label) }))}
             onChange={(next) => void update({ reviewIntensity: next })}
           />
         </Field>
 
-        <Field
-          label="每天复习多少张"
-          hint="一次会话的上限，也是学习面板上进度环的分母。"
-        >
+        <Field label={t('options.review.goal.label')} hint={t('options.review.goal.hint')}>
           <input
             type="number"
             min={1}
@@ -82,25 +99,30 @@ export function ReviewSection({
       </section>
 
       <section className="card section-card">
-        <div className="section-title">每日提醒</div>
+        <div className="section-title">{t('options.review.reminder.title')}</div>
         <div className="section-desc">
-          只在<strong>确实有卡片到期、且你今天还没完成目标</strong>时才提醒。无条件响的提醒最终都会被关掉。
+          {t('options.review.reminder.desc_lead')}
+          <strong>{t('options.review.reminder.desc_em')}</strong>
+          {t('options.review.reminder.desc_tail')}
         </div>
 
         <div className="row-between" style={{ marginBottom: 16 }}>
           <div>
-            <div style={{ fontWeight: 600 }}>开启提醒</div>
-            <div className="faint">到点后弹一条系统通知，点击直接进入复习</div>
+            <div style={{ fontWeight: 600 }}>{t('options.review.reminder.toggle')}</div>
+            <div className="faint">{t('options.review.reminder.toggle_desc')}</div>
           </div>
           <Toggle
             checked={settings.reminderEnabled}
             onChange={(next) => void update({ reminderEnabled: next })}
-            label="开启每日提醒"
+            label={t('options.review.reminder.toggle_aria')}
           />
         </div>
 
         {settings.reminderEnabled ? (
-          <Field label="提醒时间" hint="按你本机时区的时间。">
+          <Field
+            label={t('options.review.reminder.time_label')}
+            hint={t('options.review.reminder.time_hint')}
+          >
             <input
               type="time"
               value={settings.reminderTime}

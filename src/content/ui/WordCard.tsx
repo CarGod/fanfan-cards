@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AI_ERROR_MESSAGES, type AIErrorCode, type WordExplanation } from '@/types/ai.ts'
-import { CEFR_HINTS, type VocabularyEntry } from '@/types/vocabulary.ts'
+import { aiErrorMessage, type AIErrorCode, type WordExplanation } from '@/types/ai.ts'
+import { cefrHint, partOfSpeechLabel, type VocabularyEntry } from '@/types/vocabulary.ts'
 import { speak } from '@/services/speech.ts'
-import { BookmarkIcon, CheckIcon, CloseIcon, SpeakerIcon } from '@/components/icons.tsx'
+import { BookmarkIcon, CloseIcon, SpeakerIcon } from '@/components/icons.tsx'
+import { useI18n } from '@/i18n/react.ts'
+import { SenseList } from '@/components/index.tsx'
 import { truncate } from '@/shared/utils.ts'
 
 export interface ExplainMeta {
@@ -26,7 +28,6 @@ interface Props {
   autoSpeak: boolean
   onSave: () => void
   onRemove: () => void
-  onOpenBook: () => void
   onClose: () => void
 }
 
@@ -42,13 +43,12 @@ export function WordCard({
   autoSpeak,
   onSave,
   onRemove,
-  onOpenBook,
   onClose,
 }: Props) {
+  const { t } = useI18n()
   const [spoken, setSpoken] = useState(false)
   // Hovering the "saved" button reveals the undo, the way a Follow button
   // becomes Unfollow — one control, no second button competing for attention.
-  const [armedToRemove, setArmedToRemove] = useState(false)
 
   useEffect(() => {
     if (autoSpeak && !spoken && explanation.word) {
@@ -57,7 +57,7 @@ export function WordCard({
     }
   }, [autoSpeak, spoken, explanation.word, explanation.lemma])
 
-  const highlighted = useMemo(() => highlight(sentence, selection), [sentence, selection])
+  const highlighted = useMemo(() => highlightInSentence(sentence, selection), [sentence, selection])
 
   /*
    * A sentence gets a shorter card.
@@ -69,7 +69,7 @@ export function WordCard({
   const isSentence = explanation.kind === 'sentence'
 
   return (
-    <div className="card" role="dialog" aria-label={`${explanation.word} 的解释`}>
+    <div className="card" role="dialog" aria-label={t('card.aria.dialog', { word: explanation.word })}>
       <header className="card-head">
         <div className="headline">
           <div className="word-row">
@@ -78,7 +78,7 @@ export function WordCard({
               <span
                 className="cefr"
                 data-band={explanation.cefr[0]}
-                title={`CEFR ${explanation.cefr} · ${CEFR_HINTS[explanation.cefr]}`}
+                title={`CEFR ${explanation.cefr} · ${cefrHint(explanation.cefr)}`}
               >
                 {explanation.cefr}
               </span>
@@ -88,25 +88,54 @@ export function WordCard({
             {explanation.phonetic && !isSentence ? (
               <span className="phonetic">{explanation.phonetic}</span>
             ) : null}
+            {/* 词性走界面语言：头上写 verb、正文写「动词」，是同一个字段的两种说法。 */}
             {explanation.partOfSpeech ? (
-              <span className="pos">{explanation.partOfSpeech}</span>
+              <span className="pos">{partOfSpeechLabel(explanation.partOfSpeech)}</span>
             ) : null}
             {!isSentence &&
             explanation.lemma &&
             explanation.lemma !== explanation.word.toLowerCase() ? (
-              <span className="pos">原形 {explanation.lemma}</span>
+              <span className="pos">{t('card.meta.lemma', { lemma: explanation.lemma })}</span>
             ) : null}
+            {/*
+              「离线」跟着词性走，不再待在卡片底部。
+              模型名字对读在半句话中间的人是噪音，但「这条解释来自离线词典」不是——
+              它决定了这句话能信到什么程度，所以要和词性、音标待在一起。
+            */}
+            {meta.offline ? <span className="provider-tag">{t('card.tag.offline')}</span> : null}
           </div>
         </div>
+        {/*
+          收藏做成图标，放在朗读左边。
+          它原本是卡片底部一整行的主按钮——那一行的高度，加上「去复习」，
+          正是这张卡在长一点的词上开始出现滚动条的原因。收藏是**一次性**的动作，
+          不值得常驻一整行；而放在右上角，它和朗读、关闭一样，都是「对这张卡做点什么」。
+        */}
         <button
           className="icon-btn"
-          title="朗读"
-          aria-label="朗读这个词"
+          data-saved={!!savedEntry}
+          disabled={saving}
+          title={savedEntry ? t('card.action.unsave_title') : t('card.action.save_title')}
+          aria-label={savedEntry ? t('card.action.unsave_title') : t('card.action.save_title')}
+          aria-pressed={!!savedEntry}
+          onClick={savedEntry ? onRemove : onSave}
+        >
+          <BookmarkIcon size={16} filled={!!savedEntry} />
+        </button>
+        <button
+          className="icon-btn"
+          title={t('card.action.speak')}
+          aria-label={t('card.action.speak_word')}
           onClick={() => speak(explanation.lemma || explanation.word)}
         >
           <SpeakerIcon size={17} />
         </button>
-        <button className="icon-btn" title="关闭 (Esc)" aria-label="关闭" onClick={onClose}>
+        <button
+          className="icon-btn"
+          title={t('card.action.close_title')}
+          aria-label={t('card.action.close')}
+          onClick={onClose}
+        >
           <CloseIcon size={16} />
         </button>
       </header>
@@ -114,23 +143,29 @@ export function WordCard({
       <div className="card-body">
         {meta.downgradeReason ? <div className="notice">{meta.downgradeReason}</div> : null}
 
-        {explanation.meaning ? (
+        {/*
+          有 senses 就显示，哪怕 meaning 是空的。
+          原来这里只看 meaning——生产里它是从 senses 推导出来的所以碰巧非空，
+          但那是个脆耦合：任何一条「有结构化释义、没有那行汇总文本」的数据
+          都会让整节凭空消失，而消失的东西没人会去找。
+        */}
+        {explanation.meaning || explanation.senses?.length ? (
           <section className="section">
-            <div className="label">基础释义</div>
-            <div className="body-text">{explanation.meaning}</div>
+            <div className="label">{t('card.section.meaning')}</div>
+            <SenseList senses={explanation.senses ?? []} meaning={explanation.meaning} />
           </section>
         ) : null}
 
         {showEnglishDefinition && explanation.englishDefinition ? (
           <section className="section">
-            <div className="label">English</div>
+            <div className="label">{t('card.section.english')}</div>
             <div className="muted">{explanation.englishDefinition}</div>
           </section>
         ) : null}
 
         {explanation.contextMeaning ? (
           <section className="section">
-            <div className="label">语境含义 · 本页</div>
+            <div className="label">{t('card.section.context')}</div>
             <div className="context-block body-text">{explanation.contextMeaning}</div>
           </section>
         ) : null}
@@ -138,8 +173,8 @@ export function WordCard({
         {sentence ? (
           <section className="section">
             <div className="label">
-              原文与翻译
-              <SpeakButton text={sentence} title="朗读原句" />
+              {t('card.section.source')}
+              <SpeakButton text={sentence} title={t('card.action.speak_sentence')} />
             </div>
             <div className="source-quote">{highlighted}</div>
             {explanation.sentenceTranslation ? (
@@ -150,10 +185,10 @@ export function WordCard({
 
         {enriching && !isSentence && explanation.examples.length === 0 ? (
           <section className="section">
-            <div className="label">例句 · 近义词</div>
+            <div className="label">{t('card.section.extras')}</div>
             <div className="thinking">
               <span className="dot" />
-              正在补充
+              {t('card.state.enriching')}
             </div>
             <div className="skeleton-line" style={{ width: '88%' }} />
             <div className="skeleton-line" style={{ width: '64%' }} />
@@ -162,13 +197,13 @@ export function WordCard({
 
         {!isSentence && explanation.examples.length > 0 ? (
           <section className="section">
-            <div className="label">例句</div>
+            <div className="label">{t('card.section.examples')}</div>
             <ol className="example-list">
               {explanation.examples.map((item) => (
                 <li key={item.sentence}>
                   <div className="example-row">
                     <span className="example">{item.sentence}</span>
-                    <SpeakButton text={item.sentence} title="朗读这句例句" />
+                    <SpeakButton text={item.sentence} title={t('card.action.speak_example')} />
                   </div>
                   {item.translation ? <div className="example-zh">{item.translation}</div> : null}
                 </li>
@@ -179,7 +214,7 @@ export function WordCard({
 
         {!isSentence && explanation.synonyms.length > 0 ? (
           <section className="section">
-            <div className="label">近义词</div>
+            <div className="label">{t('card.section.synonyms')}</div>
             <ul className="syn-list">
               {explanation.synonyms.map((synonym) => (
                 <li key={synonym.word}>
@@ -192,41 +227,6 @@ export function WordCard({
         ) : null}
       </div>
 
-      <footer className="card-foot">
-        {savedEntry ? (
-          <>
-            <button
-              className={armedToRemove ? 'btn btn-remove' : 'btn btn-saved'}
-              onMouseEnter={() => setArmedToRemove(true)}
-              onMouseLeave={() => setArmedToRemove(false)}
-              onFocus={() => setArmedToRemove(true)}
-              onBlur={() => setArmedToRemove(false)}
-              onClick={onRemove}
-              title={armedToRemove ? '从词卡中移除' : '已收藏'}
-            >
-              {armedToRemove ? <CloseIcon size={15} /> : <CheckIcon size={15} />}
-              {armedToRemove ? '移出词卡' : '已在词卡'}
-            </button>
-            <button className="btn btn-ghost" onClick={onOpenBook}>
-              去复习
-            </button>
-          </>
-        ) : (
-          <button className="btn btn-primary" onClick={onSave} disabled={saving}>
-            {saving ? (
-              '收藏中…'
-            ) : (
-              <>
-                <BookmarkIcon size={15} />
-                收进词卡
-              </>
-            )}
-          </button>
-        )}
-        {/* The model name is noise to a reader mid-sentence. "Offline" stays:
-            it changes how much the explanation can be trusted. */}
-        {meta.offline ? <span className="provider-tag">离线词典</span> : null}
-      </footer>
     </div>
   )
 }
@@ -235,7 +235,7 @@ export function WordCard({
  * A sentence is worth hearing, not just reading — intonation and liaison are
  * most of what makes spoken English hard, and neither survives a word list.
  */
-function SpeakButton({ text, title }: { text: string; title: string }) {
+export function SpeakButton({ text, title }: { text: string; title: string }) {
   return (
     <button className="label-speak" title={title} aria-label={title} onClick={() => speak(text)}>
       <SpeakerIcon size={13} />
@@ -243,8 +243,13 @@ function SpeakButton({ text, title }: { text: string; title: string }) {
   )
 }
 
-/** Marks the selected text inside the source sentence so the eye lands on it. */
-function highlight(sentence: string, selection: string) {
+/**
+ * Marks the selected text inside the source sentence so the eye lands on it.
+ *
+ * 翻翻模式的卡片也要画同一段（当初收藏时的那句原文），所以导出来共用——
+ * 复制一份的结局是两处的截断长度、大小写匹配慢慢走散，而这种走散没人会发现。
+ */
+export function highlightInSentence(sentence: string, selection: string) {
   const text = truncate(sentence, 400)
   const index = selection ? text.toLowerCase().indexOf(selection.toLowerCase()) : -1
   if (index === -1) return text
@@ -258,23 +263,29 @@ function highlight(sentence: string, selection: string) {
 }
 
 export function CardSkeleton({ word, onClose }: { word: string; onClose: () => void }) {
+  const { t } = useI18n()
   return (
     <div className="card" role="status" aria-live="polite">
       <header className="card-head">
         <div className="headline">
           <div className="word">{word}</div>
           <div className="meta-row">
-            <span className="muted">AI 正在结合上下文分析…</span>
+            <span className="muted">{t('card.state.analyzing')}</span>
           </div>
         </div>
-        <button className="icon-btn" title="关闭 (Esc)" aria-label="关闭" onClick={onClose}>
+        <button
+          className="icon-btn"
+          title={t('card.action.close_title')}
+          aria-label={t('card.action.close')}
+          onClick={onClose}
+        >
           <CloseIcon size={16} />
         </button>
       </header>
       <div className="card-body">
         <div className="thinking">
           <span className="dot" />
-          正在阅读这句话的语境
+          {t('card.state.reading_context')}
         </div>
         <div className="skeleton-line" style={{ width: '55%' }} />
         <div className="skeleton-line" style={{ width: '92%' }} />
@@ -302,43 +313,49 @@ export function CardError({
   onOpenSettings: () => void
   onClose: () => void
 }) {
+  const { t } = useI18n()
   return (
     <div className="card" role="alert">
       <header className="card-head">
         <div className="headline">
           <div className="word">{word}</div>
           <div className="meta-row">
-            <span className="muted">查询失败</span>
+            <span className="muted">{t('card.state.failed')}</span>
           </div>
         </div>
-        <button className="icon-btn" title="关闭 (Esc)" aria-label="关闭" onClick={onClose}>
+        <button
+          className="icon-btn"
+          title={t('card.action.close_title')}
+          aria-label={t('card.action.close')}
+          onClick={onClose}
+        >
           <CloseIcon size={16} />
         </button>
       </header>
       <div className="card-body">
         <div className="error-box">
-          <div>{AI_ERROR_MESSAGES[code]}</div>
+          <div>{aiErrorMessage(code)}</div>
           {message ? <div className="muted">{truncate(message, 220)}</div> : null}
         </div>
       </div>
       <footer className="card-foot">
         {code === 'stale_context' ? (
           <button className="btn btn-primary" onClick={() => location.reload()}>
-            刷新页面
+            {t('card.action.reload')}
           </button>
         ) : (
           <>
             <button className="btn btn-primary" onClick={onRetry}>
-              重试
+              {t('card.action.retry')}
             </button>
             <button className="btn btn-ghost" onClick={onOffline}>
-              用离线词典
+              {t('card.action.use_offline')}
             </button>
           </>
         )}
         {code === 'auth' || code === 'no_api_key' ? (
           <button className="btn btn-ghost" onClick={onOpenSettings}>
-            去设置
+            {t('card.action.settings')}
           </button>
         ) : null}
       </footer>

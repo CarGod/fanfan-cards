@@ -3,8 +3,9 @@ import { StatCard, levelColor } from '@/components/index.tsx'
 import { useActivity, useEntries, useSettings } from '@/components/hooks.ts'
 import { computeStreak, recentDays, todayActivity } from '@/storage/repositories/activityRepo.ts'
 import { countDue, levelHistogram } from '@/flashcard/scheduler.ts'
-import { FAMILIARITY_LABELS, type FamiliarityLevel } from '@/types/vocabulary.ts'
+import { familiarityLabel, type FamiliarityLevel } from '@/types/vocabulary.ts'
 import { formatRelative, safeHostname, truncate } from '@/shared/utils.ts'
+import { useI18n } from '@/i18n/react.ts'
 
 /**
  * The dashboard answers one question: "is this working?"
@@ -15,6 +16,7 @@ import { formatRelative, safeHostname, truncate } from '@/shared/utils.ts'
  * top billing.
  */
 export function Dashboard({ onNavigate }: { onNavigate: (route: string) => void }) {
+  const { t } = useI18n()
   const { entries, loading } = useEntries()
   const activity = useActivity()
   const { settings } = useSettings()
@@ -40,19 +42,23 @@ export function Dashboard({ onNavigate }: { onNavigate: (route: string) => void 
 
   return (
     <div>
-      <h1 className="page-title">学习面板</h1>
+      <h1 className="page-title">{t('common.dashboard')}</h1>
       <p className="page-sub">
         {loading
-          ? '正在读取本地知识库…'
+          ? t('dashboard.sub.loading')
           : stats.total === 0
-            ? '还没有收藏任何单词——去任意英文网页划词试试。'
-            : `你的英语知识库里有 ${stats.total} 个词条，其中 ${stats.mastered} 个已掌握。`}
+            ? t('dashboard.sub.empty')
+            : t('dashboard.sub.summary', { total: stats.total, mastered: stats.mastered })}
       </p>
 
       <div className="stat-grid">
-        <StatCard label="词卡总数" value={stats.total} foot={`今日新增 ${stats.today.saved}`} />
         <StatCard
-          label="待复习"
+          label={t('dashboard.stat.total')}
+          value={stats.total}
+          foot={t('dashboard.stat.total_foot', { count: stats.today.saved })}
+        />
+        <StatCard
+          label={t('common.due')}
           value={stats.due}
           foot={
             stats.due > 0 ? (
@@ -63,27 +69,31 @@ export function Dashboard({ onNavigate }: { onNavigate: (route: string) => void 
                   onNavigate('#/flashcard')
                 }}
               >
-                开始复习 →
+                {t('dashboard.stat.due_action')}
               </a>
             ) : (
-              '今天没有到期的卡片'
+              t('dashboard.stat.due_none')
             )
           }
         />
-        <StatCard label="今日复习" value={stats.today.reviewed} foot={`目标 ${goal} 张`} />
         <StatCard
-          label="连续学习"
-          value={`${stats.streak} 天`}
-          foot={stats.streak > 0 ? '保持住' : '今天学一个词就能开始'}
+          label={t('dashboard.stat.reviewed_today')}
+          value={stats.today.reviewed}
+          foot={t('dashboard.stat.goal_foot', { goal })}
+        />
+        <StatCard
+          label={t('dashboard.stat.streak')}
+          value={t('dashboard.stat.streak_days', { count: stats.streak })}
+          foot={stats.streak > 0 ? t('dashboard.stat.streak_keep') : t('dashboard.stat.streak_start')}
         />
       </div>
 
       <div className="card card-pad" style={{ marginBottom: 20 }}>
         <div className="row-between" style={{ marginBottom: 10 }}>
           <div>
-            <div className="section-title">今日目标</div>
+            <div className="section-title">{t('dashboard.goal.title')}</div>
             <div className="faint">
-              已复习 {stats.today.reviewed} / {goal} 张
+              {t('dashboard.goal.progress', { reviewed: stats.today.reviewed, goal })}
             </div>
           </div>
           <div className="stat-value" style={{ fontSize: 22 }}>
@@ -104,16 +114,24 @@ export function Dashboard({ onNavigate }: { onNavigate: (route: string) => void 
         }}
       >
         <div className="card card-pad">
-          <div className="section-title">最近两周</div>
+          <div className="section-title">{t('dashboard.chart.title')}</div>
           <div className="faint" style={{ marginBottom: 4 }}>
-            每天的收藏 + 复习次数
+            {t('dashboard.chart.hint')}
           </div>
           <div className="bars">
             {stats.week.map((day, position) => {
               const total = day.saved + day.reviewed
               const isToday = position === stats.week.length - 1
               return (
-                <div className="bar-col" key={day.date} title={`${day.date}：收藏 ${day.saved} · 复习 ${day.reviewed}`}>
+                <div
+                  className="bar-col"
+                  key={day.date}
+                  title={t('dashboard.chart.bar_title', {
+                    date: day.date,
+                    saved: day.saved,
+                    reviewed: day.reviewed,
+                  })}
+                >
                   <div
                     className={[
                       'bar',
@@ -132,9 +150,9 @@ export function Dashboard({ onNavigate }: { onNavigate: (route: string) => void 
         </div>
 
         <div className="card card-pad">
-          <div className="section-title">熟悉度分布</div>
+          <div className="section-title">{t('dashboard.levels.title')}</div>
           <div className="faint" style={{ marginBottom: 10 }}>
-            越靠右说明掌握得越好
+            {t('dashboard.levels.hint')}
           </div>
           <div className="level-bar">
             {([0, 1, 2, 3] as FamiliarityLevel[]).map((level) => {
@@ -145,7 +163,10 @@ export function Dashboard({ onNavigate }: { onNavigate: (route: string) => void 
                   key={level}
                   className="level-seg"
                   style={{ width: `${width}%`, background: levelColor(level) }}
-                  title={`${FAMILIARITY_LABELS[level]}：${count}`}
+                  title={t('dashboard.levels.item_title', {
+                    label: familiarityLabel(level),
+                    count,
+                  })}
                 />
               )
             })}
@@ -155,7 +176,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (route: string) => void 
               <div className="row-between" key={level}>
                 <span className="row" style={{ gap: 7 }}>
                   <span className="level-dot" style={{ background: levelColor(level) }} />
-                  <span className="muted">{FAMILIARITY_LABELS[level]}</span>
+                  <span className="muted">{familiarityLabel(level)}</span>
                 </span>
                 <span className="mono">{stats.histogram[level]}</span>
               </div>
@@ -166,7 +187,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (route: string) => void 
 
       <div className="card card-pad">
         <div className="row-between" style={{ marginBottom: 12 }}>
-          <div className="section-title">最近收藏</div>
+          <div className="section-title">{t('dashboard.recent.title')}</div>
           <a
             href="#/vocabulary"
             onClick={(event) => {
@@ -174,11 +195,11 @@ export function Dashboard({ onNavigate }: { onNavigate: (route: string) => void 
               onNavigate('#/vocabulary')
             }}
           >
-            查看全部 →
+            {t('dashboard.recent.all')}
           </a>
         </div>
         {stats.recent.length === 0 ? (
-          <div className="faint">还没有记录。打开一篇英文文章，选中一个不认识的词就会出现在这里。</div>
+          <div className="faint">{t('dashboard.recent.empty')}</div>
         ) : (
           <div className="stack" style={{ gap: 10 }}>
             {stats.recent.map((entry) => (
@@ -189,12 +210,13 @@ export function Dashboard({ onNavigate }: { onNavigate: (route: string) => void 
                     <span className="faint">{truncate(entry.meaning, 28)}</span>
                   </div>
                   <div className="faint">
-                    {safeHostname(entry.source.url) || '未知来源'} · {formatRelative(entry.createdAt)}
+                    {safeHostname(entry.source.url) || t('dashboard.recent.unknown_source')} ·{' '}
+                    {formatRelative(entry.createdAt)}
                   </div>
                 </div>
                 <span className="chip">
                   <span className="level-dot" style={{ background: levelColor(entry.review.level) }} />
-                  {FAMILIARITY_LABELS[entry.review.level]}
+                  {familiarityLabel(entry.review.level)}
                 </span>
               </div>
             ))}

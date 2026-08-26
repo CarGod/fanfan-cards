@@ -1,3 +1,5 @@
+import { useI18n } from '@/i18n/react.ts'
+
 /**
  * `Alt` in a manifest is already cross-platform: Chrome renders it as Alt on
  * Windows and Linux and maps it to Option on macOS, from the same declaration.
@@ -7,10 +9,19 @@
 const IS_MAC = /Mac|iPhone|iPad/i.test(navigator.userAgent)
 const ALT = IS_MAC ? 'Option' : 'Alt'
 
+/*
+ * 键名放表里，文案在渲染时才取——常量表是模块加载时求值的，写死 `t()` 的结果
+ * 会让切换界面语言之后这里还是旧语言。按键本身（Option / Alt）不是文案，
+ * 它跟的是这台机器，不是界面语言。
+ */
 const COMMANDS = [
-  { name: 'translate-page', label: '翻译 / 还原整页', note: `默认 ${ALT} + A` },
-  { name: 'explain-selection', label: '解释选中的英文', note: `默认 ${ALT} + Shift + E` },
-  { name: 'open-app', label: '打开词卡与复习', note: `默认 ${ALT} + Shift + A` },
+  { name: 'translate-page', label: 'options.shortcut.translate_page', keys: `${ALT} + A` },
+  {
+    name: 'explain-selection',
+    label: 'options.shortcut.explain_selection',
+    keys: `${ALT} + Shift + E`,
+  },
+  { name: 'open-app', label: 'options.shortcut.open_app', keys: `${ALT} + Shift + A` },
 ] as const
 
 /**
@@ -24,24 +35,31 @@ const COMMANDS = [
  * reads as broken.
  */
 export function ShortcutSection({ shortcuts }: { shortcuts: Record<string, string> }) {
+  const { t } = useI18n()
+
   return (
     <section className="card section-card">
-      <div className="section-title">快捷键</div>
+      <div className="section-title">{t('options.shortcut.title')}</div>
       <div className="section-desc">
-        Chrome 只允许你本人修改扩展快捷键——这是它的安全设计，扩展无法自行占用按键。
-        下面显示的是当前<strong>实际生效</strong>的绑定（Chrome 会按你的系统显示，
-        macOS 上的 Option 就是 Windows 上的 Alt）。
+        {t('options.shortcut.desc_lead')}
+        <strong>{t('options.shortcut.desc_em')}</strong>
+        {t('options.shortcut.desc_tail')}
       </div>
 
       <div className="stack" style={{ gap: 10, marginBottom: 16 }}>
         {COMMANDS.map((command) => (
           <div className="row-between" key={command.name}>
             <span>
-              {command.label}
-              {command.note ? <span className="faint"> · {command.note}</span> : null}
+              {t(command.label)}
+              {command.keys ? (
+                <span className="faint">
+                  {' · '}
+                  {t('options.shortcut.default', { keys: command.keys })}
+                </span>
+              ) : null}
             </span>
             <span className={shortcuts[command.name] ? 'chip mono' : 'faint'}>
-              {shortcuts[command.name] || '未设置'}
+              {shortcuts[command.name] || t('options.shortcut.unset')}
             </span>
           </div>
         ))}
@@ -51,7 +69,7 @@ export function ShortcutSection({ shortcuts }: { shortcuts: Record<string, strin
         className="btn"
         onClick={() => void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' })}
       >
-        去 Chrome 修改快捷键
+        {t('options.shortcut.open_chrome')}
       </button>
     </section>
   )

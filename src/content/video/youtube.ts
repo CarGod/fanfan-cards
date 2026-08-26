@@ -1,3 +1,4 @@
+import { t } from '@/i18n/index.ts'
 import { sendMessage } from '@/services/messaging.ts'
 import { noteOrphanError } from '@/shared/extensionContext.ts'
 import { getSettings, saveSettings } from '@/storage/repositories/settingsRepo.ts'
@@ -103,7 +104,7 @@ export function callMainWorld<T>(request: BridgePayload): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = window.setTimeout(() => {
       document.removeEventListener(RESPONSE_EVENT, onResponse)
-      reject(new Error('页面脚本没有响应'))
+      reject(new Error(t('video.error.bridge_timeout')))
     }, BRIDGE_TIMEOUT_MS)
 
     function onResponse(event: Event): void {
@@ -162,7 +163,16 @@ export class YouTubeSubtitles {
   /** 挂载也要有代次：等控制栏的那二十秒里，读者完全可能已经换了两支视频。 */
   private mountRun = 0
   private frame = 0
+  /** 整个实例活着期间只装一次的东西：导航监听、轮询、全局点击。 */
   private disposers: Array<() => void> = []
+  /**
+   * 每挂载一次装一次的东西。
+   *
+   * 和上面那组分开，是因为 `remount()` 只拆挂载、不拆实例。原来两组混在一个数组里，
+   * 而 remount 从不清空它——于是每换一支视频就多留一个 ResizeObserver 在那儿观察，
+   * 一个下午刷下来能攒几十个。
+   */
+  private mountDisposers: Array<() => void> = []
 
   async start(): Promise<void> {
     injectVideoStyles()
@@ -170,20 +180,27 @@ export class YouTubeSubtitles {
     const settings = await getSettings()
     this.applySettings(settings)
 
-    const onNavigate = (): void => void this.remount()
-    window.addEventListener('yt-navigate-finish', onNavigate)
-    this.disposers.push(() => window.removeEventListener('yt-navigate-finish', onNavigate))
-
     /*
+     * 两条发现「换视频了」的路子，共用一个 `lastHref`。
+     *
      * 光听 `yt-navigate-finish` 不够：前进后退、以及从搜索页直接进视频的某些路径
-     * 不发这个事件。轮询 URL 是那条无论如何都成立的兜底。
+     * 不发这个事件，所以还要轮询 URL 兜底。但两边各记各的账，就会在同一次换视频上
+     * 各触发一次 remount——按钮闪一下重建、字幕重取一遍，**已经发出去的翻译请求
+     * 全部作废重发**。花的是读者自己的 API 额度，而屏幕上只是「加载了两次」。
+     *
+     * 共用之后谁先发现谁干活，另一条自然变成空转。
      */
     let lastHref = location.href
-    const poll = window.setInterval(() => {
+    const onNavigate = (): void => {
       if (location.href === lastHref) return
       lastHref = location.href
       void this.remount()
-    }, 1000)
+    }
+
+    window.addEventListener('yt-navigate-finish', onNavigate)
+    this.disposers.push(() => window.removeEventListener('yt-navigate-finish', onNavigate))
+
+    const poll = window.setInterval(onNavigate, 1000)
     this.disposers.push(() => window.clearInterval(poll))
 
     const closePanel = (): void => this.control?.closePanel()
@@ -196,6 +213,7 @@ export class YouTubeSubtitles {
   destroy(): void {
     for (const dispose of this.disposers) dispose()
     this.disposers = []
+    this.disposeMount()
     this.teardownRun()
     this.control?.destroy()
     this.control = null
@@ -210,8 +228,15 @@ export class YouTubeSubtitles {
     this.auto = settings.videoSubtitleAuto
   }
 
+  /** 拆掉上一次挂载留下的东西。remount 与 destroy 都要走这里。 */
+  private disposeMount(): void {
+    for (const dispose of this.mountDisposers) dispose()
+    this.mountDisposers = []
+  }
+
   private async remount(): Promise<void> {
     this.teardownRun()
+    this.disposeMount()
     this.control?.destroy()
     this.control = null
     this.overlay?.destroy()
@@ -220,8 +245,16 @@ export class YouTubeSubtitles {
   }
 
   private async mount(): Promise<void> {
-    if (!isWatchPage()) return
+    /*
+     * 代次先加，再判断在不在 watch 页。
+     *
+     * 反过来写会漏掉一种情况：上一次 mount 正卡在「等控制栏」的那二十秒里，读者跳去了
+     * 首页——这一次 mount 在第一行就 return 了，代次没变，于是那个还在等的旧挂载
+     * 以为自己仍然当值，等控制栏一出现就把界面挂到首页上，并按一个空的 videoId
+     * 把上一支视频整轨重翻一遍。
+     */
     const mountRun = (this.mountRun += 1)
+    if (!isWatchPage()) return
 
     /*
      * 等的是控制栏，不是播放器。
@@ -254,7 +287,7 @@ export class YouTubeSubtitles {
      */
     const sizes = new ResizeObserver(() => this.overlay?.setPlayerWidth(player.clientWidth))
     sizes.observe(player)
-    this.disposers.push(() => sizes.disconnect())
+    this.mountDisposers.push(() => sizes.disconnect())
 
     this.control = new SubtitleControl(this.state(), {
       onToggle: (next) => void this.setEnabled(next),
@@ -340,7 +373,19 @@ export class YouTubeSubtitles {
     this.groups = []
     this.groupTranslations = []
     this.perCue = []
-    if (this.overlay) this.overlay.element.style.visibility = 'hidden'
+    if (this.overlay) {
+      this.overlay.element.style.visibility = 'hidden'
+      /*
+       * 藏起来的同时要让它忘掉「这一条画过了」。
+       *
+       * 不忘的话，关掉再打开时 `render` 算出的还是同一个下标，被去重那一行挡回去，
+       * 于是按钮已经亮着、面板已经写着字幕来源，画面上却一个字都没有——要等播放头
+       * 跨过这一句才恢复。译文回来时 `translateAll` 会调一次 `refresh()` 把它救回来，
+       * 所以症状是「空白一小会儿」而不是「永远不出现」，但那一小会儿正好落在
+       * 读者刚点完开关、最盯着屏幕的时刻。
+       */
+      this.overlay.refresh()
+    }
     this.player?.removeAttribute('data-fanfan-subtitles')
     void callMainWorld({ kind: 'restore' }).catch(() => undefined)
   }
@@ -378,7 +423,7 @@ export class YouTubeSubtitles {
       if (Date.now() > deadline) return captions
 
       this.status = 'loading'
-      this.trackName = advert ? '广告播放中，结束后自动开始' : '正在等待视频数据…'
+      this.trackName = advert ? t('video.status.ad_playing') : t('video.status.waiting_video')
       this.sync()
       await sleep(CONTENT_POLL_MS)
     }
@@ -393,7 +438,7 @@ export class YouTubeSubtitles {
   private async load(): Promise<void> {
     const run = (this.run += 1)
     this.status = 'loading'
-    this.trackName = '正在读取字幕…'
+    this.trackName = t('video.status.loading_track')
     this.error = ''
     this.sync()
 
@@ -407,14 +452,14 @@ export class YouTubeSubtitles {
         targetLanguage: settings.targetLanguage,
       })
       if (!choice) {
-        this.fail('这个视频没有可用的字幕轨')
+        this.fail(t('video.error.no_track'))
         return
       }
 
       const cues = await this.fetchCues(choice.track, captions.pot)
       if (run !== this.run) return
       if (cues.length === 0) {
-        this.fail('取到的字幕是空的，稍后重试')
+        this.fail(t('video.error.empty_track'))
         return
       }
 
@@ -460,8 +505,10 @@ export class YouTubeSubtitles {
       const url = buildTimedTextUrl(track.baseUrl, pot ? { pot } : {})
       const response = await callMainWorld<{ status: number; body: string }>({ kind: 'fetch', url })
 
-      if (response.status !== 200) throw new Error(`字幕接口返回 ${response.status}`)
-      if (looksLikeBlockPage(response.body)) throw new Error('被 YouTube 拦下了，刷新页面重试')
+      if (response.status !== 200) {
+        throw new Error(t('video.error.http_status', { status: response.status }))
+      }
+      if (looksLikeBlockPage(response.body)) throw new Error(t('video.error.blocked'))
       if (response.body.trim()) return parseJson3(JSON.parse(response.body))
 
       /*
@@ -473,7 +520,7 @@ export class YouTubeSubtitles {
        */
     }
 
-    throw new Error('字幕接口一直返回空内容，刷新页面后重试')
+    throw new Error(t('video.error.empty_repeated'))
   }
 
   private startRendering(): void {
@@ -533,7 +580,7 @@ export class YouTubeSubtitles {
           if (run !== this.run) return
           // 失联之后整支视频的每一批都会失败。停住，别把面板刷成一串同样的错。
           if (noteOrphanError(error)) {
-            this.error = '扩展已更新，刷新页面后继续'
+            this.error = t('video.error.orphaned')
             this.sync()
             return
           }

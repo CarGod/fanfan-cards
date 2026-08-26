@@ -50,9 +50,15 @@ export function CloseIcon({ size = 16, className }: IconProps) {
   )
 }
 
-export function BookmarkIcon({ size = 16, className }: IconProps) {
+/**
+ * 书签。空心 = 还没收，实心 = 已经在词库里。
+ *
+ * 只靠颜色区分这两种状态是不够的：图标只有 16px，而「收了没有」是读者在这张卡上
+ * 最想一眼确认的事。填充是形状上的差别，扫一眼就分得出来，也不依赖辨色能力。
+ */
+export function BookmarkIcon({ size = 16, className, filled = false }: IconProps & { filled?: boolean }) {
   return (
-    <svg {...svgProps(size)} {...(className ? { className } : {})}>
+    <svg {...svgProps(size)} {...(className ? { className } : {})} fill={filled ? 'currentColor' : 'none'}>
       <path d="M19 21 12 16 5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2Z" />
     </svg>
   )
@@ -70,6 +76,35 @@ export function TrashIcon({ size = 16, className }: IconProps) {
   return (
     <svg {...svgProps(size)} {...(className ? { className } : {})}>
       <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    </svg>
+  )
+}
+
+/**
+ * 齿轮。
+ *
+ * 必须是**连着的轮廓**，不能是从圆心射出去的辐条——第一版就是那么画的，
+ * 渲染出来是一个太阳。齿轮之所以读作「设置」，靠的是齿和轮缘连成一体，
+ * 而不是「圆心周围有八根线」。
+ *
+ * 这个尺寸下齿轮是最没有歧义的那个符号：滑块要两个才认得出来，三个点是「更多」。
+ */
+export function SettingsIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg {...svgProps(size)} {...(className ? { className } : {})}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+    </svg>
+  )
+}
+
+/** 斜向外的箭头：这个链接会把你带出这个弹窗。 */
+export function ExternalIcon({ size = 12, className }: IconProps) {
+  return (
+    <svg {...svgProps(size)} {...(className ? { className } : {})}>
+      <path d="M14 4h6v6" />
+      <path d="M20 4 11 13" />
+      <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
     </svg>
   )
 }

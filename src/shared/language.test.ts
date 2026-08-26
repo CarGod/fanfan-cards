@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  conformLineShape,
   isLookupCandidate,
   isRedundantTranslation,
   repairOmissions,
   shouldTranslateText,
-  verbatimTokens,
   sourceLanguage,
   targetLanguage,
+  verbatimTokens,
 } from './language.ts'
 
 const zh = { source: 'auto', target: 'zh-CN' }
@@ -134,5 +135,37 @@ describe('repairOmissions', () => {
 
   it('leaves an empty translation empty rather than turning it into a token dump', () => {
     expect(repairOmissions('Invited: @a_bc', '')).toBe('')
+  })
+})
+
+describe('译文的行结构', () => {
+  it('行数对得上时原样保留每一行', () => {
+    expect(conformLineShape('One\nTwo\nThree', '一\n二\n三')).toBe('一\n二\n三')
+  })
+
+  /** 原文的空行是段落分隔，译文得落在同一个位置上，否则对照就错开了。 */
+  it('按原文的骨架重排，空行落回原来的位置', () => {
+    expect(conformLineShape('One\n\nTwo', '一\n二')).toBe('一\n\n二')
+    expect(conformLineShape('One\n\nTwo', '一\n\n\n二')).toBe('一\n\n二')
+  })
+
+  it('原文只有一行时，模型自己加的换行要合掉', () => {
+    expect(conformLineShape('A single sentence.', '一句话，\n被模型断开了。')).toBe(
+      '一句话， 被模型断开了。',
+    )
+  })
+
+  /** 修不了就说修不了——硬猜断句比不分行更糟。 */
+  it('多行塌成一行时返回 null，交给逐行重译', () => {
+    expect(conformLineShape('One\nTwo\nThree', '一 二 三')).toBeNull()
+  })
+
+  it('行数对不上时同样返回 null', () => {
+    expect(conformLineShape('One\nTwo\nThree', '一\n二')).toBeNull()
+    expect(conformLineShape('One\nTwo', '一\n二\n三')).toBeNull()
+  })
+
+  it('两边都只有一行时什么也不用做', () => {
+    expect(conformLineShape('Hello', '你好')).toBe('你好')
   })
 })

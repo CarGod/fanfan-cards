@@ -16,6 +16,8 @@ export async function handleSaveWord(
     partOfSpeech: explanation.partOfSpeech,
     cefr: explanation.cefr,
     meaning: explanation.meaning,
+    // 老模型/离线词典给不出结构化释义，那就是空数组——不去解析 meaning 反推。
+    senses: explanation.senses ?? [],
     aiExplanation: explanation.contextMeaning,
     englishDefinition: explanation.englishDefinition,
     sentenceTranslation: explanation.sentenceTranslation,

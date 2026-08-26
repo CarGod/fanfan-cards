@@ -49,10 +49,15 @@
   --ff-flame-950: #2a1710;
 
   /*
-   * Violet is deliberately *not* the brand colour: it marks one specific thing
-   * across the whole product — text the model wrote. Orange is the action you
-   * should take; violet is the sentence the AI produced. Two colours, two
-   * meanings, nothing decorative.
+   * Violet is deliberately *not* the brand colour: it marks the sentence the AI
+   * produced — but only **inside our own surfaces**（词卡、词库、学习面板）。
+   *
+   * 网页上不用它。读者的页面上，凡是我们加进去的东西——译文、翻翻模式的高亮——
+   * 一律是品牌橙：在别人的文章里，「这是这个扩展加的」比「这句话是谁写的」
+   * 更需要被一眼认出来，而后者是打开卡片之后的事。
+   *
+   * 所以是两条规则，不是一条：橙色标「我们的东西」，紫色在我们自己的界面里
+   * 标「模型写的那一段」。
    */
   --ff-violet-100: #f1eefb;
   --ff-violet-500: #5b45b0;

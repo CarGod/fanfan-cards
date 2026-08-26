@@ -5,10 +5,13 @@ import { getSettings } from '@/storage/repositories/settingsRepo.ts'
 import type { ContentCommand } from '@/types/messages.ts'
 import { handleExplain } from './handlers/explain.ts'
 import { handleLookupWord, handleRemoveWord, handleSaveWord } from './handlers/vocabulary.ts'
+import { handleEnrichEntry } from './handlers/enrich.ts'
 import { handleTranslatePage } from './handlers/translate.ts'
 import { handlePageState, handleShouldTranslate } from './handlers/pageState.ts'
 import { ensureSyncAlarm, registerSyncScheduler, requestSync } from './sync.ts'
 import { ensureReminderAlarm, registerReminder } from './reminder.ts'
+import { initI18n } from '@/i18n/bootstrap.ts'
+import { onLanguageChange, t } from '@/i18n/index.ts'
 
 /**
  * MV3 service worker.
@@ -27,12 +30,25 @@ const CONTEXT_MENU_ID = 'ai-reader-explain'
 registerSyncScheduler()
 registerReminder()
 
+/*
+ * 后台也要接一次界面语言。
+ *
+ * 这里没有 React、没有页面入口，谁都不会替它调 `initI18n`——不接的话，通知和右键
+ * 菜单永远跟着浏览器语言走，而这个产品里「界面用英文」恰恰是用户在设置页做的选择。
+ *
+ * 读设置是异步的，所以菜单先按当前语言建一次，语言真的落定（或之后被改）时再重建。
+ * `setLanguage` 只在值变了才广播，所以语言本来就对的情况下这里一次都不会多跑。
+ */
+void initI18n()
+onLanguageChange(() => createContextMenu())
+
 registerHandlers({
   ping: async () => ({ ok: true, version: chrome.runtime.getManifest().version }),
   'ai/explain': handleExplain,
   'vocab/save': handleSaveWord,
   'vocab/lookup': handleLookupWord,
   'vocab/remove': handleRemoveWord,
+  'vocab/enrich': handleEnrichEntry,
   'settings/get': async () => ({ settings: await getSettings() }),
   'page/translate': handleTranslatePage,
   'page/state': handlePageState,
@@ -97,9 +113,10 @@ chrome.commands?.onCommand.addListener((command, tab) => {
 
 function createContextMenu(): void {
   chrome.contextMenus.removeAll(() => {
+    // `%s` 是 Chrome 自己替换选中文字的占位符，两种语言里都得原样留着。
     chrome.contextMenus.create({
       id: CONTEXT_MENU_ID,
-      title: '用 AI Reader 解释「%s」',
+      title: t('background.menu.explain', { name: t('app.name') }),
       contexts: ['selection'],
     })
   })

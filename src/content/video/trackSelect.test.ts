@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { setLanguage } from '@/i18n/index.ts'
 import { chooseTrack } from './trackSelect.ts'
 import type { CaptionTrack } from './timedtext.ts'
 
@@ -19,6 +20,9 @@ describe('chooseTrack', () => {
   })
 
   it('没有人工轨时退回自动轨，并在理由里说明', () => {
+    // 理由是要显示在面板上的界面文案，跟着界面语言走。要断言中文就得先把语言钉住：
+    // 测试环境里 navigator.language 是英文，不钉的话这一条会在英文文案上失败。
+    setLanguage('zh-CN')
     const chosen = chooseTrack([track('en', { kind: 'asr' })], {
       sourceLanguage: 'en',
       targetLanguage: 'zh-CN',

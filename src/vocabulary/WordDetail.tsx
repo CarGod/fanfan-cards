@@ -3,9 +3,10 @@ import { LevelChip } from '@/components/index.tsx'
 import { SpeakerIcon, TrashIcon } from '@/components/icons.tsx'
 import { speak } from '@/services/speech.ts'
 import { setFamiliarity, updateEntry } from '@/storage/repositories/vocabularyRepo.ts'
+import { useI18n } from '@/i18n/react.ts'
 import {
-  CEFR_HINTS,
-  FAMILIARITY_LABELS,
+  cefrHint,
+  familiarityLabel,
   type FamiliarityLevel,
   type VocabularyEntry,
 } from '@/types/vocabulary.ts'
@@ -25,6 +26,7 @@ export function WordDetail({
   onClose: () => void
   onDelete: (id: string) => void
 }) {
+  const { t } = useI18n()
   const [notes, setNotes] = useState(entry.notes)
   const [savingNotes, setSavingNotes] = useState(false)
 
@@ -40,7 +42,7 @@ export function WordDetail({
         className="detail-body"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
-        aria-label={`${entry.word} 详情`}
+        aria-label={t('vocabulary.detail.aria', { word: entry.word })}
       >
         <div className="row-between">
           <div>
@@ -48,7 +50,7 @@ export function WordDetail({
               <h2 style={{ fontSize: 24 }}>{entry.word}</h2>
               <button
                 className="btn btn-ghost btn-sm"
-                aria-label="朗读这个词"
+                aria-label={t('vocabulary.detail.speak_word')}
                 onClick={() => speak(entry.lemma || entry.word)}
               >
                 <SpeakerIcon size={15} />
@@ -58,42 +60,42 @@ export function WordDetail({
               {entry.phonetic ? <span className="mono muted">{entry.phonetic}</span> : null}
               {entry.partOfSpeech ? <span className="chip">{entry.partOfSpeech}</span> : null}
               {entry.cefr ? (
-                <span className="cefr" data-band={entry.cefr[0]} title={CEFR_HINTS[entry.cefr]}>
-                  {entry.cefr} {CEFR_HINTS[entry.cefr]}
+                <span className="cefr" data-band={entry.cefr[0]} title={cefrHint(entry.cefr)}>
+                  {entry.cefr} {cefrHint(entry.cefr)}
                 </span>
               ) : null}
               <LevelChip level={entry.review.level} />
             </div>
           </div>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>
-            关闭
+            {t('vocabulary.detail.close')}
           </button>
         </div>
 
         {entry.meaning ? (
           <section className="detail-section">
-            <div className="detail-label">基础释义</div>
+            <div className="detail-label">{t('vocabulary.detail.meaning')}</div>
             <div>{entry.meaning}</div>
           </section>
         ) : null}
 
         {entry.aiExplanation ? (
           <section className="detail-section">
-            <div className="detail-label">语境含义</div>
+            <div className="detail-label">{t('vocabulary.detail.in_context')}</div>
             <div className="context-block">{entry.aiExplanation}</div>
           </section>
         ) : null}
 
         {entry.englishDefinition ? (
           <section className="detail-section">
-            <div className="detail-label">English</div>
+            <div className="detail-label">{t('vocabulary.detail.english')}</div>
             <div className="muted">{entry.englishDefinition}</div>
           </section>
         ) : null}
 
         {entry.examples.length ? (
           <section className="detail-section">
-            <div className="detail-label">例句</div>
+            <div className="detail-label">{t('vocabulary.detail.examples')}</div>
             <ol className="example-list">
               {entry.examples.map((item) => (
                 <li key={item.sentence}>
@@ -101,7 +103,7 @@ export function WordDetail({
                     <span style={{ fontStyle: 'italic' }}>{item.sentence}</span>
                     <button
                       className="label-speak"
-                      aria-label="朗读这句例句"
+                      aria-label={t('vocabulary.detail.speak_example')}
                       onClick={() => speak(item.sentence)}
                     >
                       <SpeakerIcon size={13} />
@@ -116,7 +118,7 @@ export function WordDetail({
 
         {entry.synonyms.length ? (
           <section className="detail-section">
-            <div className="detail-label">近义词</div>
+            <div className="detail-label">{t('vocabulary.detail.synonyms')}</div>
             <ul className="syn-list">
               {entry.synonyms.map((synonym) => (
                 <li key={synonym.word}>
@@ -129,8 +131,8 @@ export function WordDetail({
         ) : null}
 
         <section className="detail-section">
-          <div className="detail-label">遇见它的地方</div>
-          <div className="quote">{entry.source.context || '（未记录原句）'}</div>
+          <div className="detail-label">{t('vocabulary.detail.source')}</div>
+          <div className="quote">{entry.source.context || t('vocabulary.detail.no_context')}</div>
           {entry.sentenceTranslation ? (
             <div className="faint" style={{ marginTop: 6 }}>{entry.sentenceTranslation}</div>
           ) : null}
@@ -146,7 +148,7 @@ export function WordDetail({
         </section>
 
         <section className="detail-section">
-          <div className="detail-label">熟悉程度</div>
+          <div className="detail-label">{t('vocabulary.detail.familiarity')}</div>
           <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
             {([0, 1, 2, 3] as FamiliarityLevel[]).map((level) => (
               <button
@@ -154,27 +156,30 @@ export function WordDetail({
                 className={level === entry.review.level ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'}
                 onClick={() => void setFamiliarity(entry.id, level)}
               >
-                {FAMILIARITY_LABELS[level]}
+                {familiarityLabel(level)}
               </button>
             ))}
           </div>
           <div className="faint" style={{ marginTop: 8 }}>
-            已复习 {entry.review.reviewCount} 次 · 遗忘 {entry.review.lapses} 次 · 下次{' '}
-            {formatDue(entry.review.dueAt)}
+            {t('vocabulary.detail.review_stats', {
+              count: entry.review.reviewCount,
+              lapses: entry.review.lapses,
+              due: formatDue(entry.review.dueAt),
+            })}
           </div>
         </section>
 
         <section className="detail-section">
-          <div className="detail-label">我的笔记</div>
+          <div className="detail-label">{t('vocabulary.detail.notes')}</div>
           <textarea
             rows={3}
             value={notes}
-            placeholder="记下你自己的理解、联想或易混词…"
+            placeholder={t('vocabulary.detail.notes_placeholder')}
             onChange={(event) => setNotes(event.target.value)}
           />
           <div className="row" style={{ marginTop: 8 }}>
             <button className="btn btn-sm" onClick={() => void saveNotes()} disabled={savingNotes || notes === entry.notes}>
-              {savingNotes ? '保存中…' : '保存笔记'}
+              {savingNotes ? t('vocabulary.detail.notes_saving') : t('vocabulary.detail.notes_save')}
             </button>
           </div>
         </section>
@@ -182,11 +187,13 @@ export function WordDetail({
         <section className="detail-section">
           <div className="row-between">
             <span className="faint">
-              来源模型：{entry.origin.offline ? '离线词典' : entry.origin.model}
+              {t('vocabulary.detail.origin', {
+                model: entry.origin.offline ? t('vocabulary.detail.origin_offline') : entry.origin.model,
+              })}
             </span>
             <button className="btn btn-danger btn-sm" onClick={() => onDelete(entry.id)}>
               <TrashIcon size={14} />
-              删除词条
+              {t('vocabulary.detail.delete')}
             </button>
           </div>
         </section>

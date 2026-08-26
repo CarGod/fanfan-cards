@@ -186,10 +186,22 @@ document.addEventListener(REQUEST_EVENT, (event) => {
   )
 })
 
-// 换视频了，上一支的票不能用在这一支上。
+/*
+ * 换视频了，上一支的票不能用在这一支上。
+ *
+ * **只清票，不清 `captionsWereOn`。** 这两个值的生命周期不一样，一起清是个 bug：
+ * 隔离世界在同一个 `yt-navigate-finish` 上也挂了监听器，它要做的正是
+ * teardownRun → restore，把我们替读者打开的原生字幕关回去。而这个文件的监听器
+ * 注册在 document_start、对面注册在 document_idle，Blink 按注册顺序派发——
+ * 所以清空必定先跑，restore 到手时 `captionsWereOn` 已经是 null，第一道闸直接
+ * return，unloadModule 永远执行不到。
+ *
+ * 表现是：读者本来关着的 YouTube 原生字幕，从第二支视频起就一直开着，
+ * 而且他从没开过它。`captionsWereOn` 的清除本来就由 restoreCaptions() 自己在
+ * 末尾负责，这里不该插手。
+ */
 window.addEventListener('yt-navigate-finish', () => {
   capturedPot = ''
-  captionsWereOn = null
 })
 
 installHooks()

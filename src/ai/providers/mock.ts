@@ -270,6 +270,8 @@ export class MockProvider implements AIProvider {
         partOfSpeech: hit.pos,
         cefr: hit.cefr,
         meaning: chineseTarget ? hit.meaning : hit.english,
+        // 离线词典每个词条只有一个义项，没有可拆的词性。
+        senses: [],
         contextMeaning: chineseTarget
           ? `${contextual}\n${OFFLINE_HINT}`
           : `Offline dictionary: Chinese glosses only. Configure an API key for a real contextual explanation.\nSeen in: "${truncate(input.context || surface, 120)}"`,
@@ -288,6 +290,7 @@ export class MockProvider implements AIProvider {
       partOfSpeech: phrase ? 'phrase' : guessPartOfSpeech(normalized),
       cefr: '',
       meaning: phrase ? '离线词典未收录该短语' : '离线词典未收录该词',
+      senses: [],
       contextMeaning: `原句：「${truncate(input.context || surface, 160)}」\n${OFFLINE_HINT}`,
       englishDefinition: '',
       sentenceTranslation: '',
