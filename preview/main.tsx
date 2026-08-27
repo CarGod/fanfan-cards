@@ -18,6 +18,9 @@ import { BrandMark } from '@/components/icons.tsx'
 import '@/components/ui.css'
 import contentStyles from '@/content/styles.css?inline'
 import { CardError, CardSkeleton, WordCard } from '@/content/ui/WordCard.tsx'
+import { SavedWordCard } from '@/content/ui/SavedWordCard.tsx'
+import { SavedWordHighlighter } from '@/content/highlight/highlighter.ts'
+import { injectPageStyles } from '@/content/page/styles.ts'
 import { App } from '@/app/App.tsx'
 import { Popup } from '@/popup/Popup.tsx'
 import { Options } from '@/options/Options.tsx'
@@ -439,6 +442,119 @@ function StoreReaderShowcase() {
   )
 }
 
+/**
+ * Store screenshot for FanFan mode: saved words are painted by the exact
+ * CSS Custom Highlight implementation shipped in the extension, and the card
+ * on the right is the real no-network saved-word card.
+ */
+function StoreFanFanModeShowcase() {
+  useEffect(() => {
+    setLanguage('zh-CN')
+    injectPageStyles()
+    const highlighter = new SavedWordHighlighter()
+    highlighter.start(WORDS)
+    return () => highlighter.stop()
+  }, [])
+
+  const saved = WORDS[2]!
+
+  return (
+    <main
+      style={{
+        position: 'relative',
+        width: '100vw',
+        height: '100vh',
+        overflow: 'hidden',
+        background: '#f4f1eb',
+        color: '#20232a',
+        fontFamily: "Georgia, 'Times New Roman', serif",
+      }}
+    >
+      <header
+        style={{
+          height: 68,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 62px',
+          borderBottom: '1px solid #dcd8d0',
+          background: 'rgba(255,255,255,.72)',
+          fontFamily: 'var(--font-sans)',
+        }}
+      >
+        <strong style={{ fontSize: 17, letterSpacing: '-.02em' }}>Field Notes</strong>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 30, color: '#6e716f', fontSize: 12, letterSpacing: '.08em' }}>
+          <span>IDEAS</span><span>DESIGN</span><span>ENGINEERING</span>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ff6a3d', boxShadow: '0 0 0 5px rgba(255,106,61,.12)' }} />
+        </div>
+      </header>
+
+      <section style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 390px', gap: 54, padding: '48px 62px 56px' }}>
+        <article style={{ maxWidth: 760 }}>
+          <div style={{ color: '#787a77', fontFamily: 'var(--font-sans)', fontSize: 12, letterSpacing: '.12em' }}>
+            SYSTEMS · 7 MIN READ
+          </div>
+          <h1 style={{ margin: '17px 0 22px', fontSize: 52, lineHeight: 1.02, letterSpacing: '-.045em', fontWeight: 620 }}>
+            The quiet systems behind reliable products
+          </h1>
+          <p style={{ margin: '0 0 36px', color: '#767873', fontFamily: 'var(--font-sans)', fontSize: 14 }}>
+            Notes on making change safer · August 27, 2026
+          </p>
+          <p style={{ margin: '0 0 22px', color: '#3c3e3b', fontSize: 21, lineHeight: 1.78 }}>
+            A database migration is rarely difficult because of one command. The real work is
+            designing an idempotent path that remains safe when traffic, retries, and partial
+            failures arrive together.
+          </p>
+          <p style={{ margin: '0 0 22px', color: '#3c3e3b', fontSize: 21, lineHeight: 1.78 }}>
+            Good teams remove a deprecated path deliberately. They observe the bottleneck,
+            move data in small batches, and keep rollback boring enough to trust.
+          </p>
+          <blockquote style={{ margin: '34px 0 0', padding: '7px 0 7px 22px', borderLeft: '3px solid #ff6a3d', color: '#5f615e', fontSize: 18, lineHeight: 1.65 }}>
+            Reliability is less about preventing every failure than making the next step obvious.
+          </blockquote>
+        </article>
+
+        <aside style={{ position: 'relative', paddingTop: 34 }}>
+          <div style={{ marginBottom: 15, display: 'flex', justifyContent: 'space-between', color: '#767873', fontFamily: 'var(--font-sans)', fontSize: 11, letterSpacing: '.08em' }}>
+            <span>FANFAN MODE</span><strong style={{ color: '#c6431a' }}>4 SAVED WORDS FOUND</strong>
+          </div>
+          <div style={{ transform: 'scale(.9)', transformOrigin: 'top right' }}>
+            <ShadowMount>
+              <SavedWordCard
+                entry={saved}
+                enriching={false}
+                enrichFailed={false}
+                inLibrary
+                onSave={() => {}}
+                onRemove={() => {}}
+                onClose={() => {}}
+              />
+            </ShadowMount>
+          </div>
+        </aside>
+      </section>
+
+      <div
+        style={{
+          position: 'absolute',
+          left: 62,
+          bottom: 24,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          color: '#6f716e',
+          fontFamily: 'var(--font-sans)',
+          fontSize: 12,
+        }}
+      >
+        <BrandMark size={24} />
+        <strong style={{ color: '#20232a' }}>翻翻模式</strong>
+        <span>收藏过的词留在阅读现场 · 点击即看 · 不再次调用 AI</span>
+      </div>
+    </main>
+  )
+}
+
 /** Required 440x280 Chrome Web Store small promotional tile. */
 function StorePromoTile() {
   return (
@@ -570,6 +686,7 @@ function Harness() {
   }
   if (store === 'promo') return <StorePromoTile />
   if (store === 'youtube') return <YouTubeShowcase />
+  if (store === 'highlight') return <StoreFanFanModeShowcase />
 
   const view = params.get('view') ?? 'card'
   /*

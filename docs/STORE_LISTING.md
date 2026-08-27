@@ -37,6 +37,9 @@
 > **划词就懂。** 选中一个词，AI 结合它所在的这句话给出解释——不是词典里那条最常见的义项，
 > 而是它在这里到底什么意思。「lock a table for minutes」里的 lock 不是「锁」。
 >
+> **收藏过的词，会在下一篇文章里重新出现。** 打开翻翻模式，词库里的词会在网页上轻轻标出来；
+> 点一下直接看已经保存的释义、例句和近义词，不再调用 AI，也不产生新的模型费用。
+>
 > **整段、整页翻译。** 悬停加一个键翻译这一段；一个快捷键翻译整页。译文追加在原文下面，
 > 不替换、不打乱排版。
 >
@@ -64,6 +67,10 @@
 > **Select a word, understand it here.** The AI explains a word in the sentence it appears in —
 > not the most common dictionary sense, but what it means *right here*. The "lock" in
 > "lock a table for minutes" is not a padlock.
+>
+> **Saved words return on the next page.** Turn on FanFan mode to mark words from your library
+> wherever they appear. Click one to revisit the stored meaning, examples and synonyms — no
+> additional AI call and no additional model cost.
 >
 > **Translate a paragraph, or the whole page.** Hover and hold one key for a paragraph;
 > one shortcut for the page. Translations are appended below the original — nothing is
@@ -161,7 +168,7 @@
 | 素材 | 要求 | 状态 |
 |---|---|---|
 | 图标 128×128 | PNG | ✅ `public/icons/icon-128.png` |
-| 截图 | 1280×800，1–5 张，尺寸不能混用 | ✅ 3 张，新增 `docs/screenshots/youtube-bilingual-subtitles.png` 展示 YouTube 双语字幕与设置面板 |
+| 截图 | 1280×800，1–5 张，尺寸不能混用 | ✅ 5 张；新增 `fanfan-mode-highlight.png` 展示收藏词高亮，`reading-in-context-v1.4.png` 展示新版语境卡片 |
 | 小宣传图 440×280 | 可选，没有它进不了推荐位 | ❌ 未制作 |
 
 ---

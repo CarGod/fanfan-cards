@@ -6,6 +6,12 @@
 
 <p align="center"><em>在真实英文环境中阅读，把每一次语言障碍变成你自己的英语知识资产。</em></p>
 
+<p align="center">
+  <a href="https://chromewebstore.google.com/detail/%E7%BF%BB%E7%BF%BB%E8%AF%8D%E5%8D%A1-%E2%80%94-ai-%E8%8B%B1%E8%AF%AD%E9%98%85%E8%AF%BB%E5%8A%A9%E6%89%8B/ejhmidlnfffkpolnaiflfaojgfbngjba"><strong>Chrome Web Store</strong></a>
+  ·
+  <a href="https://luffyliu.com/fanfan-cards/"><strong>产品主页</strong></a>
+</p>
+
 一个 AI 驱动的英语阅读与学习 Chrome 扩展（Manifest V3）。它不是"英文 → 中文"的翻译插件，
 而是一条完整的学习闭环：
 
@@ -32,6 +38,9 @@
 
 ## 功能
 
+**翻翻模式** — 词库里收藏过的词会在任何网页上被轻量标出。点击直接查看当时保存的释义、
+例句和近义词，不再次调用 AI，也不产生新的模型费用；匹配与高亮完全在本机完成。
+
 **AI 划词解释** — 选中单词或短语，浮层给出音标、基础释义、**结合当前网页上下文的解释**、
 英文释义、AI 例句、近义词，并高亮显示原句。支持三种触发方式（小按钮 / 立即解释 / 按住 Alt）、
 右键菜单和快捷键。
@@ -45,8 +54,16 @@
 **学习面板** — 收藏总数、待复习数、今日目标进度、连续学习天数、近两周活跃柱状图、熟悉度分布、
 最近收藏。全部由本地数据真实计算，没有一个装饰性指标。
 
+**段落与整页翻译** — 悬停翻译当前段落，或用快捷键翻译整页。译文追加在原文旁边，
+不会替换或重排原网页。
+
+**YouTube 双语字幕** — 在播放器控制栏直接开启原文 + 译文字幕，也可切换为仅译文，
+并调整字号与背景深浅。
+
 ![划词卡片：结果、加载与错误三种状态](docs/screenshots/reading-card.png)
 ![学习面板](docs/screenshots/dashboard.png)
+![翻翻模式：在文章里标出已收藏单词](docs/screenshots/fanfan-mode-highlight.png)
+![YouTube 双语字幕](docs/screenshots/youtube-bilingual-subtitles.png)
 
 **同步到 GitHub 私有仓库** — 填一个 Personal Access Token，扩展自动替你创建私有仓库，
 之后每次同步都是一次提交：`vocabulary.json`（机器读）+ `VOCABULARY.md`（人读，按字母分组）+
