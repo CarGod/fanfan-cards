@@ -120,3 +120,64 @@ describe('OpenAICompatibleProvider', () => {
     )
   })
 })
+
+describe('思考深度走到请求体里', () => {
+  /**
+   * 翻译函数写对了不等于它被调用了。这条走完整路径：设置 → provider → HTTP 请求体。
+   * 中间任何一环没接上，表现都是「设置调了但没变快」，而那是查不出来的。
+   */
+  const sent = async (thinkingLevel?: 'off' | 'low' | 'high') => {
+    const captured = stubChat({ content: GOOD_JSON })
+    const deepseek = new OpenAICompatibleProvider({
+      id: 'deepseek',
+      label: 'test',
+      apiKey: 'k',
+      model: 'deepseek-v4-flash',
+      baseUrl: 'https://api.example.com/v1',
+      structuredOutput: 'json_object',
+      reasoning: 'deepseek',
+    })
+    await deepseek.explainWord({
+      text: 'misleading',
+      context: 'The chart is misleading.',
+      ...(thinkingLevel ? { thinkingLevel } : {}),
+    })
+    return captured[0]!
+  }
+
+  it('低档时请求体里带着 reasoning_effort: low', async () => {
+    expect((await sent('low'))['reasoning_effort']).toBe('low')
+  })
+
+  it('关闭时请求体里带着 thinking: disabled', async () => {
+    expect((await sent('off'))['thinking']).toEqual({ type: 'disabled' })
+  })
+
+  /** 没设置时不发——让服务商用它自己的默认值，而不是我们替它决定。 */
+  it('没设置时一个推理参数都不发', async () => {
+    const body = await sent()
+    expect(body['reasoning_effort']).toBeUndefined()
+    expect(body['thinking']).toBeUndefined()
+  })
+
+  /** 自建端点对不认识的字段常常直接 400，一个字段都不能多发。 */
+  it('自建端点上一个推理参数都不发', async () => {
+    const captured = stubChat({ content: GOOD_JSON })
+    const custom = new OpenAICompatibleProvider({
+      id: 'custom',
+      label: 'test',
+      apiKey: 'k',
+      model: 'local',
+      baseUrl: 'http://localhost:1234/v1',
+      structuredOutput: 'json_object',
+      reasoning: 'none',
+    })
+    await custom.explainWord({
+      text: 'misleading',
+      context: 'The chart is misleading.',
+      thinkingLevel: 'low',
+    })
+    expect(captured[0]!['reasoning_effort']).toBeUndefined()
+    expect(captured[0]!['thinking']).toBeUndefined()
+  })
+})

@@ -57,6 +57,9 @@ export interface LanguagePair {
  */
 export type ExplainDetail = 'core' | 'extras' | 'full'
 
+/** 模型思考多深。各服务商各自翻译成自己的参数。 */
+export type ThinkingLevel = 'off' | 'low' | 'high'
+
 export interface ExplainWordInput {
   /** The exact selected text. */
   text: string
@@ -64,6 +67,8 @@ export interface ExplainWordInput {
   exampleCount?: number
   /** Defaults to `full`. */
   detail?: ExplainDetail
+  /** 思考深度。不传时由各 provider 用自己的默认值。 */
+  thinkingLevel?: ThinkingLevel
   /** Omitted only in tests; defaults to auto -> 简体中文. */
   languages?: LanguagePair
   /** Sentence the selection sits in. */

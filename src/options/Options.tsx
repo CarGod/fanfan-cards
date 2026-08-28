@@ -347,6 +347,22 @@ export function Options() {
                 onChange={(event) => patchProvider({ baseUrl: event.target.value })}
               />
             </Field>
+
+            {/*
+              思考深度放在模型这一节，紧挨着模型选择。
+              它和「选哪个模型」是同一个问题的两面：一个决定谁来答，一个决定它想多久。
+            */}
+            <Field label={t('options.model.thinking')} hint={t('options.model.thinking.hint')}>
+              <SegmentedControl
+                value={settings.thinkingLevel}
+                options={[
+                  { value: 'off', label: t('options.model.thinking.off') },
+                  { value: 'low', label: t('options.model.thinking.low') },
+                  { value: 'high', label: t('options.model.thinking.high') },
+                ]}
+                onChange={(next) => void update({ thinkingLevel: next })}
+              />
+            </Field>
           </>
         )}
 
@@ -490,6 +506,23 @@ export function Options() {
               { value: 'all' as const, label: t('options.reading.page_range.all') },
             ]}
             onChange={(next) => void update({ pageTranslationRange: next })}
+          />
+        </Field>
+
+        <Field
+          label={t('options.reading.concurrency')}
+          hint={t('options.reading.concurrency.hint')}
+        >
+          <Select
+            value={String(settings.pageTranslationConcurrency)}
+            label={t('options.reading.concurrency')}
+            options={[1, 2, 3, 4, 5, 6, 7, 8].map((count) => ({
+              value: String(count),
+              label:
+                t('options.reading.concurrency.value', { count }) +
+                (count === 3 ? t('options.reading.concurrency.default_suffix') : ''),
+            }))}
+            onChange={(next) => void update({ pageTranslationConcurrency: Number(next) })}
           />
         </Field>
 

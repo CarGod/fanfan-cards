@@ -55,10 +55,14 @@ const REFUSAL_FALLBACK_BETA = 'server-side-fallback-2026-07-01'
 /**
  * Anthropic provider, built on the official SDK.
  *
- * Word lookup is latency-sensitive and cognitively easy, so it runs at
- * `effort: 'low'` with adaptive thinking left on (the default on Opus 5) rather
- * than disabling thinking, which is the documented cause of leaked reasoning
- * tags in visible output.
+ * Word lookup is latency-sensitive and cognitively easy, so it defaults to
+ * `effort: 'low'` with adaptive thinking left on (the default on Opus 5).
+ *
+ * 读者在设置里选「关闭思考」时，这里**仍然只是把 effort 压到 low**，不发
+ * `thinking: {type:'disabled'}`。官方文档写明了关掉思考的两种坏法：模型偶尔会把
+ * 工具调用写进**可见正文**（那一轮成功、调用没执行、也不报错），以及把
+ * `<thinking>` 标签漏进回答里。对一张给读者看的词卡来说，第二种就是直接的破相。
+ * 低 effort 已经拿到了绝大部分的提速，没必要为剩下那点去冒这个险。
  */
 export class ClaudeProvider implements AIProvider {
   readonly id = 'claude' as const
@@ -92,6 +96,8 @@ export class ClaudeProvider implements AIProvider {
       user: buildExplainPrompt(input),
       schema: strictExplanationSchemaFor(detail),
       maxTokens: 3000,
+      // 「关闭思考」在这里也只是 low——见类文档：关掉思考会让标签漏进正文。
+      effort: input.thinkingLevel === 'high' ? 'high' : 'low',
       signal,
     })
     return coerceExplanation(parsed, input.text, this.id, detail)
@@ -147,16 +153,18 @@ export class ClaudeProvider implements AIProvider {
     user: string
     schema: ZodType<T>
     maxTokens: number
+    /** 不传时按 low 走：这个产品里绝大多数请求都是查词。 */
+    effort?: 'low' | 'high'
     signal?: AbortSignal | undefined
   }): Promise<T> {
     try {
-      return await this.request(args, this.useRefusalFallback)
+      return await this.request({ ...args, effort: args.effort ?? 'low' }, this.useRefusalFallback)
     } catch (error) {
       // An account without the beta rejects the request outright; retry clean
       // once and remember, so this costs at most one extra round trip ever.
       if (this.useRefusalFallback && error instanceof Anthropic.BadRequestError) {
         this.useRefusalFallback = false
-        return this.request(args, false)
+        return this.request({ ...args, effort: args.effort ?? 'low' }, false)
       }
       throw this.toAIError(error, args.signal)
     }
@@ -168,6 +176,7 @@ export class ClaudeProvider implements AIProvider {
       user: string
       schema: ZodType<T>
       maxTokens: number
+      effort: 'low' | 'high'
       signal?: AbortSignal | undefined
     },
     withFallback: boolean,
@@ -179,7 +188,7 @@ export class ClaudeProvider implements AIProvider {
         system: args.system,
         messages: [{ role: 'user', content: args.user }],
         output_config: {
-          effort: 'low',
+          effort: args.effort,
           format: betaZodOutputFormat(args.schema),
         },
         ...(withFallback ? { betas: [REFUSAL_FALLBACK_BETA], fallbacks: 'default' as const } : {}),

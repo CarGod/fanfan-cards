@@ -290,13 +290,14 @@ export function App({ host }: { host: HTMLElement }) {
         pageTranslator.start({
           range: settings.pageTranslationRange,
           targetLanguage: settings.targetLanguage,
+          concurrency: settings.pageTranslationConcurrency,
         })
       })
       .catch(() => undefined)
     return () => {
       cancelled = true
     }
-  }, [enabled, settings.pageTranslationRange, settings.targetLanguage])
+  }, [enabled, settings.pageTranslationRange, settings.targetLanguage, settings.pageTranslationConcurrency])
   const languages = useMemo(
     () => ({ source: settings.sourceLanguage, target: settings.targetLanguage }),
     [settings.sourceLanguage, settings.targetLanguage],

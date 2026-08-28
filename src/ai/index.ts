@@ -51,6 +51,8 @@ export function resolveProvider(settings: Settings): ResolvedProvider {
             model,
             baseUrl,
             structuredOutput: 'json_schema',
+            // o 系列 / gpt-5 认 reasoning_effort。
+            reasoning: 'openai',
           }),
         }
       case 'deepseek':
@@ -63,6 +65,12 @@ export function resolveProvider(settings: Settings): ResolvedProvider {
             baseUrl,
             // DeepSeek implements `json_object` but not `json_schema`.
             structuredOutput: 'json_object',
+            /*
+             * DeepSeek 的 reasoning_effort **默认是 high**。
+             * 此前一个参数都不发，等于每次查词都跑在最高推理档上——
+             * 而查词恰恰是这个产品里最延迟敏感的动作。
+             */
+            reasoning: 'deepseek',
           }),
         }
       case 'custom':
@@ -74,6 +82,14 @@ export function resolveProvider(settings: Settings): ResolvedProvider {
             model,
             baseUrl,
             structuredOutput: 'json_object',
+            /*
+             * 自建端点什么都不发。
+             *
+             * 「OpenAI 兼容」是个很宽的说法：Ollama、LM Studio、各种网关都自称兼容，
+             * 而它们对不认识的字段常常直接 400。为了一点加速把一个本来能用的配置
+             * 弄坏，不划算。
+             */
+            reasoning: 'none',
           }),
         }
     }

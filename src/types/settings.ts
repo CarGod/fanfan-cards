@@ -92,6 +92,19 @@ export const settingsSchema = z.object({
   /** `content` skips nav/header/footer chrome; `all` translates everything. */
   pageTranslationRange: z.enum(['content', 'all']).default('content'),
   /**
+   * 整页翻译时最多几个请求同时在飞。
+   *
+   * 这个数字直接换来速度：一篇长文的耗时基本等于
+   * 「批次数 ÷ 并发数 × 单批耗时」。
+   *
+   * 但它同样直接换来限流。每一家服务商都限速，调高之后撞 429 是常态而不是意外——
+   * 所以翻译器在撞到限流时会**自动把并发减半**继续跑，而不是把整轮翻译停掉。
+   * 这个设置定的是上限，不是死数。
+   *
+   * 默认 3：一个在几乎所有服务商上都不会触线的数。
+   */
+  pageTranslationConcurrency: z.number().int().min(1).max(8).default(3),
+  /**
    * 译文出现时把原文留着对照，还是只留译文。
    *
    * 默认对照。这个产品的读者是在学英语的人——藏掉原文就等于把他今天唯一一次
@@ -130,6 +143,20 @@ export const settingsSchema = z.object({
    * 装上扩展第二天发现所有文章都被涂了色，第一反应是卸载，不是「真贴心」。
    */
   fanfanMode: z.boolean().default(false),
+
+  /**
+   * 模型思考多深。
+   *
+   * 查词是**延迟敏感、认知简单**的任务：读者划完一个词，等的是「这里什么意思」，
+   * 不是一篇论证。而多数服务商的默认是**高**——DeepSeek 的 `reasoning_effort`
+   * 默认就是 high，我们此前一个参数都不发，等于每次查词都跑在最高档上。
+   *
+   * 默认 `low`。想要更细的解释再调高，那是一次明确的选择；而慢是每一次都要付的。
+   *
+   * `off` 是「能关就关」：能力不支持的服务商会退到它最低的一档，
+   * 而不是假装关掉了。
+   */
+  thinkingLevel: z.enum(['off', 'low', 'high']).default('low'),
 
   /** Example sentences per lookup. 0 turns them off (and makes lookups faster). */
   exampleCount: z.number().int().min(0).max(6).default(3),

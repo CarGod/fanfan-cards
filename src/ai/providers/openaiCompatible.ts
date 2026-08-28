@@ -1,4 +1,9 @@
-import { AIError, type AIProvider, type ProviderId } from '@/types/ai.ts'
+import {
+  AIError,
+  type AIProvider,
+  type ProviderId,
+  type ThinkingLevel,
+} from '@/types/ai.ts'
 import type {
   ExplainWordInput,
   GenerateExampleInput,
@@ -48,6 +53,17 @@ import {
  *
  * `max_tokens` is a ceiling, not a charge: unused headroom costs nothing.
  */
+/**
+ * 这个端点用哪一套参数表达「少想一点」。
+ *
+ * - `deepseek`：`reasoning_effort`（low/high/max，**默认 high**）加
+ *   `thinking: {type}` 开关。
+ * - `openai`：`reasoning_effort`，没有独立的开关字段。
+ * - `none`：什么都不发。自建网关和不确定的端点走这条——多发一个不认识的字段，
+ *   代价是整个配置 400，而收益只是快一点。
+ */
+export type ReasoningDialect = 'deepseek' | 'openai' | 'none'
+
 export const EXPLAIN_MAX_TOKENS = 4000
 
 /**
@@ -73,6 +89,14 @@ export interface OpenAICompatibleOptions {
   model: string
   baseUrl: string
   structuredOutput: StructuredOutputMode
+  /**
+   * 这个端点认哪一套推理参数。
+   *
+   * **只对确认支持的服务商发。** 「OpenAI 兼容」是个很宽的说法：Ollama、
+   * LM Studio、各种自建网关都自称兼容，而它们对不认识的字段的反应是
+   * 直接 400——那会让一个本来能用的配置彻底不能用，只为了一个可有可无的加速。
+   */
+  reasoning?: ReasoningDialect
   /** Extra headers, e.g. OpenRouter attribution. */
   headers?: Record<string, string>
 }
@@ -105,6 +129,7 @@ export class OpenAICompatibleProvider implements AIProvider {
   private readonly apiKey: string
   private readonly baseUrl: string
   private readonly structuredOutput: StructuredOutputMode
+  private readonly reasoning: ReasoningDialect
   private readonly extraHeaders: Record<string, string>
 
   constructor(options: OpenAICompatibleOptions) {
@@ -114,6 +139,7 @@ export class OpenAICompatibleProvider implements AIProvider {
     this.apiKey = options.apiKey
     this.baseUrl = normalizeBaseUrl(options.baseUrl)
     this.structuredOutput = options.structuredOutput
+    this.reasoning = options.reasoning ?? 'none'
     this.extraHeaders = options.headers ?? {}
 
     if (!this.baseUrl) throw new AIError('unknown', 'Base URL is not configured', this.id)
@@ -128,6 +154,7 @@ export class OpenAICompatibleProvider implements AIProvider {
       schemaName: 'word_explanation',
       schema: explanationJsonSchema(detail),
       maxTokens: EXPLAIN_MAX_TOKENS,
+      thinkingLevel: input.thinkingLevel,
       signal,
     })
     return coerceExplanation(raw, input.text, this.id, detail)
@@ -188,6 +215,7 @@ export class OpenAICompatibleProvider implements AIProvider {
     schemaName: string
     schema: object
     maxTokens: number
+    thinkingLevel?: ThinkingLevel | undefined
     signal?: AbortSignal | undefined
   }): Promise<unknown> {
     // `json_object` guarantees valid JSON, not *our* JSON: the field contract
@@ -206,6 +234,8 @@ export class OpenAICompatibleProvider implements AIProvider {
         { role: 'user', content: user },
       ],
     }
+
+    applyReasoning(body, this.reasoning, args.thinkingLevel)
 
     if (this.structuredOutput === 'json_schema') {
       body['response_format'] = {
@@ -267,4 +297,32 @@ export class OpenAICompatibleProvider implements AIProvider {
       this.id,
     )
   }
+}
+
+/**
+ * 把「思考多深」翻译成这个端点认得的字段。
+ *
+ * 导出是为了可测：这里发错一个字段名，表现是**什么都没发生**——请求照常成功，
+ * 只是慢照旧。没有报错，没有线索，唯一的症状是读者觉得"好像没变快"。
+ */
+export function applyReasoning(
+  body: Record<string, unknown>,
+  dialect: ReasoningDialect,
+  level: ThinkingLevel | undefined,
+): void {
+  if (dialect === 'none' || !level) return
+
+  if (dialect === 'openai') {
+    // OpenAI 没有独立的开关，最低档就是 `low`。
+    body['reasoning_effort'] = level === 'high' ? 'high' : 'low'
+    return
+  }
+
+  // DeepSeek：关得掉就真关掉，关不掉的档位用 reasoning_effort 压到最低。
+  if (level === 'off') {
+    body['thinking'] = { type: 'disabled' }
+    return
+  }
+  body['thinking'] = { type: 'enabled' }
+  body['reasoning_effort'] = level === 'high' ? 'high' : 'low'
 }

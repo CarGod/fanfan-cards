@@ -46,9 +46,25 @@ import { noteOrphanError } from '@/shared/extensionContext.ts'
  * Three is deliberate rather than "as many as possible": every provider rate
  * limits, and a burst of twenty requests earns a 429 that fails the whole run.
  */
-const MAX_CONCURRENT = 3
+/**
+ * 并发的出厂值。读者可以在设置里调，但**这里仍然是每一次运行的起点**——
+ * 撞到限流之后翻译器会自己往下退，而退让的结果不写回设置：
+ * 那是一次网络状况，不是读者改了主意。
+ */
+const DEFAULT_CONCURRENT = 3
 /** Consecutive failed batches before the run gives up. */
 const MAX_FAILURES = 3
+/**
+ * 一轮里最多因为限流重排多少**批**。
+ *
+ * 按批算而不是按段落算：一批有多少段由内容长短决定（`BATCH_LIMITS`），
+ * 拿段落数当上限，等于批一大就只允许重来两次——而那恰恰是最需要重来的时候。
+ *
+ * 限流可以靠慢下来解决，所以被拒的那批应该重来；但不能无限重来：服务商如果
+ * 一直在拒（配额用完、被封），无限重排就是一个安静的死循环，而读者看到的是
+ * 进度永远差最后几段。到顶之后按普通失败处理，让它停下来。
+ */
+const MAX_RATE_LIMIT_REQUEUES = 12
 /** Per request. Larger batches mean fewer round trips but a longer tail latency. */
 const BATCH_LIMITS = { maxUnits: 12, maxChars: 3000 }
 
@@ -74,6 +90,16 @@ export class PageTranslator {
   private readonly lineRetries = new LineRetryBudget()
   /** 换行被压平、等着逐行补一次的段落。等主队列排空再处理。 */
   private lineShapeLost: TranslationUnit[] = []
+  /**
+   * 这一轮**此刻**允许几个请求同时在飞。
+   *
+   * 从设置读进来，撞到限流就往下减。分成「设置值」和「当前值」两个东西，
+   * 是因为它们回答的是不同问题：设置说的是「我愿意跑多快」，
+   * 当前值说的是「服务商此刻让我跑多快」。
+   */
+  private concurrency = DEFAULT_CONCURRENT
+  /** 这一轮已经因为限流重排过多少批。 */
+  private requeues = 0
   private queue: TranslationUnit[] = []
   private flushing = false
   private state: TranslatorState = 'idle'
@@ -104,7 +130,14 @@ export class PageTranslator {
     else this.start(options)
   }
 
-  start(options: { range?: 'content' | 'all'; targetLanguage?: string } = {}): void {
+  start(
+    options: {
+      range?: 'content' | 'all'
+      targetLanguage?: string
+      /** 最多几个请求同时在飞。撞到限流会从这个值往下退。 */
+      concurrency?: number
+    } = {},
+  ): void {
     if (this.state === 'running') return
     this.state = 'running'
     this.done = 0
@@ -112,6 +145,9 @@ export class PageTranslator {
     // 补救额度按「一轮翻译」计：重新开一次整页翻译，就该重新给一次机会。
     this.lineRetries.reset()
     this.lineShapeLost = []
+    // 每一轮都从设置值重新起步：上一轮退让到 1，不该拖累这一轮。
+    this.concurrency = clampConcurrency(options.concurrency)
+    this.requeues = 0
     this.emit()
 
     this.walkOptions = {
@@ -226,7 +262,7 @@ export class PageTranslator {
         // was on screen when the run started.
         this.sortByDistanceFromViewport()
         const batches: TranslationUnit[][] = []
-        while (batches.length < MAX_CONCURRENT && this.queue.length > 0) {
+        while (batches.length < this.concurrency && this.queue.length > 0) {
           const [batch] = batchUnits(this.queue.splice(0, BATCH_LIMITS.maxUnits), BATCH_LIMITS)
           if (!batch) break
           batches.push(batch)
@@ -308,6 +344,38 @@ export class PageTranslator {
        * Two failure kinds still end the run, because continuing would only
        * repeat them: a rejected key, and a run where nothing is getting through.
        */
+      /*
+       * 撞到限流不是失败，是「你太快了」。
+       *
+       * 把并发砍半（最低 1）继续跑，而**不计入失败次数**——限流是可以靠慢下来
+       * 解决的，而按失败处理会让连续三次限流把整轮翻译停掉。既然并发交给了读者，
+       * 他把它调到 8 之后撞线是必然的；那时该退让的是我们，不是把他的翻译弄挂。
+       */
+      if (
+        error instanceof AIError &&
+        error.code === 'rate_limit' &&
+        this.requeues < MAX_RATE_LIMIT_REQUEUES
+      ) {
+        const next = Math.max(1, Math.floor(this.concurrency / 2))
+        if (next !== this.concurrency) {
+          this.concurrency = next
+          console.warn(`[fanfan] rate limited — 并发降到 ${next}`)
+        }
+
+        /*
+         * 把这一批放回队列，而不是丢掉。
+         *
+         * 限流失败和内容失败不是一回事：内容有问题重试多少次都一样，而限流只是
+         * 「你太快了」——慢下来再来一次就能成。丢掉它的后果是页面上留下几个
+         * 没翻的洞，而且没有任何东西告诉读者那是限流，他只会觉得这个功能不稳。
+         *
+         * 上面的 catch 已经把槽和标记清掉了，所以这里重排是干净的。
+         */
+        this.requeues += 1
+        for (const unit of batch) this.enqueue(unit)
+        return
+      }
+
       const fatal = error instanceof AIError && (error.code === 'auth' || error.code === 'no_api_key')
       this.failures += 1
       if (fatal || this.failures >= MAX_FAILURES) this.stop()
@@ -343,4 +411,10 @@ function yieldToMain(): Promise<void> {
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => resolve())
     else setTimeout(resolve, 0)
   })
+}
+
+/** 设置值可能来自旧版本或被手改过，收进合法区间再用。 */
+function clampConcurrency(value: number | undefined): number {
+  if (!Number.isFinite(value)) return DEFAULT_CONCURRENT
+  return Math.min(8, Math.max(1, Math.floor(value as number)))
 }

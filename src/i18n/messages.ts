@@ -202,6 +202,13 @@ export const MESSAGES = {
     'zh-CN': '整页翻译和悬停整段翻译共用这个设置。「仅译文」把原文藏起来，不是删掉——随时切回来，不用重新翻一遍。',
     en: 'Shared by page translation and the hover-a-paragraph gesture. “Translation only” hides the original rather than removing it — switch back any time, with no re-translation.',
   },
+  'options.reading.concurrency': { 'zh-CN': '整页翻译并发数', en: 'Page translation concurrency' },
+  'options.reading.concurrency.hint': {
+    'zh-CN': '同时发出多少个翻译请求。一篇长文的耗时大致等于「段落批次 ÷ 并发数」，所以调高确实更快。代价是撞限流：调高之后遇到 429 是常态，那时翻译会自动把并发减半继续跑，不会整轮停掉。默认 3 在几乎所有服务商上都不触线。',
+    en: 'How many translation requests run at once. A long article takes roughly “batches ÷ concurrency”, so raising this really is faster. The cost is rate limiting: at higher values a 429 is normal, and translation then halves its concurrency and keeps going rather than stopping the whole run. The default of 3 stays under the limit on nearly every provider.',
+  },
+  'options.reading.concurrency.value': { 'zh-CN': '{count} 个', en: '{count}' },
+  'options.reading.concurrency.default_suffix': { 'zh-CN': '（默认）', en: ' (default)' },
   'options.reading.page_range': { 'zh-CN': '整页翻译范围', en: 'Page translation scope' },
   'options.reading.page_range.hint': {
     'zh-CN': '「仅正文」会跳过导航栏、页眉页脚和侧边栏——它们通常是界面文字而不是你要读的内容。',
@@ -218,6 +225,14 @@ export const MESSAGES = {
     en: 'Backtick ` (default, clashes with nothing)',
   },
   'options.reading.paragraph.hold': { 'zh-CN': '按住 {key}', en: 'Hold {key}' },
+  'options.model.thinking': { 'zh-CN': '模型思考深度', en: 'Thinking depth' },
+  'options.model.thinking.hint': {
+    'zh-CN': '查词是等着要答案的动作，而多数服务商默认跑在最高推理档上——DeepSeek 就是。调低能明显变快，解释也够用；遇到难词再调高。「关闭」在支持的服务商上是真关，不支持的会退到它最低的一档。',
+    en: 'Looking a word up is something you wait for, and most providers default to their highest reasoning effort — DeepSeek does. Lower is noticeably faster and still explains well; raise it for hard words. “Off” genuinely turns thinking off where the provider supports it, and falls back to its lowest setting where it does not.',
+  },
+  'options.model.thinking.off': { 'zh-CN': '关闭', en: 'Off' },
+  'options.model.thinking.low': { 'zh-CN': '低（快）', en: 'Low (fast)' },
+  'options.model.thinking.high': { 'zh-CN': '高', en: 'High' },
   'options.reading.examples': { 'zh-CN': '例句数量', en: 'Examples per look-up' },
   'options.reading.examples.hint': {
     'zh-CN': '0 表示不要例句——例句是查询里最费时间的部分，关掉能明显加快出结果。',

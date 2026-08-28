@@ -33,7 +33,13 @@ export async function handleExplain(
     model: provider.model,
     // Language pair is part of the identity of an answer: switching target
     // language must not keep serving the previous language's explanation.
-    promptVersion: `${PROMPT_VERSION}/${languages.source}>${languages.target}/${detail}/ex${settings.exampleCount}`,
+    /*
+     * 思考档位进 key。
+     *
+     * 它决定的是答案本身有多深——读者把它从 low 调到 high，期待的是更好的解释，
+     * 而不是把之前那条低档答案再看一遍。
+     */
+    promptVersion: `${PROMPT_VERSION}/${languages.source}>${languages.target}/${detail}/ex${settings.exampleCount}/t${settings.thinkingLevel}`,
     text,
     context: payload.context,
   })
@@ -56,6 +62,7 @@ export async function handleExplain(
     languages,
     detail,
     exampleCount: settings.exampleCount,
+    thinkingLevel: settings.thinkingLevel,
   })
 
   await Promise.all([
