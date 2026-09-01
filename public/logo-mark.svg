@@ -1,0 +1,14 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="翻翻词卡">
+  <!--
+    A card with its top-right corner turned.
+
+    The fold is the gesture the product is named after (翻); the rounded
+    rectangle is the card; lifting a corner is what "look at the other side"
+    looks like. Flat colour on purpose — no gradient, no shadow, no stroke.
+    See docs/LOGO_DESIGN.md.
+  -->
+  <path d="M14 6h27l17 17v27a8 8 0 0 1-8 8H14a8 8 0 0 1-8-8V14a8 8 0 0 1 8-8Z" fill="#FF6A3D" />
+  <rect x="14" y="33" width="24" height="5.5" rx="2.75" fill="#FFF0E6" opacity="0.92" />
+  <rect x="14" y="44" width="15" height="5.5" rx="2.75" fill="#FFF0E6" opacity="0.5" />
+  <path d="M41 6 58 23H41Z" fill="#FFC6AE" />
+</svg>

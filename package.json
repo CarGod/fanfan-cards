@@ -1,0 +1,43 @@
+{
+  "name": "fanfan-cards",
+  "private": true,
+  "version": "1.6.0",
+  "type": "module",
+  "description": "Lingua — turn real-world English reading into a personal, AI-explained vocabulary asset.",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run clean && npm run build:pages && npm run build:content && npm run build:mainworld && npm run build:manifest",
+    "build:pages": "vite build",
+    "build:content": "vite build --config vite.content.config.ts",
+    "build:manifest": "node scripts/build-manifest.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "icons": "node scripts/generate-icons.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "zip": "npm run build && node scripts/zip.mjs",
+    "smoke": "node scripts/smoke-test.mjs",
+    "verify": "npm run typecheck && npm run test && npm run build && npm run smoke",
+    "preview": "vite --config vite.preview.config.ts",
+    "crx": "npm run build && node scripts/pack-crx.mjs",
+    "shot": "node scripts/store-shot.mjs",
+    "build:mainworld": "vite build --config vite.mainworld.config.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.117.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.31",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.0.4",
+    "jsdom": "^30.0.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9",
+    "vitest": "^3.2.4"
+  }
+}

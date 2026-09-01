@@ -1,0 +1,1597 @@
+@import './tokens.css';
+
+/*
+ * Shared stylesheet for the extension's own pages (popup, options, app).
+ *
+ * Content-script styles live separately in `src/content/styles.css` because
+ * they are injected into a shadow root and must not assume a document reset.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+/* Match scrollbars to the surface they sit on, in both themes. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+  background-clip: content-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/*
+ * Reserve the scrollbar gutter on the long pages.
+ *
+ * `.options` is centred with `margin: 0 auto`, so the moment a pane crosses the
+ * viewport height the scrollbar appears, the viewport narrows, and the whole
+ * page jumps sideways by the scrollbar's width — switching tabs made it shudder.
+ * Scoped with `:has()` rather than applied to every page, because the popup is
+ * sized to its content and a permanently reserved gutter would just be a blank
+ * strip down its side.
+ */
+html:has(.options),
+html:has(.app) {
+  scrollbar-gutter: stable;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--primary-ink);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* ---------- primitives ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: filter 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.btn svg {
+  flex: none;
+  margin-top: -1px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/*
+ * The "currently on" state of a toggle button.
+ *
+ * `btn-ghost` was standing in for this, and a transparent outlined button
+ * wedged between two filled grey ones just looks like it failed to render. This
+ * says something instead: soft brand wash, brand text, brand hairline — the
+ * same vocabulary as 「已在词卡」 on the reading card, because it means the same
+ * thing (this is on; click to turn it off).
+ */
+/* Compact select for popup rows, where a full-width control would dominate. */
+/*
+ * 自己画的下拉。
+ *
+ * 原生 select 弹开的列表由操作系统绘制，CSS 碰不到——在 macOS 上那是一个带对勾的
+ * 系统菜单，圆角、字体、配色全和产品无关，深色模式下还不跟着页面走。
+ * 所以整个换掉，代价是这里的每一个状态都得自己写。
+ */
+.select {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.select-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 9px;
+  font-family: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.select-trigger:hover {
+  border-color: var(--text-faint);
+}
+
+/* 键盘用户要看得见自己在哪儿——原生控件白给的东西，换掉之后得自己补。 */
+.select-trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.select-trigger[data-open='true'] {
+  border-color: var(--primary);
+  background: var(--surface-soft);
+}
+
+.select-value {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.select-caret {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  color: var(--text-faint);
+  transition: transform 150ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.select-trigger[data-open='true'] .select-caret {
+  transform: rotate(180deg);
+  color: var(--primary);
+}
+
+.select-list {
+  position: absolute;
+  z-index: 40;
+  min-width: 100%;
+  /* 右对齐：触发器贴着卡片右边，往左展开才不会顶出弹窗的边。 */
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-float);
+  animation: select-in 130ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+.select-list[data-drop='down'] {
+  top: calc(100% + 5px);
+}
+
+.select-list[data-drop='up'] {
+  bottom: calc(100% + 5px);
+  transform-origin: bottom;
+}
+
+@keyframes select-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.select-option {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px 7px 8px;
+  font-family: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--text-soft);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/*
+ * 选中的那一项前面留一条竖杠，而不是打勾。
+ *
+ * 勾是「已完成」的意思；这里表达的是「当前是哪一个」。竖杠还有个好处：
+ * 它不占额外的宽度节奏——每一项左边都留着同样的位置，切换时文字不会跳。
+ */
+.select-option::before {
+  content: '';
+  width: 3px;
+  align-self: stretch;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.select-option[data-selected='true'] {
+  color: var(--text);
+}
+
+.select-option[data-selected='true']::before {
+  background: var(--primary);
+}
+
+.select-option[data-active='true'] {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .select-list {
+    animation: none;
+  }
+
+  .select-caret {
+    transition: none;
+  }
+}
+
+/*
+ * 设置页里的下拉和输入框上下并排，尺寸必须一模一样。
+ *
+ * 差两像素高度或者半档字号，读者说不出哪里不对，但会觉得这一页是拼出来的。
+ * 所以这里的数值不是重新挑的，是照抄上面那条 input/select/textarea 的。
+ */
+.field > .select {
+  display: flex;
+  width: 100%;
+}
+
+.field > .select .select-trigger {
+  height: 36px;
+  padding: 0 11px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* 整行宽的触发器，列表就左右贴齐，不必往左收。 */
+.field > .select .select-list {
+  left: 0;
+  right: 0;
+}
+
+/* 弹窗里的下拉比设置页窄一档：那一行右边只剩这么多地方。 */
+.popup-select {
+  min-width: 88px;
+  max-width: 148px;
+}
+
+.btn-on {
+  background: var(--primary-soft);
+  color: var(--primary-ink);
+  border-color: var(--primary-line);
+}
+
+.btn-on:hover:not(:disabled) {
+  background: var(--primary-soft);
+  filter: brightness(0.97);
+}
+
+/*
+ * White on flame is 2.85:1 — a deliberate exception (see design-token.css).
+ * Since the ratio is fixed by that decision, the two levers left are stroke
+ * weight and letter-spacing: a heavier, slightly looser glyph is measurably
+ * easier to resolve at low contrast, and costs nothing.
+ */
+.btn-primary {
+  background: var(--primary);
+  color: var(--primary-text);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.07);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-soft);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--text-faint);
+}
+
+.btn-danger {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+.btn-sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.btn-lg {
+  height: 42px;
+  padding: 0 22px;
+  font-size: 14px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+
+.card-pad {
+  padding: 18px;
+}
+
+input[type='text'],
+input[type='password'],
+input[type='number'],
+input[type='search'],
+select,
+textarea {
+  width: 100%;
+  height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+textarea {
+  height: auto;
+  padding: 9px 11px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--primary-line);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.field {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.field-hint {
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-top: 5px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.muted {
+  color: var(--text-soft);
+}
+
+.faint {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+
+.level-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.toggle {
+  position: relative;
+  width: 40px;
+  height: 23px;
+  border-radius: 999px;
+  border: none;
+  background: var(--border-strong);
+  cursor: pointer;
+  flex: none;
+  padding: 0;
+  transition: background 140ms ease;
+}
+
+.toggle[data-on='true'] {
+  background: var(--primary);
+}
+
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--ff-ink-0);
+  transition: transform 140ms cubic-bezier(0.3, 0.8, 0.4, 1.2);
+}
+
+.toggle[data-on='true']::after {
+  transform: translateX(17px);
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  gap: 3px;
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.segmented button {
+  border: none;
+  background: transparent;
+  color: var(--text-soft);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.segmented button[data-active='true'] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(16, 22, 43, 0.12);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-faint);
+}
+
+.empty-emoji {
+  font-size: 30px;
+}
+
+.empty-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--primary-line);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- app shell ---------- */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+  height: 58px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* The mark is an SVG now; the wrapper only needs to hold its size. */
+.brand-mark {
+  display: inline-flex;
+  flex: none;
+}
+
+.nav {
+  display: flex;
+  gap: 2px;
+}
+
+.nav a {
+  padding: 6px 13px;
+  border-radius: 8px;
+  color: var(--text-soft);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.nav a:hover {
+  background: var(--surface-soft);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.nav a[data-active='true'] {
+  background: var(--primary-soft);
+  color: var(--primary-ink);
+}
+
+.app-main {
+  flex: 1;
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.page-title {
+  font-size: 22px;
+  margin-bottom: 4px;
+}
+
+.page-sub {
+  color: var(--text-soft);
+  margin-bottom: 20px;
+}
+
+/* ---------- dashboard ---------- */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.stat {
+  padding: 16px 18px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.stat-foot {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 96px;
+  padding-top: 8px;
+}
+
+.bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+}
+
+/*
+ * History is neutral; only today wears the brand colour.
+ *
+ * Fourteen orange bars plus an orange progress fill left the one real call to
+ * action on this screen — "开始复习" — as the least prominent orange thing on
+ * it. Data is not an action, so data does not get the action colour.
+ */
+.bar {
+  width: 100%;
+  max-width: 26px;
+  min-height: 3px;
+  border-radius: 4px 4px 2px 2px;
+  background: var(--border-strong);
+}
+
+.bar-today {
+  background: var(--primary);
+}
+
+.bar-empty {
+  background: var(--surface-soft);
+}
+
+.bar-label {
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+  transition: width 240ms ease;
+}
+
+.level-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface-soft);
+}
+
+.level-seg {
+  height: 100%;
+}
+
+/* ---------- vocabulary ---------- */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.toolbar input[type='search'] {
+  max-width: 280px;
+}
+
+.word-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.word-row {
+  display: flex;
+  gap: 14px;
+  padding: 14px 16px;
+  cursor: pointer;
+  align-items: flex-start;
+}
+
+.word-row:hover {
+  border-color: var(--border-strong);
+}
+
+.word-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.word-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.word-term {
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.word-meaning {
+  color: var(--text-soft);
+  font-size: 13px;
+  margin-top: 2px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.word-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex: none;
+}
+
+.detail-panel {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 14, 22, 0.42);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 50;
+}
+
+.detail-body {
+  width: min(480px, 100%);
+  height: 100%;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  padding: 22px;
+  overflow-y: auto;
+  animation: slide-in 180ms ease;
+}
+
+/* Translate only: fading the panel in makes the list behind it show through
+   the text for ~180ms, which reads as a rendering glitch rather than motion. */
+@keyframes slide-in {
+  from {
+    transform: translateX(28px);
+  }
+}
+
+.detail-section {
+  margin-top: 18px;
+}
+
+.detail-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 5px;
+}
+
+.quote {
+  background: var(--surface-soft);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+/*
+ * The contextual reading is the model's sentence, so it wears the AI colour —
+ * the same rail it has on the reading card. It was the brand colour here and
+ * violet there, which made the one visual promise the product makes ("a violet
+ * rail means a model wrote this") true on only one of the two surfaces.
+ */
+.context-block {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 0 8px 8px 0;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+}
+
+.cefr {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 5px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.cefr[data-band='A'] {
+  color: var(--success);
+}
+
+.cefr[data-band='B'] {
+  color: var(--warning);
+}
+
+.cefr[data-band='C'] {
+  color: var(--danger);
+}
+
+.example-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.example-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.label-speak {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  flex: none;
+}
+
+.label-speak:hover {
+  background: var(--surface-soft);
+  color: var(--primary-ink);
+}
+
+.syn-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.syn-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.syn-word {
+  font-weight: 650;
+  flex: none;
+}
+
+.syn-meaning {
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+/* ---------- flashcard ---------- */
+
+.flash-wrap {
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+/*
+ * Review runs on ink, in both themes.
+ *
+ * This is a ritual signal rather than a theme preference: reading happens on
+ * paper, recall happens in a darkened room, and the switch is what tells you
+ * you have stopped browsing and started working. It is deliberately not
+ * user-configurable — a mode you can turn off stops meaning anything.
+ *
+ * Redeclaring the semantic tokens on one container flips the entire subtree,
+ * including components that know nothing about focus mode. That only works
+ * because nothing downstream hardcodes a colour.
+ */
+.focus-mode {
+  --bg: var(--ff-ink-950);
+  --surface: var(--ff-ink-850);
+  --surface-soft: var(--ff-ink-800);
+  --border: var(--ff-ink-750);
+  --border-strong: var(--ff-ink-700);
+
+  --text: var(--ff-on-ink);
+  --text-soft: var(--ff-on-ink-soft);
+  --text-faint: var(--ff-on-ink-faint);
+
+  --primary: var(--ff-flame-400);
+  --primary-strong: var(--ff-flame-300);
+  --primary-soft: var(--ff-flame-950);
+  --primary-line: var(--ff-flame-400);
+  --primary-ink: var(--ff-flame-350);
+  --primary-text: var(--ff-ink-0);
+
+  --accent: var(--ff-violet-300);
+  --accent-soft: var(--ff-violet-900);
+
+  --success: var(--ff-teal-400);
+  --success-soft: var(--ff-teal-950);
+  --warning: var(--ff-amber-400);
+  --danger: var(--ff-red-400);
+  --danger-soft: var(--ff-red-950);
+
+  --level-0: var(--ff-red-400);
+  --level-1: var(--ff-amber-400);
+  --level-2: var(--ff-blue-400);
+  --level-3: var(--ff-teal-400);
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 28px rgba(0, 0, 0, 0.35);
+
+  background: var(--bg);
+  color: var(--text);
+  padding: 22px;
+  border-radius: var(--radius-lg);
+}
+
+.flash-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.flash-card {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  padding: 28px;
+  cursor: pointer;
+  user-select: none;
+  /*
+   * The mark's turned corner, used as a shape. `clip-path` would slice a gap
+   * out of a border, so this one card draws its edge with an inset outline
+   * instead — which the clip trims cleanly.
+   */
+  border: 0;
+  outline: 1px solid var(--border);
+  outline-offset: -1px;
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--dogear)) 0,
+    100% var(--dogear),
+    100% 100%,
+    0 100%
+  );
+}
+
+.flash-front {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.flash-word {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.flash-hint {
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+.flash-back {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.grade-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.grade-btn {
+  flex-direction: column;
+  height: 56px;
+  gap: 2px;
+  line-height: 1.2;
+}
+
+.grade-btn small {
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.72;
+}
+
+/* ---------- popup ---------- */
+
+.popup {
+  width: 328px;
+  padding: 14px;
+  background: var(--bg);
+}
+
+.popup-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+
+/*
+ * 版本号。
+ *
+ * 靠 margin-left: auto 推到最右，而不是给标题块设固定宽度——产品名在英文界面下
+ * 会变长（「翻翻词卡」→「FanFan Cards」），固定宽度到英文版就挤了。
+ */
+.options-lang {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.options-lang .select {
+  min-width: 172px;
+}
+
+/*
+ * 页头右侧：版本号 + 设置。
+ *
+ * 版本号在左、设置在右——可点的那个放在最角上，是所有工具栏的惯例，
+ * 手往那儿伸不用瞄准。
+ */
+/*
+ * 页头右侧：版本号 + 设置。
+ *
+ * 版本号在左、设置在右——可点的那个放在最角上，是所有工具栏的惯例，
+ * 手往那儿伸不用瞄准。
+ *
+ * 整组顶到页头上沿：品牌那一块是两行（名字 + 服务商），而这两样都只有一行，
+ * 垂直居中会让它们浮在中间，看起来像没放好。
+ */
+.popup-head-actions {
+  margin-left: auto;
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  /* 抵掉图标按钮四周的留白，让齿轮的视觉右边缘和下面卡片的边对齐。 */
+  margin-right: -5px;
+}
+
+/*
+ * 一排两个开关。
+ *
+ * 每一半只有约 140px，所以标题必须短、提示必须能截断。中间那条线不是装饰：
+ * 没有它，两个开关会读成「一个标题配两个开关」，而它们其实是两件事。
+ */
+.popup-duo {
+  display: flex;
+  align-items: stretch;
+  /*
+   * 比别的卡紧一点。
+   *
+   * 这一半只有一百二十来像素，而标题、间距、开关都要塞进去。padding 和 gap
+   * 各省两像素，换来的是「FanFan mode」不用被截成「FanFan mod…」——
+   * 在这个宽度上，几个像素决定的是一整个词看不看得全。
+   */
+  padding: 12px 10px;
+  margin-bottom: 12px;
+  gap: 10px;
+}
+
+/*
+ * 两半不是均分的。
+ *
+ * 左边要装「翻翻模式 / FanFan mode」，右边是「本站划词 / This site」——
+ * 英文差出快 30px。均分的结果是左边被截成「FanFan mo…」而右边空着一块，
+ * 所以按各自真正需要的长度分。
+ */
+.popup-duo-item {
+  min-width: 0;
+}
+
+.popup-duo-item:first-child {
+  flex: 1.16;
+}
+
+.popup-duo-item:last-child {
+  flex: 0.84;
+}
+
+/*
+ * 标题不换行。
+ *
+ * 这一半只有 125px，而英文标题比中文长得多——不锁住的话「FanFan mode」会折成
+ * 两行，整张卡跟着变高，而这张卡存在的理由正是省高度。截断是兜底：
+ * 宁可显示不全，也不要把开关挤下去。
+ */
+.popup-duo-item .row-between > :first-child {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.popup-duo-hint {
+  margin-top: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.popup-duo-line {
+  width: 1px;
+  flex: none;
+  background: var(--border);
+}
+
+/*
+ * 底部那一行。
+ *
+ * 「今日 …」和「关于此项目」并排，因为它们都是**看一眼就好**的东西——
+ * 给「关于」单独一行，会让它看起来和上面那几个按钮一样重要。
+ */
+.popup-foot {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.popup-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 2px;
+}
+
+.popup-link:hover {
+  color: var(--primary-ink);
+  text-decoration-color: currentColor;
+}
+
+/*
+ * 图标按钮。
+ *
+ * 这条规则原本只存在于内容脚本的样式表里，而弹窗用的是这一份——于是弹窗里那颗
+ * 设置齿轮吃的是**浏览器默认的 button 样式**：一个灰底带边框的方块。
+ * 复用一个在当前上下文里不存在的类，看起来像复用，其实是没样式。
+ */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.icon-btn:hover {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/*
+ * 版本号是个**标签**，不是控件。
+ *
+ * 原来它带一圈边框，紧挨着一颗可点的齿轮时就在说谎——看起来像另一个按钮。
+ * 去掉边框、只留一点底色，它就退回它该在的位置。
+ *
+ * 另外去掉了 margin-left:auto 和 align-self——那是它当初直接挂在页头上时的写法，
+ * 现在它在 .popup-head-actions 里，这两条只会把它和齿轮的对齐顶歪。
+ */
+.popup-version {
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 5px;
+  color: var(--text-faint);
+  background: var(--surface-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.popup-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.popup-stat {
+  padding: 10px;
+  text-align: center;
+}
+
+.popup-stat .stat-value {
+  font-size: 21px;
+}
+
+.key-hint {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  opacity: 0.55;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.popup-actions {
+  display: grid;
+  gap: 8px;
+}
+
+/* ---------- options ---------- */
+
+/*
+ * Sidebar + pane, not a grid of cards on top of a column.
+ *
+ * The tabs used to be `repeat(auto-fit, minmax(150px, 1fr))`, so five of them
+ * wrapped 4 + 1 and the row looked broken at every width. A settings page also
+ * wants its navigation to stay put while you scroll a long pane — which a row
+ * above the content cannot do.
+ */
+.options {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 26px 24px 64px;
+}
+
+.options-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.options-body {
+  display: grid;
+  grid-template-columns: 178px minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  position: sticky;
+  top: 26px;
+}
+
+.settings-tab {
+  text-align: left;
+  padding: 8px 11px;
+  border-radius: var(--radius-sm);
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+
+.settings-tab:hover {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.settings-tab[data-active='true'] {
+  background: var(--primary-soft);
+  color: var(--primary-ink);
+  font-weight: 650;
+}
+
+/* Below this the sidebar becomes a scrolling strip above the pane. */
+@media (max-width: 720px) {
+  .options-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .settings-nav {
+    position: static;
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .settings-tab {
+    white-space: nowrap;
+  }
+}
+
+.section-card {
+  padding: 20px;
+  margin-bottom: 18px;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 650;
+  margin-bottom: 3px;
+}
+
+.section-desc {
+  color: var(--text-soft);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+/*
+ * Provider picker: name and badge only.
+ *
+ * The vendor blurbs ("国内可直连、价格低，OpenAI 兼容协议") were marketing copy
+ * for products the user has already chosen between elsewhere. Removing them
+ * lets the control shrink from six ragged cards to one tidy row of chips, and
+ * puts the only fact that actually guides the choice — which one we recommend,
+ * which one needs no key — on a badge instead of in a paragraph.
+ */
+.provider-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.provider-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 13px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-soft);
+  transition: border-color var(--motion-fast) ease, background var(--motion-fast) ease,
+    color var(--motion-fast) ease;
+}
+
+.provider-option:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.provider-option[data-active='true'] {
+  border-color: var(--primary-line);
+  background: var(--primary-soft);
+  color: var(--primary-ink);
+}
+
+.provider-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-soft);
+  color: var(--text-faint);
+}
+
+
+/*
+ * Each tone owns both halves of its colour pair, and nothing else may set only
+ * one of them. There used to be a `.provider-option[data-active] .provider-badge`
+ * rule that reset just the background; at (0,3,0) it outranked these (0,2,0)
+ * modifiers, so selecting DeepSeek left white text on a white pill — the badge
+ * vanished. A rule that overrides half a pair is always a bug waiting to happen.
+ */
+.provider-badge[data-tone='recommend'] {
+  background: var(--primary-ink);
+  color: var(--ff-ink-0);
+}
+
+.provider-badge[data-tone='free'] {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.banner {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-soft);
+  color: var(--text);
+  margin-bottom: 18px;
+  font-size: 13px;
+}
+
+.banner-success {
+  background: var(--success-soft);
+}
+
+.banner-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.toast-fixed {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--shadow-card);
+  z-index: 100;
+}
+
+/*
+ * 按词性分行的释义。
+ *
+ * 词性做成右对齐的一列：几个词性的字宽不一样（「名词」两字、「形容词」三字），
+ * 左对齐会让后面的释义参差不齐，眼睛每行都要重新找起点。右对齐之后释义那一列
+ * 是齐的，而这一列才是要读的东西。
+ */
+.sense-list {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.sense-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.sense-pos {
+  margin: 0;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.sense-meaning {
+  margin: 0;
+}
