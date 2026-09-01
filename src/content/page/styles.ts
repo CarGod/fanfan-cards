@@ -1,5 +1,4 @@
 import { HOVER_CLASS } from './paragraphTranslator.ts'
-import { HIGHLIGHT_NAME } from '../highlight/highlighter.ts'
 import { TRANSLATED_MARK, TRANSLATION_CLASS } from './walker.ts'
 
 /**
@@ -132,23 +131,6 @@ html[data-fanfan-translation-mode='translation-only']
 }
 
 /*
- * 翻翻模式：词库里的词。
- *
- * 用 ::highlight() 而不是给元素加背景色，因为这些高亮根本不是元素——
- * 它们是 Range，浏览器直接画在文字上，页面的节点树一个字节都没动。
- * 代价是这个伪元素只认得几个属性：background-color、color、text-decoration
- * 和 text-shadow。圆角、内边距、边框全都不支持，所以样式必须靠这几样撑住。
- *
- * 一层很淡的品牌橙，没有下划线。读者是来读文章的，不是来看标记的——
- * 荧光笔式的实心块会把注意力从句子上拽走，而这个功能的意义恰恰是
- * 「你读着读着，认出一个你查过的词」。加过下划线，试出来太吵：
- * 标记本身开始比它标的那个词更显眼。
- */
-::highlight(${HIGHLIGHT_NAME}) {
-  background-color: rgba(255, 106, 61, 0.16);
-}
-
-/*
  * 停在标出来的词上时，光标变成手形。
  *
  * 为什么不写在 ::highlight() 里：那个伪元素只认得颜色、背景和文字装饰几样属性，
@@ -164,12 +146,14 @@ html[data-fanfan-word-hover] * {
   cursor: pointer !important;
 }
 
-@media (prefers-color-scheme: dark) {
-  ::highlight(${HIGHLIGHT_NAME}) {
-    /* 深色底上同样的透明度会被吞掉，提一点点才看得出是同一个颜色。 */
-    background-color: rgba(255, 138, 94, 0.24);
-  }
-}
+/*
+ * 翻翻模式那几条上色规则**不在这张表里**，见 highlight/styles.ts。
+ *
+ * 搬走的原因是它们不再是常量：颜色跟着熟悉度走，深浅跟着**这一页量出来的底色**走，
+ * 而不是跟着操作系统。原来那条 @media (prefers-color-scheme: dark) 是个安静的错——
+ * 媒体查询问的是系统，chatgpt.com 在浅色系统上照样是深色页，于是浅底那层 0.16 的橙
+ * 画在近黑的背景上，直接消失。
+ */
 
 @keyframes ara-translation-in {
   from {

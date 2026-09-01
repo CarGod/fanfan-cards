@@ -557,6 +557,29 @@ export function Options() {
           </div>
         </Field>
 
+        {/*
+          「标出已掌握的词」只在翻翻模式开着的时候出现，而且是 Field 的**兄弟**，
+          不是塞在它里面：Field 渲染出来的是一个 label，把第二个开关包进同一个 label，
+          点它的说明文字会去拨上面那个开关。
+        */}
+        {settings.fanfanMode ? (
+          <div className="row-between" style={{ marginBottom: 16 }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{t('fanfan.mastered.title')}</div>
+              <div className="faint">
+                {settings.fanfanShowMastered
+                  ? t('fanfan.mastered.hint_on')
+                  : t('fanfan.mastered.hint_off')}
+              </div>
+            </div>
+            <Toggle
+              checked={settings.fanfanShowMastered}
+              onChange={(next) => void update({ fanfanShowMastered: next })}
+              label={t('fanfan.mastered.aria')}
+            />
+          </div>
+        ) : null}
+
         <Field
           label={t('popup.paragraph.title')}
           hint={t('options.reading.paragraph.hint')}

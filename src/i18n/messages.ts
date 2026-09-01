@@ -940,6 +940,16 @@ export const MESSAGES = {
   },
   /* 一排两个开关时用的短标题。 */
   'fanfan.mode.short': { 'zh-CN': '翻翻模式', en: 'FanFan mode' },
+  'fanfan.mastered.title': { 'zh-CN': '标出已掌握的词', en: 'Mark mastered words' },
+  'fanfan.mastered.aria': { 'zh-CN': '标出已掌握的词', en: 'Mark mastered words' },
+  'fanfan.mastered.hint_on': {
+    'zh-CN': '四个熟悉度都标：陌生最显眼，掌握只剩一层浅灰',
+    en: 'All four levels are marked — boldest when new, a faint grey once mastered',
+  },
+  'fanfan.mastered.hint_off': {
+    'zh-CN': '掌握了的词不再标出来，读得越久页面越干净',
+    en: 'Mastered words are left alone, so pages get cleaner as you learn',
+  },
   'fanfan.options.hint': {
     'zh-CN': '把你词库里的词在网页上标出来，点一下直接看释义、近义词和例句——都是收藏时就存好的，不再调用 AI，也不花额度。只认完全一样的词形：收藏了 migration，页面上的 migrations 不会标。',
     en: 'Marks words from your library on any page. Click one to see its meaning, synonyms and examples — all saved when you first looked it up, so nothing is sent to a model and nothing is billed. Exact forms only: saving “migration” will not mark “migrations”.'

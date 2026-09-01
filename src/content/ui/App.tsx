@@ -173,7 +173,7 @@ export function App({ host }: { host: HTMLElement }) {
      */
     void listEntries()
       .then((entries) => {
-        if (alive) highlighter.start(entries)
+        if (alive) highlighter.start(entries, { showMastered: settingsRef.current.fanfanShowMastered })
       })
       .catch(noteOrphanError)
     const unwatch = watchEntries((entries) => highlighter.setEntries(entries))
@@ -183,6 +183,17 @@ export function App({ host }: { host: HTMLElement }) {
       highlighter.stop()
     }
   }, [fanfanOn])
+
+  /*
+   * 「标不标已掌握的词」单独走一条路，不进上面那个 effect 的依赖。
+   *
+   * 进去的话，拨一下这个开关会把整个高亮层拆掉重建——重新拉一遍词库、重新装观察器。
+   * 它要的只是重新建一次索引再画一次，所以从 `setOptions` 递进去。
+   */
+  useEffect(() => {
+    if (!fanfanOn) return
+    highlighter.setOptions({ showMastered: settings.fanfanShowMastered })
+  }, [fanfanOn, settings.fanfanShowMastered])
 
   /*
    * 点一个标出来的词，把那张卡拿出来。
