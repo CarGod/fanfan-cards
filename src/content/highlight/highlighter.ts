@@ -168,6 +168,18 @@ export class SavedWordHighlighter {
      */
     document.addEventListener('mouseleave', this.onScroll)
     window.addEventListener('blur', this.onScroll)
+    /*
+     * 改了窗口大小也要清掉。
+     *
+     * DOM 没变（观察器看不见），指针没动（mousemove 不发），但重排之后那个词
+     * 已经不在指针底下了，而缓存的矩形还「包含」着指针，于是不再重查。
+     * 滚动堵住的是同一类账，只是这一半以前漏了。
+     *
+     * 只兜得住窗口尺寸和浏览器缩放——发 resize 的只有它们。字体加载完回流、
+     * 图片撑开同样会把那个词挪走，却不发任何事件，这里够不着；代价是重排之后
+     * 指针若仍落在旧矩形里，手形光标会多留一会儿，直到指针移出那个矩形。
+     */
+    window.addEventListener('resize', this.onScroll)
   }
 
   private readonly onPointerMove = (event: MouseEvent): void => {
@@ -198,17 +210,7 @@ export class SavedWordHighlighter {
      * 光标会一直卡在手形上。
      */
     const last = this.hoverRect
-    if (
-      last &&
-      last.width > 0 &&
-      last.height > 0 &&
-      point.x >= last.left &&
-      point.x <= last.right &&
-      point.y >= last.top &&
-      point.y <= last.bottom
-    ) {
-      return
-    }
+    if (last && last.width > 0 && last.height > 0 && within(last, point.x, point.y)) return
 
     const hit = this.hitAt(point.x, point.y)
     this.hoverRect = hit?.rect ?? null
@@ -302,6 +304,7 @@ export class SavedWordHighlighter {
     window.removeEventListener('scroll', this.onScroll, true)
     document.removeEventListener('mouseleave', this.onScroll)
     window.removeEventListener('blur', this.onScroll)
+    window.removeEventListener('resize', this.onScroll)
     if (this.hoverFrame) cancelAnimationFrame(this.hoverFrame)
     this.hoverFrame = 0
     this.pointer = null
@@ -319,7 +322,21 @@ export class SavedWordHighlighter {
    * 这个坐标底下是哪一处高亮。
    *
    * 高亮收不到事件，所以点击是从坐标反查回来的：先问浏览器这个点落在哪个文本节点的
-   * 第几个字符上，再看它落进了哪一段高亮里。
+   * 第几个字符上，再看它落进了哪一段高亮里，最后**量一次这处高亮画在哪，确认这个点
+   * 真的压在色块上**。
+   *
+   * 最后这一步不是保险，是这条路子唯一的把关。`caretRangeFromPoint` 回答的是
+   * 「离这个点最近的插入点在哪」，不是「这个点压在哪个字上」——它本来是给
+   * 「在输入框里点一下把光标放过去」用的，点在一行右边的空白上，光标就得落到行尾，
+   * 所以它**按设计**会把远处的坐标吸到最近的字符边界，而且几乎不返回 null。
+   * 只比字符偏移的话，一个独占一行的词会把「这一行右边所有空白」都算成自己的热区，
+   * 一直连到块容器的边缘；而误命中的代价不只是弹错卡片，还会把宿主页面的这次点击
+   * 整个吞掉（见 App.tsx 里的 preventDefault + stopPropagation）。
+   *
+   * 偏移那一关留着，它是个**便宜的预筛**：一页上高亮能有几百处，每处都去量矩形是
+   * 每帧几百次布局查询；偏移比对是纯数值，先用它把候选缩到通常 0 或 1 个，
+   * 再对这一个量几何。也正因为有了几何这一关，偏移用的闭区间才变得无害——
+   * 改成开区间反倒会让 `a`、`I` 这种单字母词永远点不中。
    *
    * 一次把卡片 id 和那个词的矩形一起给出来。分两次查会查到**另一处**同词高亮上去——
    * 同一个词一页里出现好几次是常态，那样卡片会弹在别的段落旁边。
@@ -329,12 +346,21 @@ export class SavedWordHighlighter {
     if (!caret) return null
     for (const { range, entryId } of this.painted) {
       if (
-        range.startContainer === caret.node &&
-        caret.offset >= range.startOffset &&
-        caret.offset <= range.endOffset
+        range.startContainer !== caret.node ||
+        caret.offset < range.startOffset ||
+        caret.offset > range.endOffset
       ) {
-        return { entryId, rect: rectOf(range, x, y) }
+        continue
       }
+      /*
+       * 偏移对上了还不算数，得这个点真的压在色块上。
+       *
+       * 落空了接着看下一处，不在这里返回 null：眼下同一个文本节点里的几处高亮
+       * 偏移窗口两两不相交（词之间至少隔一个非词字符），所以走不到第二次判断，
+       * 但那是扫描那一层的性质，不该由这里替它担保。
+       */
+      const rect = hitRectOf(range, x, y)
+      if (rect) return { entryId, rect }
     }
     return null
   }
@@ -397,6 +423,65 @@ function rectOf(range: Range, x: number, y: number): DOMRect {
   const rect = range.getBoundingClientRect?.()
   if (rect && (rect.width > 0 || rect.height > 0)) return rect
   return new DOMRect(x, y, 0, 0)
+}
+
+/**
+ * 命中判定的余量，单位是 CSS 像素。
+ *
+ * 为什么不是 0：指针坐标和矩形不在同一个刻度上。页面缩放和高 DPI 下 `clientX/Y`
+ * 是带小数的，而矩形的边界本来就带小数（一行文字的高度很少是整数）。边上一两个
+ * 物理像素的取整差，落到读者眼里就是「明明点在字上却没反应」——而没反应是这个
+ * 功能最贵的一种错，它没有任何反馈，读者只会以为这个词没被标上。
+ *
+ * 为什么不更大：余量正是这个 bug 的原材料。原来那片误命中区有一千多像素宽，
+ * 2px 是「够抵消取整误差」和「肉眼分不出来」的交集。
+ *
+ * 不必为行距和字缝额外放宽：`getClientRects()` 给的是**行盒**，不是字形的墨迹，
+ * 行距上下那点留白本来就在矩形里，而那也正是 `::highlight()` 涂到色的地方。
+ * 于是判定和视觉共用同一个矩形——有颜色的地方点得中，没颜色的地方点不中。
+ */
+const HIT_SLACK = 2
+
+/** 点在不在这个矩形里。余量的账见 {@link HIT_SLACK}。 */
+function within(rect: DOMRect, x: number, y: number): boolean {
+  return (
+    x >= rect.left - HIT_SLACK &&
+    x <= rect.right + HIT_SLACK &&
+    y >= rect.top - HIT_SLACK &&
+    y <= rect.bottom + HIT_SLACK
+  )
+}
+
+/**
+ * 这个点压在这处高亮上吗？压着就返回它踩中的那一块，没压着返回 null。
+ *
+ * 用 `getClientRects()` 而不是 `getBoundingClientRect()`：一个词折了行会画成两块，
+ * 而这两块的外接矩形会把两行之间那一整条——左边那行行尾之后的空白、右边那行行首
+ * 之前的空白——全圈进来，等于把要修的这个 bug 又请回来一次。逐块判断才对得上
+ * 眼睛看见的色块。
+ *
+ * 返回踩中的那一块，而不是外接矩形，有两处好处：卡片贴着**被点的那一行**弹出来；
+ * 上面那层的 hover 缓存也因此变准——缓存的框就是刚判定通过的那个框，指针不出这块
+ * 就一定还在命中区里，不必每帧再问一次浏览器。
+ *
+ * 量不到就放行。这和 {@link rectOf} 是同一套哲学：Range 的矩形在几种情况下是空的，
+ * 或者环境根本没实现这个方法（jsdom 就没有）。这时候宁可退回只看偏移的老行为，
+ * 也不要把一个明明画在页面上的词变成点不开的。
+ */
+function hitRectOf(range: Range, x: number, y: number): DOMRect | null {
+  const rects = range.getClientRects?.()
+  if (!rects || rects.length === 0) return rectOf(range, x, y)
+
+  // 按下标取，不用 for...of：DOMRectList 的可迭代性依赖 lib 配置，而这里只需要长度和下标。
+  let measured = false
+  for (let i = 0; i < rects.length; i += 1) {
+    const rect = rects[i]
+    // 零尺寸的块画不出颜色，也就包不住任何点；更要紧的是别让它冒充「量到了」。
+    if (!rect || rect.width <= 0 || rect.height <= 0) continue
+    measured = true
+    if (within(rect, x, y)) return rect
+  }
+  return measured ? null : rectOf(range, x, y)
 }
 
 /**

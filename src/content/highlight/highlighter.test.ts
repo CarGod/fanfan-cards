@@ -166,6 +166,95 @@ describe('点击反查', () => {
   })
 })
 
+/**
+ * 点得中的地方，必须就是看得见颜色的地方。
+ *
+ * 上面那一节只喂偏移，测不到这条——而线上出的正是这个丑：`caretRangeFromPoint`
+ * 回答的是「离这个点最近的插入点」，不是「这个点压在哪个字上」。点在一行右边的
+ * 空白里，它照样把坐标吸到行尾那个字符上，于是一个独占一行的词把「这一行右边
+ * 所有空白」都算成了自己的热区，一直连到块容器边缘。误命中的代价还不止弹错卡片：
+ * App 那边命中后会 `preventDefault + stopPropagation`，把宿主页面的这次点击整个吞掉。
+ *
+ * jsdom 不做布局，`Range.getClientRects` 是 undefined 而不是返回空数组，所以矩形
+ * 得自己喂进去。挂在实例上而不是 prototype 上——不用善后。
+ */
+describe('点在词的矩形之外', () => {
+  const WORD_RECT = new DOMRect(110, 0, 90, 20)
+
+  /** 给这处高亮量得到的矩形；传多块就是折了行的词。 */
+  const laidOut = (...rects: DOMRect[]) => {
+    const range = painted()[0]!
+    range.getClientRects = (() => rects) as unknown as Range['getClientRects']
+    range.getBoundingClientRect = () => rects[0]!
+  }
+
+  /** 不管点在哪，caret 都落在词中间——把「偏移」和「几何」这两件事拆开测。 */
+  const caretIntoWord = () => {
+    const node = document.getElementById('p')!.firstChild as Text
+    ;(document as unknown as { caretRangeFromPoint: unknown }).caretRangeFromPoint = () => {
+      const range = document.createRange()
+      const at = 'A database '.length + 2
+      range.setStart(node, at)
+      range.setEnd(node, at)
+      return range
+    }
+  }
+
+  it('点在矩形里照常命中', () => {
+    highlighter.start([entry({ id: 'card-1' })])
+    laidOut(WORD_RECT)
+    caretIntoWord()
+    expect(highlighter.hitAt(150, 10)?.entryId).toBe('card-1')
+  })
+
+  it('点在矩形外就不命中，哪怕 caret 还落在这个词里', () => {
+    highlighter.start([entry({ id: 'card-1' })])
+    laidOut(WORD_RECT)
+    caretIntoWord()
+    expect(highlighter.hitAt(400, 10)).toBeNull()
+    expect(highlighter.hitAt(150, 60)).toBeNull()
+  })
+
+  it('折行的词逐块判断，不认外接矩形', () => {
+    highlighter.start([entry({ id: 'card-1' })])
+    // 第一行右端 + 第二行左端；外接矩形会把中间那一大片空白也圈进来。
+    laidOut(new DOMRect(300, 0, 40, 20), new DOMRect(10, 20, 30, 20))
+    caretIntoWord()
+
+    expect(highlighter.hitAt(310, 10)?.entryId).toBe('card-1')
+    expect(highlighter.hitAt(20, 30)?.entryId).toBe('card-1')
+    // 外接矩形里，但两块都不在。
+    expect(highlighter.hitAt(150, 10)).toBeNull()
+  })
+
+  it('返回踩中的那一块，不是外接矩形', () => {
+    highlighter.start([entry({ id: 'card-1' })])
+    laidOut(new DOMRect(300, 0, 40, 20), new DOMRect(10, 20, 30, 20))
+    caretIntoWord()
+    expect(highlighter.hitAt(20, 30)?.rect.top).toBe(20)
+  })
+
+  it('边上一两个像素的取整差还算命中', () => {
+    highlighter.start([entry({ id: 'card-1' })])
+    laidOut(WORD_RECT)
+    caretIntoWord()
+    expect(highlighter.hitAt(201, 10)?.entryId).toBe('card-1')
+  })
+
+  it('量不到矩形时仍然命中——不能把画着的词变成点不开的', () => {
+    highlighter.start([entry({ id: 'card-1' })])
+    caretIntoWord()
+    expect(highlighter.hitAt(10, 10)?.entryId).toBe('card-1')
+  })
+
+  it('只量到零尺寸的块时也放行', () => {
+    highlighter.start([entry({ id: 'card-1' })])
+    laidOut(new DOMRect(0, 0, 0, 0))
+    caretIntoWord()
+    expect(highlighter.hitAt(400, 400)?.entryId).toBe('card-1')
+  })
+})
+
 describe('浏览器不支持时', () => {
   it('安静地什么都不做，而不是报错', () => {
     vi.stubGlobal('CSS', {})
