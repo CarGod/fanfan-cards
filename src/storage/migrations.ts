@@ -1,4 +1,5 @@
 import { SCHEMA_VERSION, STORAGE_KEYS } from '@/shared/constants.ts'
+import { coerceFanfanPaletteId } from '@/shared/fanfanPalette.ts'
 import { storage } from './area.ts'
 
 export interface StorageMeta {
@@ -100,6 +101,37 @@ const MIGRATIONS: Record<number, Migration> = {
       if (!Array.isArray(entry['senses'])) entry['senses'] = []
     }
     await storage().set(STORAGE_KEYS.words, words)
+  },
+
+  /**
+   * v7: three-spaces input translation gets an independent target language.
+   *
+   * Missing means English, not the page translation target. Persisting it here
+   * makes that decision explicit for existing installations as well as letting
+   * the settings schema provide the same default before migration has run.
+   * Existing values — including an explicitly chosen `follow` — are preserved.
+   */
+  7: async (db) => {
+    const settings = db[STORAGE_KEYS.settings] as Record<string, unknown> | undefined
+    if (!settings || typeof settings['inputTranslationTargetLanguage'] === 'string') return
+    settings['inputTranslationTargetLanguage'] = 'en'
+    await storage().set(STORAGE_KEYS.settings, settings)
+  },
+
+  /**
+   * v8: 翻翻模式增加完整的亮/暗配色主题。
+   *
+   * 没有主题字段的老用户落到暖日麦田。开发期短暂出现过的 `warmBlue` 从未发布，
+   * 但本地测试资料可能已经写入；它在同一个 v8 迁移里直接折叠为 `warmField`，
+   * 不为一段未发布历史制造 v9。
+   */
+  8: async (db) => {
+    const settings = db[STORAGE_KEYS.settings] as Record<string, unknown> | undefined
+    if (!settings) return
+    const palette = coerceFanfanPaletteId(settings['fanfanPalette'])
+    if (settings['fanfanPalette'] === palette) return
+    settings['fanfanPalette'] = palette
+    await storage().set(STORAGE_KEYS.settings, settings)
   },
 }
 

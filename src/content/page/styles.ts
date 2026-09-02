@@ -1,5 +1,9 @@
 import { HOVER_CLASS } from './paragraphTranslator.ts'
-import { TRANSLATED_MARK, TRANSLATION_CLASS } from './walker.ts'
+import {
+  SEGMENT_SOURCE_CLASS,
+  TRANSLATED_MARK,
+  TRANSLATION_CLASS,
+} from './walker.ts'
 
 /**
  * Styles for the injected translations.
@@ -26,6 +30,15 @@ export const HIDDEN_IN_TRANSLATION_ONLY =
 const STYLE_ID = 'fanfan-page-translation-style'
 
 const CSS = `
+/*
+ * A CMS may encode several visual paragraphs in one element with <br><br>.
+ * This reversible wrapper gives each one independent translation state without
+ * adding a box or changing the bilingual layout.
+ */
+.${SEGMENT_SOURCE_CLASS} {
+  display: contents !important;
+}
+
 /*
  * The paragraph about to be translated.
  *
@@ -70,6 +83,11 @@ const CSS = `
   border-left: 3px solid rgba(255, 106, 61, 0.75) !important;
   padding-left: 0.75em;
   animation: ara-translation-in 220ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+/* The host page's original blank line provides the bottom spacing here. */
+.${TRANSLATION_CLASS}[data-ara-segment] {
+  margin-bottom: 0 !important;
 }
 
 /*

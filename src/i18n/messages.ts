@@ -95,6 +95,7 @@ export const MESSAGES = {
   // ── 设置页 ────────────────────────────────────────────────────────────
   'options.nav.model': { 'zh-CN': 'AI 模型', en: 'AI model' },
   'options.nav.reading': { 'zh-CN': '划词与翻译', en: 'Look-up & translation' },
+  'options.nav.fanfan': { 'zh-CN': '翻翻模式', en: 'FanFan mode' },
   'options.nav.review': { 'zh-CN': '复习', en: 'Review' },
   'options.nav.shortcut': { 'zh-CN': '快捷键', en: 'Shortcuts' },
   'options.nav.sync': { 'zh-CN': 'GitHub 同步', en: 'GitHub sync' },
@@ -166,12 +167,28 @@ export const MESSAGES = {
     en: 'With “Auto-detect” the model decides; naming a language keeps look-ups from firing on other languages.',
   },
   'options.reading.target_language': {
-    'zh-CN': '解释用什么语言写',
-    en: 'Language explanations are written in',
+    'zh-CN': '解释与网页翻译语言',
+    en: 'Explanations & page translation',
   },
   'options.reading.target_language.hint': {
-    'zh-CN': '固定不变——它是你思考用的语言，不该随页面变化。',
-    en: 'Fixed on purpose — this is the language you think in, and it should not follow the page.',
+    'zh-CN': '划词解释、整页翻译、段落翻译与字幕默认都使用这里的语言。',
+    en: 'Used by look-up explanations, page and paragraph translation, and subtitles by default.',
+  },
+  'options.reading.input_translation_language': {
+    'zh-CN': '三击空格翻译语言',
+    en: 'Three-spaces translation language',
+  },
+  'options.reading.input_translation_language.hint': {
+    'zh-CN': '在输入框或可编辑区域连续按三次空格，会把已有内容翻译后原位替换。默认固定翻译成英语；也可以单独指定其他语言，或主动选择跟随网页翻译。',
+    en: 'Press Space three times in an input or editable area to translate and replace its contents. English is the fixed default; choose another language independently, or explicitly follow page translation.',
+  },
+  'options.reading.input_translation_language.follow': {
+    'zh-CN': '跟随网页翻译（当前：{language}）',
+    en: 'Follow page translation (currently {language})',
+  },
+  'options.reading.input_translation_language.default_suffix': {
+    'zh-CN': '（默认）',
+    en: ' (default)',
   },
   'options.reading.enable': { 'zh-CN': '启用划词助手', en: 'Enable look-up' },
   'options.reading.enable.hint': {
@@ -755,6 +772,29 @@ export const MESSAGES = {
   'language.target.es': { 'zh-CN': 'Español', en: 'Spanish' },
   'language.target.ru': { 'zh-CN': 'Русский', en: 'Russian' },
 
+  // ── 输入框三击空格翻译 ────────────────────────────────────────────────
+  'input_translation.translating': { 'zh-CN': '正在翻译输入内容…', en: 'Translating input…' },
+  'input_translation.done': {
+    'zh-CN': '已翻译为 {language}',
+    en: 'Translated into {language}',
+  },
+  'input_translation.busy': {
+    'zh-CN': '这段内容正在翻译，请稍候',
+    en: 'This input is already being translated',
+  },
+  'input_translation.changed': {
+    'zh-CN': '输入内容已变化，译文未覆盖',
+    en: 'The input changed, so the translation was not inserted',
+  },
+  'input_translation.failed': {
+    'zh-CN': '输入翻译失败：{reason}',
+    en: 'Input translation failed: {reason}',
+  },
+  'input_translation.no_model': {
+    'zh-CN': '请先在设置里配置可用的模型',
+    en: 'Configure a model in Settings first',
+  },
+
   // ── 错误与提示 ────────────────────────────────────────────────────────
   'error.ai.no_api_key': {
     'zh-CN': '还没有配置 API Key，正在使用离线词典模式',
@@ -929,6 +969,7 @@ export const MESSAGES = {
 
   // ── 翻翻模式 ────────────────────────────────────────────────────────────
   'fanfan.mode.title': { 'zh-CN': '翻翻模式', en: 'FanFan mode' },
+  'fanfan.mode.enable': { 'zh-CN': '在网页中开启翻翻模式', en: 'Enable FanFan mode on pages' },
   'fanfan.mode.aria': { 'zh-CN': '翻翻模式开关', en: 'FanFan mode' },
   'fanfan.mode.hint_on': {
     'zh-CN': '标出网页上你收藏过的词，点开就看',
@@ -951,9 +992,57 @@ export const MESSAGES = {
     en: 'Mastered words are left alone, so pages get cleaner as you learn',
   },
   'fanfan.options.hint': {
-    'zh-CN': '把你词库里的词在网页上标出来，点一下直接看释义、近义词和例句——都是收藏时就存好的，不再调用 AI，也不花额度。只认完全一样的词形：收藏了 migration，页面上的 migrations 不会标。',
-    en: 'Marks words from your library on any page. Click one to see its meaning, synonyms and examples — all saved when you first looked it up, so nothing is sent to a model and nothing is billed. Exact forms only: saving “migration” will not mark “migrations”.'
+    'zh-CN': '按掌握程度标出词库里收藏过的词，点击即可查看已保存的释义、近义词和例句，不会再次调用 AI。当前只匹配完全相同的词形。',
+    en: 'Marks saved words by familiarity. Click one to see its stored meaning, synonyms and examples without another AI call. Exact word forms are matched for now.'
   },
+  'fanfan.palette.title': { 'zh-CN': '高亮主题', en: 'Highlight theme' },
+  'fanfan.palette.hint': {
+    'zh-CN': '六种综合色调都为亮色和深色网页分别校准，四档从醒目逐步退为安静。',
+    en: 'Six distinct color families are calibrated separately for light and dark pages, with four levels that steadily recede.',
+  },
+  'fanfan.palette.aria': { 'zh-CN': '选择翻翻模式高亮主题', en: 'Choose a FanFan highlight theme' },
+  'fanfan.palette.recommended': { 'zh-CN': '推荐', en: 'Recommended' },
+  'fanfan.palette.light': { 'zh-CN': '亮', en: 'Light' },
+  'fanfan.palette.dark': { 'zh-CN': '暗', en: 'Dark' },
+  'fanfan.palette.backdrop_note': {
+    'zh-CN': '插件会测量当前网页的实际底色，自动选用对应的亮色或深色色值；不跟随操作系统主题。',
+    en: 'The extension measures the page itself and automatically uses its light or dark colors, independently of the operating-system theme.',
+  },
+  'fanfan.palette.warm_field': { 'zh-CN': '暖日麦田', en: 'Sunlit Wheatfield' },
+  'fanfan.palette.warm_field.summary': {
+    'zh-CN': '日光橙走向麦穗金与土壤褐，温暖自然，适合作为默认。',
+    en: 'Sunlit orange settles into wheat gold and earth brown for a natural default.',
+  },
+  'fanfan.palette.glacier_bay': { 'zh-CN': '冰川蓝湾', en: 'Glacier Bay' },
+  'fanfan.palette.glacier_bay.summary': {
+    'zh-CN': '钴蓝沉入湖蓝和钢蓝，冷静清晰，适合技术阅读。',
+    en: 'Cobalt descends through lake and steel blue for clear, analytical reading.',
+  },
+  'fanfan.palette.wisteria_nocturne': { 'zh-CN': '紫藤夜曲', en: 'Wisteria Nocturne' },
+  'fanfan.palette.wisteria_nocturne.summary': {
+    'zh-CN': '洋红紫逐步沉到灰紫，色彩明确，深色网页层次完整。',
+    en: 'Magenta violet recedes into muted purple with especially clear dark-page depth.',
+  },
+  'fanfan.palette.mint_forest': { 'zh-CN': '薄荷森林', en: 'Mint Forest' },
+  'fanfan.palette.mint_forest.summary': {
+    'zh-CN': '鲜绿转入薄荷与苔藓，安静自然，四档依然清楚。',
+    en: 'Fresh green moves through mint and moss for a calm but legible scale.',
+  },
+  'fanfan.palette.cherry_cloud': { 'zh-CN': '樱粉云霞', en: 'Cherry Blush' },
+  'fanfan.palette.cherry_cloud.summary': {
+    'zh-CN': '樱红退到柔粉和烟灰粉，亲和明亮而不过甜。',
+    en: 'Cherry red softens into blush and dusty rose without becoming sugary.',
+  },
+  'fanfan.palette.mist_study': { 'zh-CN': '雾灰书房', en: 'Misty Study' },
+  'fanfan.palette.mist_study.summary': {
+    'zh-CN': '咖棕、石板蓝灰与纸张灰组成低彩度阶梯，最为克制。',
+    en: 'Coffee brown, slate and paper grey form the most restrained low-chroma scale.',
+  },
+  'fanfan.levels.aria': { 'zh-CN': '四档熟悉度', en: 'Four familiarity levels' },
+  'fanfan.level.new': { 'zh-CN': '陌生', en: 'New' },
+  'fanfan.level.learning': { 'zh-CN': '学习中', en: 'Learning' },
+  'fanfan.level.familiar': { 'zh-CN': '熟悉', en: 'Familiar' },
+  'fanfan.level.mastered': { 'zh-CN': '已掌握', en: 'Mastered' },
   'card.action.save_title': { 'zh-CN': '收进词卡', en: 'Save to word cards' },
   'card.action.unsave_title': { 'zh-CN': '从词卡里移出', en: 'Remove from word cards' },
   'fanfan.card.saved': { 'zh-CN': '已收藏', en: 'In your library' },

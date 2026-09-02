@@ -1,5 +1,11 @@
 import { z } from 'zod'
 import { t, type MessageKey } from '@/i18n/index.ts'
+import {
+  DEFAULT_FANFAN_PALETTE,
+  FANFAN_PALETTE_IDS,
+  coerceFanfanPaletteId,
+  type FanfanPaletteId,
+} from '@/shared/fanfanPalette.ts'
 
 /** Zod is the single source of truth for settings: parse on read, migrate on miss. */
 
@@ -80,6 +86,16 @@ export const settingsSchema = z.object({
    */
   targetLanguage: z.string().default('zh-CN'),
 
+  /**
+   * Target for the three-spaces gesture inside editable fields.
+   *
+   * English is intentionally the default: this gesture is primarily for
+   * turning a draft into English, independently from what language the reader
+   * uses for page translation. `follow` remains available as an explicit user
+   * choice; only then does changing `targetLanguage` move this target too.
+   */
+  inputTranslationTargetLanguage: z.string().default('en'),
+
   triggerMode: triggerModeSchema.default('button'),
   /** Global kill switch for the content script UI. */
   enabled: z.boolean().default(true),
@@ -145,10 +161,19 @@ export const settingsSchema = z.object({
   fanfanMode: z.boolean().default(false),
 
   /**
+   * 翻翻模式高亮主题。六套主题都有独立的亮色与深色色值；页面深浅仍由实际底色测量，
+   * 这里仅决定使用哪一组色相与强度。
+   */
+  fanfanPalette: z.preprocess(
+    coerceFanfanPaletteId,
+    z.enum(FANFAN_PALETTE_IDS).default(DEFAULT_FANFAN_PALETTE),
+  ),
+
+  /**
    * 翻翻模式：已经掌握的词还标不标。
    *
-   * 标记的颜色跟着熟悉度走——陌生的是品牌橙，越熟越退，到「掌握」只剩一层没有色相的
-   * 灰。这个开关是那条阶梯的最后一级：会了的词，那块底色不再传递任何信息，
+   * 标记的颜色跟着熟悉度走——无论选哪套主题，陌生最醒目，越熟越退，到「掌握」
+   * 都只剩一层安静的中性灰。这个开关是那条阶梯的最后一级：会了的词，那块底色不再传递任何信息，
    * 却照样占着别人文章上的一块地方。关掉它，读得越久，页面就还得越干净。
    *
    * 默认仍然标出来。这个功能的读者是**主动**打开翻翻模式的人，升级之后突然发现
@@ -212,6 +237,7 @@ export const settingsSchema = z.object({
 })
 
 export type Settings = z.infer<typeof settingsSchema>
+export type { FanfanPaletteId }
 
 export const DEFAULT_SETTINGS: Settings = settingsSchema.parse({})
 

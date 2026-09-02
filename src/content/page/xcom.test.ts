@@ -67,17 +67,21 @@ describe('x.com 的「显示更多」', () => {
     translator.start({ range: 'all', targetLanguage: 'zh-CN' })
     await settle(50)
     expect(translate).toHaveBeenCalledTimes(1)
-    const first = translate.mock.calls[0]![1].texts[0] as string
+    const first = translate.mock.calls[0]![1].texts.join('\n\n')
 
     // 展开：容器里追加了新的 span，容器本身没有被替换。
     document.querySelector('[data-testid="tweetText"]')!.innerHTML = EXPANDED
     await settle(600)
 
     expect(translate).toHaveBeenCalledTimes(2)
-    const second = translate.mock.calls[1]![1].texts[0] as string
+    const second = translate.mock.calls[1]![1].texts.join('\n\n')
     expect(second.length).toBeGreaterThan(first.length)
-    expect(second).toContain('yourname.gallon')
-    expect(document.querySelectorAll('.ara-translation')).toHaveLength(1)
+    expect(second).toContain('Now that would be an American internet domain.')
+    // Double breaks are visual paragraph boundaries, so each expanded paragraph
+    // has its own translation rather than one aggregate block under the post.
+    // `yourname.gallon` is intentionally left as-is by the language filter; the
+    // five prose paragraphs each receive their own slot.
+    expect(document.querySelectorAll('.ara-translation')).toHaveLength(5)
     translator.stop()
   })
 
@@ -102,7 +106,9 @@ describe('x.com 的「显示更多」', () => {
     clearInterval(ticker)
 
     expect(translate).toHaveBeenCalledTimes(2)
-    expect(translate.mock.calls[1]![1].texts[0]).toContain('yourname.gallon')
+    expect(translate.mock.calls[1]![1].texts).toContain(
+      'Now that would be an American internet domain.',
+    )
     translator.stop()
   })
 })

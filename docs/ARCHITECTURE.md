@@ -110,7 +110,27 @@ mouseup (capture, debounce 140ms)
 
 `requestRef` 递增序号保证**乱序返回被丢弃**：用户连续划两个词时，先发的慢响应不会覆盖后发的。
 
-### 4.2 收藏
+### 4.2 输入框三击空格翻译
+
+```
+keydown (capture)
+  └─ 同一编辑器、相邻按键 ≤ 450ms、非 IME / 非 repeat
+       └─ 第三次 Space：阻止默认输入并移除前两个触发空格
+            └─ 在该编辑框内部右侧边缘覆盖 target-bound spinner（Shadow DOM / fixed，不改页面布局）
+            └─ sendMessage('input/translate', { text })
+                 └─ background: 独立语言设置（默认 en；显式 follow 时取 targetLanguage）
+                      → resolveProvider → translation cache → provider.translate()
+            └─ 返回时再次比对编辑器内容
+                 ├─ 未变化 → 可取消 beforeinput → 原生写值 → input → 移除 spinner
+                 └─ 已变化 → 保留用户新输入，只显示提示 → 移除 spinner
+```
+
+spinner 按编辑器分别维护，跟随滚动、resize 与目标移动；请求失败、目标移除或控制器卸载同样清理。
+写回遵循浏览器编辑协议，不提前派发只应在提交/失焦出现的原生 `change`；仅当目标仍保持当前输入状态时把光标放到译文末尾。用户等待期间切到其他控件时不会抢回焦点，受控框架若重挂载编辑器也只校验新节点，不再操作旧节点。
+X 等站点的 Draft.js 编辑器不能直接改 `contenteditable` 子节点：控制器先同步全选 SelectionState，再派发纯文本 paste，让 Draft 通过 `replaceWithFragment`/`EditorState.push` 接受译文。宿主没有渲染出完整译文时事务判失败；若选择状态未被接受而发生部分插入，则用 Draft 自己的 undo 回滚，避免 DOM 与 EditorState 分裂后出现不可删除或叠字的 ghost 文本。
+密码、只读字段和非文本输入不参与。后台拒绝用离线词典的占位文本替换用户草稿。
+
+### 4.3 收藏
 
 ```
 sendMessage('vocab/save', { explanation, source, origin })
@@ -122,7 +142,7 @@ sendMessage('vocab/save', { explanation, source, origin })
   └─ storage.onChanged → 所有打开的扩展页面自动刷新
 ```
 
-### 4.3 复习
+### 4.4 复习
 
 ```
 buildReviewQueue(entries, { limit, allowAhead })   到期优先，等级升序，同级最过期优先
@@ -143,6 +163,8 @@ interface MessageMap {
   'vocab/lookup':  { req: { word: string }; res: { entry: VocabularyEntry | null } }
   'vocab/remove':  { req: { id: string };   res: { removed: boolean } }
   'settings/get':  { req: {};               res: { settings: Settings } }
+  'input/translate': { req: { text: string }; res: { translation, targetLanguage } }
+  'page/translate':  { req: { texts: string[] }; res: { translations: string[] } }
   'app/open':      { req: { route?: string };res: { opened: true } }
   'options/open':  { req: {};               res: { opened: true } }
   ping:            { req: {};               res: { ok: true; version: string } }

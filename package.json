@@ -31,10 +31,12 @@
   },
   "devDependencies": {
     "@types/chrome": "^0.1.31",
+    "@types/draft-js": "^0.11.18",
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.0.4",
+    "draft-js": "^0.11.7",
     "jsdom": "^30.0.1",
     "typescript": "^5.9.3",
     "vite": "^7.1.9",

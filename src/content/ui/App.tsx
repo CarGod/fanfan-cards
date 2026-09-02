@@ -8,7 +8,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react'
-import { AIError, type AIErrorCode, type WordExplanation } from '@/types/ai.ts'
+import { AIError, aiErrorMessage, type AIErrorCode, type WordExplanation } from '@/types/ai.ts'
 import type { ContentCommand } from '@/types/messages.ts'
 import { DEFAULT_SETTINGS, type Settings } from '@/types/settings.ts'
 import type { VocabularyEntry } from '@/types/vocabulary.ts'
@@ -28,11 +28,17 @@ import { ParagraphTranslator } from '../page/paragraphTranslator.ts'
 import { injectPageStyles, setTranslationMode } from '../page/styles.ts'
 import { readSelection, type SelectionSnapshot } from '../dom/selection.ts'
 import { isTypingTarget } from '../dom/editable.ts'
+import {
+  TripleSpaceInputTranslator,
+  type InputTranslationStatus,
+} from '../input/tripleSpaceTranslator.ts'
 import { needsEnriching } from '@/shared/enrichment.ts'
+import { targetLanguage } from '@/shared/language.ts'
 import { placePanel, type AnchorBox, type Placement } from './position.ts'
 import { decideSelectionAction } from './selectionTrigger.ts'
 import { CardError, CardSkeleton, WordCard, type ExplainMeta } from './WordCard.tsx'
 import { SavedWordCard } from './SavedWordCard.tsx'
+import { InputTranslationIndicator } from './InputTranslationIndicator.tsx'
 import { SavedWordHighlighter } from '../highlight/highlighter.ts'
 import { BrandMark } from '@/components/icons.tsx'
 
@@ -113,6 +119,9 @@ export function App({ host }: { host: HTMLElement }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [inputTranslationTargets, setInputTranslationTargets] = useState(
+    () => new Map<HTMLElement, number>(),
+  )
   const [orphaned, setOrphaned] = useState(isOrphaned)
 
   const [dragOffset, setDragOffset] = useState<Offset>(ZERO_OFFSET)
@@ -132,6 +141,7 @@ export function App({ host }: { host: HTMLElement }) {
    */
   const settingsRef = useRef(settings)
   settingsRef.current = settings
+  const nextInputIndicatorIdRef = useRef(0)
 
   const enabled = isHostEnabled(settings, location.hostname)
 
@@ -173,7 +183,12 @@ export function App({ host }: { host: HTMLElement }) {
      */
     void listEntries()
       .then((entries) => {
-        if (alive) highlighter.start(entries, { showMastered: settingsRef.current.fanfanShowMastered })
+        if (alive) {
+          highlighter.start(entries, {
+            showMastered: settingsRef.current.fanfanShowMastered,
+            palette: settingsRef.current.fanfanPalette,
+          })
+        }
       })
       .catch(noteOrphanError)
     const unwatch = watchEntries((entries) => highlighter.setEntries(entries))
@@ -185,15 +200,18 @@ export function App({ host }: { host: HTMLElement }) {
   }, [fanfanOn])
 
   /*
-   * 「标不标已掌握的词」单独走一条路，不进上面那个 effect 的依赖。
+   * 「标不标已掌握的词」和主题单独走一条路，不进上面那个 effect 的依赖。
    *
    * 进去的话，拨一下这个开关会把整个高亮层拆掉重建——重新拉一遍词库、重新装观察器。
    * 它要的只是重新建一次索引再画一次，所以从 `setOptions` 递进去。
    */
   useEffect(() => {
     if (!fanfanOn) return
-    highlighter.setOptions({ showMastered: settings.fanfanShowMastered })
-  }, [fanfanOn, settings.fanfanShowMastered])
+    highlighter.setOptions({
+      showMastered: settings.fanfanShowMastered,
+      palette: settings.fanfanPalette,
+    })
+  }, [fanfanOn, settings.fanfanShowMastered, settings.fanfanPalette])
 
   /*
    * 点一个标出来的词，把那张卡拿出来。
@@ -319,6 +337,75 @@ export function App({ host }: { host: HTMLElement }) {
     void getSettings().then(setSettings).catch(noteOrphanError)
     return watchSettings(setSettings)
   }, [])
+
+  /*
+   * 输入框里连续按三次空格，原位翻译整段输入。
+   *
+   * 识别与 DOM 写回由独立控制器负责：它要处理 input、textarea、富文本编辑器、
+   * 输入法和 React/Vue 的受控输入。App 这里只拥有两件跨层的事——通过后台调用
+   * 用户配置的模型，以及把进度/失败反馈放进现有 toast。
+   */
+  useEffect(() => {
+    if (!enabled) return
+
+    const showInputTranslationStatus = (status: InputTranslationStatus): void => {
+      const setTargetLoading = (loading: boolean): void => {
+        setInputTranslationTargets((current) => {
+          if (loading === current.has(status.target)) return current
+          const next = new Map(current)
+          if (loading) next.set(status.target, ++nextInputIndicatorIdRef.current)
+          else next.delete(status.target)
+          return next
+        })
+      }
+
+      switch (status.kind) {
+        case 'translating':
+          setTargetLoading(true)
+          setToast(t('input_translation.translating'))
+          break
+        case 'done':
+          setTargetLoading(false)
+          setToast(
+            t('input_translation.done', {
+              language: t(targetLanguage(status.targetLanguage).labelKey),
+            }),
+          )
+          break
+        case 'busy':
+          setToast(t('input_translation.busy'))
+          break
+        case 'changed':
+          setTargetLoading(false)
+          setToast(t('input_translation.changed'))
+          break
+        case 'error': {
+          setTargetLoading(false)
+          if (noteOrphanError(status.error)) return
+          const reason =
+            status.error instanceof AIError
+              ? status.error.code === 'no_api_key'
+                ? t('input_translation.no_model')
+                : aiErrorMessage(status.error.code)
+              : status.error instanceof Error
+                ? truncate(status.error.message, 80)
+                : aiErrorMessage('unknown')
+          setToast(t('input_translation.failed', { reason }))
+          break
+        }
+        case 'cancelled':
+          setTargetLoading(false)
+          break
+      }
+    }
+
+    const translator = new TripleSpaceInputTranslator({
+      translate: (text) => sendMessage('input/translate', { text }),
+      onStatus: showInputTranslationStatus,
+    })
+    translator.start(document)
+    return () => translator.stop()
+  }, [enabled, t])
 
   /*
    * 把词卡上缺的那几项补回来。
@@ -804,12 +891,35 @@ export function App({ host }: { host: HTMLElement }) {
     [anchorRect],
   )
 
+  const inputIndicators = enabled
+    ? [...inputTranslationTargets.entries()].map(([target, id]) => (
+        <InputTranslationIndicator
+          key={id}
+          target={target}
+          onTargetRemoved={() =>
+            setInputTranslationTargets((current) => {
+              if (!current.has(target)) return current
+              const next = new Map(current)
+              next.delete(target)
+              return next
+            })
+          }
+        />
+      ))
+    : null
+
   if (!enabled || phase.kind === 'idle') {
-    return notice ? <Toast text={notice} /> : null
+    return inputIndicators || notice ? (
+      <>
+        {inputIndicators}
+        {notice ? <Toast text={notice} /> : null}
+      </>
+    ) : null
   }
 
   return (
     <>
+      {inputIndicators}
       <FloatingLayer
         anchor={anchor}
         measureKey={phase.kind}

@@ -1,4 +1,5 @@
 import { clamp, debounce } from '@/shared/utils.ts'
+import { DEFAULT_FANFAN_PALETTE, type FanfanPaletteId } from '@/shared/fanfanPalette.ts'
 import type { FamiliarityLevel, VocabularyEntry } from '@/types/vocabulary.ts'
 import {
   applyBackdropAttribute,
@@ -80,9 +81,14 @@ interface Painted {
 export interface HighlightOptions {
   /** 已经掌握（3 级）的词还标不标。 */
   showMastered: boolean
+  /** 使用哪套亮/暗成对的高亮主题。 */
+  palette: FanfanPaletteId
 }
 
-const DEFAULT_OPTIONS: HighlightOptions = { showMastered: true }
+const DEFAULT_OPTIONS: HighlightOptions = {
+  showMastered: true,
+  palette: DEFAULT_FANFAN_PALETTE,
+}
 
 export class SavedWordHighlighter {
   private index = new Map<string, string>()
@@ -119,10 +125,10 @@ export class SavedWordHighlighter {
     return typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight === 'function'
   }
 
-  start(entries: readonly VocabularyEntry[], options: HighlightOptions = DEFAULT_OPTIONS): void {
+  start(entries: readonly VocabularyEntry[], options: Partial<HighlightOptions> = {}): void {
     if (!SavedWordHighlighter.supported) return
     this.running = true
-    this.options = options
+    this.options = { ...DEFAULT_OPTIONS, ...options }
 
     /*
      * 先把底色量出来，再画。
@@ -229,13 +235,16 @@ export class SavedWordHighlighter {
    * 单独一个入口，不并进 `setEntries`：翻一下「标不标已掌握的词」不该顺带把整个词库
    * 重新拉一遍，而 App 那边的 effect 一旦把这个开关加进依赖，重建的就是整个高亮层。
    */
-  setOptions(options: HighlightOptions): void {
-    if (this.options.showMastered === options.showMastered) return
-    this.options = options
-    this.reindex()
+  setOptions(options: Partial<HighlightOptions>): void {
+    const next = { ...this.options, ...options }
+    const masteredChanged = this.options.showMastered !== next.showMastered
+    const paletteChanged = this.options.palette !== next.palette
+    if (!masteredChanged && !paletteChanged) return
+    this.options = next
+    if (masteredChanged) this.reindex()
     if (this.running) {
       this.applyStyles()
-      this.paint()
+      if (masteredChanged) this.paint()
     }
   }
 
@@ -265,7 +274,9 @@ export class SavedWordHighlighter {
   }
 
   private applyStyles(): void {
-    applyHighlightStyles(highlightCss(this.backdrop, this.options.showMastered))
+    applyHighlightStyles(
+      highlightCss(this.backdrop, this.options.showMastered, this.options.palette),
+    )
   }
 
   stop(): void {

@@ -26,15 +26,17 @@ import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from '@/shared/language.ts'
 import { SyncSection } from './SyncSection.tsx'
 import { ReviewSection } from './ReviewSection.tsx'
 import { ShortcutSection } from './ShortcutSection.tsx'
+import { FanfanSection } from './FanfanSection.tsx'
 import { truncate } from '@/shared/utils.ts'
 
-type Category = 'model' | 'reading' | 'review' | 'shortcut' | 'sync' | 'data'
+type Category = 'model' | 'reading' | 'fanfan' | 'review' | 'shortcut' | 'sync' | 'data'
 
 // 存键而不是存文案：这个常量在模块加载时就求值了，那时用户的语言偏好还没读出来。
 // 真正的取词推迟到渲染里的 `t(item.labelKey)`，切换语言才跟得上。
 const CATEGORIES: ReadonlyArray<{ id: Category; labelKey: MessageKey }> = [
   { id: 'model', labelKey: 'options.nav.model' },
   { id: 'reading', labelKey: 'options.nav.reading' },
+  { id: 'fanfan', labelKey: 'options.nav.fanfan' },
   { id: 'review', labelKey: 'options.nav.review' },
   { id: 'shortcut', labelKey: 'options.nav.shortcut' },
   { id: 'sync', labelKey: 'options.nav.sync' },
@@ -434,6 +436,39 @@ export function Options() {
           </div>
         </div>
 
+        <Field
+          label={t('options.reading.input_translation_language')}
+          hint={t('options.reading.input_translation_language.hint')}
+        >
+          <Select
+            value={settings.inputTranslationTargetLanguage}
+            label={t('options.reading.input_translation_language')}
+            options={[
+              ...[
+                ...TARGET_LANGUAGES.filter((item) => item.code === 'en'),
+                ...TARGET_LANGUAGES.filter((item) => item.code !== 'en'),
+              ].map((item) => ({
+                value: item.code,
+                label:
+                  t(item.labelKey) +
+                  (item.code === 'en'
+                    ? t('options.reading.input_translation_language.default_suffix')
+                    : ''),
+              })),
+              {
+                value: 'follow',
+                label: t('options.reading.input_translation_language.follow', {
+                  language: t(
+                    TARGET_LANGUAGES.find((item) => item.code === settings.targetLanguage)?.labelKey ??
+                      'language.target.zh_cn',
+                  ),
+                }),
+              },
+            ]}
+            onChange={(next) => void update({ inputTranslationTargetLanguage: next })}
+          />
+        </Field>
+
         <div className="row-between" style={{ marginBottom: 16 }}>
           <div>
             <div style={{ fontWeight: 600 }}>{t('options.reading.enable')}</div>
@@ -540,46 +575,6 @@ export function Options() {
           />
         </Field>
 
-        {/*
-          翻翻模式放在阅读这一节，紧挨着显示方式：它们回答的是同一个问题——
-          「一个网页在我眼里应该长什么样」。
-        */}
-        <Field label={t('fanfan.mode.title')} hint={t('fanfan.options.hint')}>
-          <div className="row-between">
-            <span className="faint">
-              {settings.fanfanMode ? t('fanfan.mode.hint_on') : t('fanfan.mode.hint_off')}
-            </span>
-            <Toggle
-              checked={settings.fanfanMode}
-              onChange={(next) => void update({ fanfanMode: next })}
-              label={t('fanfan.mode.aria')}
-            />
-          </div>
-        </Field>
-
-        {/*
-          「标出已掌握的词」只在翻翻模式开着的时候出现，而且是 Field 的**兄弟**，
-          不是塞在它里面：Field 渲染出来的是一个 label，把第二个开关包进同一个 label，
-          点它的说明文字会去拨上面那个开关。
-        */}
-        {settings.fanfanMode ? (
-          <div className="row-between" style={{ marginBottom: 16 }}>
-            <div>
-              <div style={{ fontWeight: 600, fontSize: 13 }}>{t('fanfan.mastered.title')}</div>
-              <div className="faint">
-                {settings.fanfanShowMastered
-                  ? t('fanfan.mastered.hint_on')
-                  : t('fanfan.mastered.hint_off')}
-              </div>
-            </div>
-            <Toggle
-              checked={settings.fanfanShowMastered}
-              onChange={(next) => void update({ fanfanShowMastered: next })}
-              label={t('fanfan.mastered.aria')}
-            />
-          </div>
-        ) : null}
-
         <Field
           label={t('popup.paragraph.title')}
           hint={t('options.reading.paragraph.hint')}
@@ -660,6 +655,8 @@ export function Options() {
         ) : null}
       </section>
       ) : null}
+
+      {category === 'fanfan' ? <FanfanSection settings={settings} update={update} /> : null}
 
       {category === 'review' ? <ReviewSection settings={settings} update={update} /> : null}
 

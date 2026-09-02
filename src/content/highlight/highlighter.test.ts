@@ -351,8 +351,8 @@ describe('底色', () => {
     highlighter.start([entry({})])
 
     expect(document.documentElement.getAttribute(BACKDROP_ATTRIBUTE)).toBe('dark')
-    expect(injectedCss()).toContain('rgba(255, 106, 61, 0.26)')
-    expect(injectedCss()).not.toContain('rgba(255, 106, 61, 0.3)')
+    expect(injectedCss()).toContain('rgba(255, 125, 20, 0.282)')
+    expect(injectedCss()).not.toContain('rgba(255, 70, 0, 0.277)')
   })
 
   it('浅色页面用浅底那套', () => {
@@ -360,7 +360,19 @@ describe('底色', () => {
     highlighter.start([entry({})])
 
     expect(document.documentElement.getAttribute(BACKDROP_ATTRIBUTE)).toBe('light')
-    expect(injectedCss()).toContain('rgba(255, 106, 61, 0.3)')
+    expect(injectedCss()).toContain('rgba(255, 70, 0, 0.277)')
+  })
+
+  it('切换主题只换色表，已有高亮 Range 继续保留', () => {
+    document.body.style.backgroundColor = '#ffffff'
+    highlighter.start([entry({})], { palette: 'warmField' })
+    const ranges = paintedAt(0)
+
+    highlighter.setOptions({ palette: 'glacierBay' })
+
+    expect(injectedCss()).toContain('rgba(0, 85, 225, 0.219)')
+    expect(injectedCss()).not.toContain('rgba(255, 70, 0, 0.277)')
+    expect(paintedAt(0)).toEqual(ranges)
   })
 
   /** 关掉之后一个痕迹都不留——包括那张表和那个属性。 */

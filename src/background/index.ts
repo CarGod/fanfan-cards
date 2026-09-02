@@ -6,7 +6,7 @@ import type { ContentCommand } from '@/types/messages.ts'
 import { handleExplain } from './handlers/explain.ts'
 import { handleLookupWord, handleRemoveWord, handleSaveWord } from './handlers/vocabulary.ts'
 import { handleEnrichEntry } from './handlers/enrich.ts'
-import { handleTranslatePage } from './handlers/translate.ts'
+import { handleTranslateInput, handleTranslatePage } from './handlers/translate.ts'
 import { handlePageState, handleShouldTranslate } from './handlers/pageState.ts'
 import { ensureSyncAlarm, registerSyncScheduler, requestSync } from './sync.ts'
 import { ensureReminderAlarm, registerReminder } from './reminder.ts'
@@ -51,6 +51,7 @@ registerHandlers({
   'vocab/enrich': handleEnrichEntry,
   'settings/get': async () => ({ settings: await getSettings() }),
   'page/translate': handleTranslatePage,
+  'input/translate': handleTranslateInput,
   'page/state': handlePageState,
   'sync/run': async (payload) => requestSync(payload.mode ?? 'merge'),
   'page/shouldTranslate': handleShouldTranslate,

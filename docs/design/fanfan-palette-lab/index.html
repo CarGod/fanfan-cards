@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN" data-backdrop="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="翻翻词卡翻翻模式高亮配色设计评审与交互比较">
+  <title>翻翻模式 · 色彩设计评审</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">Fanfan Cards · Color Lab 01</p>
+        <h1>让掌握程度<br>成为阅读的背景</h1>
+        <p class="lede">高亮应当帮助眼睛决定“哪里值得停”，而不是把文章变成一张热力图。这份评审同时观察掌握语义、阅读干扰和真实明暗网页上的表现。</p>
+      </div>
+      <aside class="decision" aria-label="设计结论">
+        <small>建议结论</small>
+        <strong>四档保留，暗色网页专门增强</strong>
+        <p>提供六套一眼可分的综合色调；将“已掌握”隐藏作为显著开关。颜色只是冗余线索，真正的顺序来自档位名称与强度持续衰减。</p>
+      </aside>
+    </header>
+
+    <section class="workspace" aria-label="配色模拟器">
+      <aside class="controls">
+        <div class="control-group">
+          <span class="control-label">配色方案</span>
+          <div class="button-stack" id="palette-choices" role="group" aria-label="选择配色方案"></div>
+        </div>
+        <div class="control-group">
+          <span class="control-label">网页底色</span>
+          <div class="segmented" role="group" aria-label="选择网页底色">
+            <button type="button" data-backdrop="light" aria-pressed="true">亮色</button>
+            <button type="button" data-backdrop="dark" aria-pressed="false">深色</button>
+          </div>
+        </div>
+        <div class="control-group">
+          <label class="toggle" for="show-mastered"><span id="mastered-label">显示已掌握</span><input id="show-mastered" type="checkbox" checked></label>
+        </div>
+        <button class="export" id="export" type="button" aria-label="复制当前方案 JSON">复制当前配置</button>
+      </aside>
+
+      <div class="stage">
+        <div class="stage-head">
+          <div><h2 id="palette-title">暖日麦田</h2><p id="palette-summary"></p></div>
+          <span class="badge" id="theme-badge">橙金综合色调</span>
+        </div>
+        <div class="browser">
+          <div class="browser-chrome" aria-hidden="true"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="address">fieldnotes.example / memory-and-reading</span></div>
+          <article class="article">
+            <div class="article-inner">
+              <div class="kicker">READING NOTES · 8 MIN</div>
+              <h3>我们如何在阅读里，慢慢把一个词变成自己的？</h3>
+              <p>真正有效的阅读，并不要求每次遇到生词都停下来。一个完全<span class="mark" data-level="0">陌生 unfamiliar</span> 的表达值得注意；当它进入<span class="mark" data-level="1">学习 learning</span> 阶段，提示应该仍然清晰，但不再发出警报。</p>
+              <p>随着语境不断累积，词义会从刻意回忆变成<span class="mark" data-level="2">熟悉 familiar</span> 的直觉。高亮此时要主动后退，把注意力交还给文章。最终，已经<span class="mark" data-level="3">掌握 mastered</span> 的词只留下安静的确认，或者完全消失。</p>
+              <p>好的颜色系统不是给四个状态贴四张醒目的标签，而是在每一种综合色调里建立可预测的注意力坡道：越需要行动越明确，越接近掌握越安静。</p>
+            </div>
+          </article>
+        </div>
+        <div class="swatch-panel"><h3>实际渲染值 · 点击色块复制</h3><ul class="swatches" id="swatches"></ul></div>
+      </div>
+    </section>
+
+    <section class="review">
+      <div class="section-title"><h2>设计评审</h2><p>这里评估的是覆盖在任意第三方网页上的半透明背景，而不是插件自身界面中的固定色块。网页原本的字号、字色和底色不可控，因此“轻”比“艳”更重要。</p></div>
+      <div class="review-grid">
+        <article class="review-card"><b>01 · 语义</b><h3>同一综合色调内，强度表达注意力需求</h3><p>陌生不是错误，掌握也不是成功通知。六套主题用不同色彩气质表达个人偏好；每套内部都由明确逐步退到安静，不依赖红绿交通灯语义。</p></article>
+        <article class="review-card"><b>02 · 可访问性</b><h3>颜色不能是唯一信息</h3><p>设置中必须同时展示“陌生 / 学习中 / 熟悉 / 已掌握”名称，并用强度顺序作第二线索。Windows 强制颜色模式应交给系统 Highlight/HighlightText。</p></article>
+        <article class="review-card"><b>03 · 明暗适配</b><h3>暗色不是把亮色原样搬过去</h3><p>每套主题分别求解亮暗值，在白、米白、浅灰和三种常见近黑底上验收。所有格子都保留至少 7:1 的典型正文对比。</p></article>
+        <article class="review-card"><b>04 · 档位数量</b><h3>保留四档，但允许第四档退出</h3><p>四档与“陌生 / 学习中 / 熟悉 / 掌握”的复习模型一一对应，不需要额外映射。三档会挤掉中间反馈，五档则超过用户稳定辨认的粒度。第四档默认可见以保持升级连续性，但应可隐藏。</p></article>
+        <article class="review-card"><b>05 · 验收门槛</b><h3>用定量底线守住层级与差异</h3><p>每格对底至少显示为 1.25:1，原正文对比保留至少 60%，且 L0 &gt; L1 &gt; L2 &gt; L3。任意两主题的 L0–L2 平均 ΔEOK 至少 .03，并至少两档达到 .025。</p></article>
+        <article class="review-card"><b>06 · 使用边界</b><h3>指标是安全网，不是任意网页保证</h3><p>当网页使用图片、渐变、透明层或极端底色时，实际合成结果仍会变化。因此不声称在任意网页都符合 WCAG，插件仍应测量实际背景。</p></article>
+        <article class="review-card recommend">
+          <div><b>生产默认</b><h3>使用「暖日麦田」</h3><p>橙金到麦褐的坡道最符合“需要注意 → 可以放下”的直觉；它是六套方案的默认，但不承担品牌色任务。</p></div>
+          <div><b>插件设置建议</b><p>提供 6 个整套主题，不开放 8 个独立拾色器。自由调色会轻易破坏亮暗适配与层级顺序；极端底色、图片和渐变不可控，不声称在任意网页都符合 WCAG。</p><div class="token-box">type FanfanPalette = {
+  id: 'warmField' | 'glacierBay' | 'wisteriaNocturne'
+    | 'mintForest' | 'cherryCloud' | 'mistStudy'
+  light: readonly [string, string, string, string]
+  dark: readonly [string, string, string, string]
+}
+
+settings.fanfanPalette = 'warmField'
+settings.fanfanShowMastered = true
+
+// CSS Custom Highlight 仍输出 rgba 实值；
+// 不从宿主页面读取 CSS var。</div></div>
+        </article>
+      </div>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <!-- Classic deferred scripts keep the lab fully functional when index.html is
+       opened directly from disk. ES modules are blocked on file:// by Chromium. -->
+  <script defer src="./palette-data.js"></script>
+  <script defer src="./app.js"></script>
+</body>
+</html>

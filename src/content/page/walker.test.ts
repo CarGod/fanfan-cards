@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { batchUnits, collectUnits, TRANSLATION_CLASS } from './walker.ts'
+import {
+  batchUnits,
+  collectUnits,
+  materializeTranslationUnit,
+  SEGMENT_SOURCE_CLASS,
+  TRANSLATION_CLASS,
+} from './walker.ts'
 
 /**
  * jsdom does no layout, so the walker takes its layout inputs as injectable
@@ -159,11 +165,43 @@ describe('batchUnits', () => {
 })
 
 describe('line structure', () => {
-  // A multi-line post collapsed into one string reads as a run-on for the
-  // reader and, worse, invites the model to summarise instead of translate.
-  it('keeps <br> as a line break instead of swallowing it', () => {
-    const html = '<div>BIG NEWS: launches AI<br><br>MORE INFO: here<br>Invited: @nero_eth</div>'
-    expect(textsOf(html)).toEqual(['BIG NEWS: launches AI\n\nMORE INFO: here\nInvited: @nero_eth'])
+  // A single break is a line inside one paragraph (address, poem, social post),
+  // while a blank line is a real visual paragraph boundary.
+  it('keeps a single <br> as line structure instead of over-splitting it', () => {
+    const html = '<div>BIG NEWS: launches AI<br>MORE INFO: here<br>Invited: @nero_eth</div>'
+    expect(textsOf(html)).toEqual(['BIG NEWS: launches AI\nMORE INFO: here\nInvited: @nero_eth'])
+  })
+
+  it('splits visual paragraphs separated by <br><br>, including mixed inline nodes', () => {
+    const html = `<p id="article">
+      You can use <a href="#">gift card balances</a> for purchases. <b>Mobile purchases are excluded.</b>
+      <!-- a template marker must not join or erase paragraphs --><br> \n <!-- gap --> <br>
+      Note that you cannot choose how much balance to use for a specific purchase.
+      <br><br>
+      Trials and promotions may still require a payment method.<br>
+      Check the amount before confirming.
+    </p>`
+
+    const units = collectUnits(parse(html), noLayout)
+    expect(units.map((unit) => unit.text)).toEqual([
+      'You can use gift card balances for purchases. Mobile purchases are excluded.',
+      'Note that you cannot choose how much balance to use for a specific purchase.',
+      'Trials and promotions may still require a payment method.\nCheck the amount before confirming.',
+    ])
+    expect(units.every((unit) => unit.pendingVisualSegment)).toBe(true)
+  })
+
+  it('materialises each visual paragraph as a reversible, independent source', () => {
+    const root = parse('<p id="article">First paragraph.<br><br>Second paragraph.</p>')
+    const units = collectUnits(root, noLayout).map(materializeTranslationUnit)
+
+    expect(units.map((unit) => unit.element.className)).toEqual([
+      SEGMENT_SOURCE_CLASS,
+      SEGMENT_SOURCE_CLASS,
+    ])
+    expect(document.querySelectorAll(`.${SEGMENT_SOURCE_CLASS}`)).toHaveLength(2)
+    expect(document.getElementById('article')?.textContent).toContain('First paragraph.')
+    expect(document.getElementById('article')?.textContent).toContain('Second paragraph.')
   })
 
   it('still collapses ordinary runs of whitespace inside a line', () => {

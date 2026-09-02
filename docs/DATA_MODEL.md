@@ -13,6 +13,7 @@
 | `ara:activity` | 每日活跃汇总 | `Record<'YYYY-MM-DD', DailyActivity>` |
 | `ara:reviewLog` | 复习流水（滚动保留最近 3000 条） | `ReviewLogEntry[]` |
 | `ara:cache:explain` | 解释缓存（LRU，上限 300） | `Record<hash, { value, at, usedAt }>` |
+| `ara:cache:translation` | 网页与输入框翻译缓存（LRU，上限 3000） | `Record<hash, { value, at, usedAt }>` |
 
 命名统一 `ara:` 前缀，迁移和清理时可以一眼分辨。
 
@@ -156,9 +157,16 @@ withLock('ara:words', async () => { const map = await readAll(); …; await writ
 
 ## 6. 版本与迁移
 
-`ara:meta.schemaVersion` 记录当前版本（现为 `1`）。`storage/migrations.ts` 保存
+`ara:meta.schemaVersion` 记录当前版本（现为 `8`）。`storage/migrations.ts` 保存
 "升级到版本 N 要做什么"的有序表；启动时逐级执行。第一版没有迁移函数，但结构先建好了——
 第一次改 schema 时才建迁移机制，通常已经晚了。
+
+翻翻模式的用户偏好随其他设置保存在 `ara:settings`：`fanfanMode` 是总开关，
+`fanfanPalette` 是六套完整主题之一（缺失或未知值回退为 `warmField`；开发期的
+`warmBlue` 同样折叠到 `warmField`），
+`fanfanShowMastered` 决定 3 级词是否进入扫描索引。主题只同步用户选择，不存重复色值；
+亮暗两套生产色值由代码中的主题目录统一维护。该扩展尚未发布过旧主题，因此这次调整
+仍属于 schema v8，不额外增加空洞的迁移版本。
 
 ## 7. 取舍记录
 

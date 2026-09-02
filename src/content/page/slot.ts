@@ -1,5 +1,9 @@
 import { conformLineShape, isRedundantTranslation, repairOmissions } from '@/shared/language.ts'
-import { TRANSLATED_MARK, TRANSLATION_CLASS } from './walker.ts'
+import {
+  SEGMENT_SOURCE_CLASS,
+  TRANSLATED_MARK,
+  TRANSLATION_CLASS,
+} from './walker.ts'
 
 /**
  * Inserting a translation next to its original.
@@ -28,8 +32,11 @@ let nextId = 0
  * instead of twice and the reader sees where the text will land.
  */
 export function createSlot(source: Element): HTMLElement {
-  const inline = isInlineLike(source)
-  const slot = document.createElement(inline ? 'span' : 'div')
+  const segmented = source.classList.contains(SEGMENT_SOURCE_CLASS)
+  const inline = !segmented && isInlineLike(source)
+  // A visual paragraph lives inside its host `<p>`, where inserting a `<div>`
+  // would produce invalid nesting. CSS still gives this span a block box.
+  const slot = document.createElement(inline || segmented ? 'span' : 'div')
   slot.className = `${TRANSLATION_CLASS} ${PENDING_CLASS} notranslate`
   slot.setAttribute('translate', 'no')
   /*
@@ -46,6 +53,7 @@ export function createSlot(source: Element): HTMLElement {
   source.setAttribute(SOURCE_ID, id)
   slot.dataset['araFor'] = id
   if (inline) slot.dataset['araInline'] = ''
+  if (segmented) slot.dataset['araSegment'] = ''
   return slot
 }
 
@@ -95,6 +103,11 @@ export function clearAllSlots(): void {
   for (const element of document.querySelectorAll(`[${TRANSLATED_MARK}], [${SOURCE_ID}]`)) {
     element.removeAttribute(TRANSLATED_MARK)
     element.removeAttribute(SOURCE_ID)
+  }
+  // Restore the site's exact node order. Moving the children out preserves the
+  // original Node objects (and any listeners attached to them).
+  for (const wrapper of document.querySelectorAll(`.${SEGMENT_SOURCE_CLASS}`)) {
+    wrapper.replaceWith(...wrapper.childNodes)
   }
 }
 

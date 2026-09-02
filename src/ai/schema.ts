@@ -287,17 +287,15 @@ export const strictBatchTranslationSchema = z.object({ translations: z.array(z.s
 /**
  * Models drop or merge segments; a shifted array would put every paragraph's
  * translation under the wrong paragraph, which is worse than missing text.
- * Pad and trim to the expected length so the mapping stays positional.
+ * Reject the entire positional result on a count mismatch. The page handler
+ * can then retry each source independently without ever guessing which shifted
+ * translation belongs to which paragraph.
  */
 export function coerceBatchTranslations(raw: unknown, expected: number): string[] {
   const source = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const list = Array.isArray(source['translations']) ? source['translations'] : []
-  const out: string[] = []
-  for (let i = 0; i < expected; i++) {
-    const value = list[i]
-    out.push(typeof value === 'string' ? value.trim() : '')
-  }
-  return out
+  if (list.length !== expected) return Array.from({ length: expected }, () => '')
+  return list.map((value) => (typeof value === 'string' ? value.trim() : ''))
 }
 
 export const exampleSchema = z.object({

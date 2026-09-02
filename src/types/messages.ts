@@ -104,6 +104,11 @@ export interface MessageMap {
     req: { texts: string[]; hint?: string }
     res: { translations: string[] }
   }
+  /** Replace an editable field after the user presses Space three times. */
+  'input/translate': {
+    req: { text: string }
+    res: { translation: string; targetLanguage: string }
+  }
 }
 
 export type MessageType = keyof MessageMap

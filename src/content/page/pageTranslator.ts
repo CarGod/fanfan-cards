@@ -4,6 +4,7 @@ import {
   TRANSLATED_MARK,
   batchUnits,
   collectUnits,
+  materializeTranslationUnit,
   type TranslationUnit,
 } from './walker.ts'
 import { clearAllSlots, clearSlot, createSlot, fillSlot, sweepOrphanSlots } from './slot.ts'
@@ -65,6 +66,8 @@ const MAX_FAILURES = 3
  * 进度永远差最后几段。到顶之后按普通失败处理，让它停下来。
  */
 const MAX_RATE_LIMIT_REQUEUES = 12
+/** A model may occasionally omit one item from an otherwise valid batch. */
+const MAX_REJECTED_RETRIES = 1
 /** Per request. Larger batches mean fewer round trips but a longer tail latency. */
 const BATCH_LIMITS = { maxUnits: 12, maxChars: 3000 }
 
@@ -105,6 +108,8 @@ export class PageTranslator {
   private state: TranslatorState = 'idle'
   private done = 0
   private failures = 0
+  /** Per-unit guard against an empty/redundant provider response looping forever. */
+  private rejectedRetries = new Map<Element, number>()
   /**
    * Every unit we know about, keyed by element.
    *
@@ -142,6 +147,7 @@ export class PageTranslator {
     this.state = 'running'
     this.done = 0
     this.failures = 0
+    this.rejectedRetries.clear()
     // 补救额度按「一轮翻译」计：重新开一次整页翻译，就该重新给一次机会。
     this.lineRetries.reset()
     this.lineShapeLost = []
@@ -154,7 +160,7 @@ export class PageTranslator {
       ...(options.range ? { range: options.range } : {}),
       ...(options.targetLanguage ? { targetLanguage: options.targetLanguage } : {}),
     }
-    const units = collectUnits(document.body, this.walkOptions)
+    const units = collectUnits(document.body, this.walkOptions).map(materializeTranslationUnit)
     this.units = units
 
     /*
@@ -197,9 +203,9 @@ export class PageTranslator {
   private absorbNewUnits(): void {
     if (this.state !== 'running') return
     const seen = new Set(this.units.map((unit) => unit.element))
-    const fresh = collectUnits(document.body, this.walkOptions).filter(
-      (unit) => !seen.has(unit.element) && !unit.element.hasAttribute(TRANSLATED_MARK),
-    )
+    const fresh = collectUnits(document.body, this.walkOptions)
+      .map(materializeTranslationUnit)
+      .filter((unit) => !seen.has(unit.element) && !unit.element.hasAttribute(TRANSLATED_MARK))
     if (fresh.length === 0) return
     this.units = [...this.units, ...fresh]
     for (const unit of fresh) this.enqueue(unit)
@@ -227,6 +233,7 @@ export class PageTranslator {
     this.units = []
     this.queue = []
     this.lineShapeLost = []
+    this.rejectedRetries.clear()
     this.state = 'idle'
 
     clearAllSlots()
@@ -263,8 +270,18 @@ export class PageTranslator {
         this.sortByDistanceFromViewport()
         const batches: TranslationUnit[][] = []
         while (batches.length < this.concurrency && this.queue.length > 0) {
-          const [batch] = batchUnits(this.queue.splice(0, BATCH_LIMITS.maxUnits), BATCH_LIMITS)
+          /*
+           * Peek, then remove exactly the batch we are about to send.
+           *
+           * Splicing twelve first and then taking only `[batch]` silently lost
+           * every overflow batch when those twelve paragraphs exceeded the
+           * character limit. Long FAQ pages therefore had a translated prefix,
+           * a run of untouched middle paragraphs, and translated text again
+           * after the next twelve-item window.
+           */
+          const [batch] = batchUnits(this.queue.slice(0, BATCH_LIMITS.maxUnits), BATCH_LIMITS)
           if (!batch) break
+          this.queue.splice(0, batch.length)
           batches.push(batch)
         }
         if (batches.length === 0) break
@@ -295,15 +312,25 @@ export class PageTranslator {
       })
 
       const lost: TranslationUnit[] = []
+      let accepted = 0
       batch.forEach((unit, index) => {
         const outcome = fillSlot(unit.element, unit.text, result.translations[index] ?? '')
-        if (outcome === 'rejected') return
+        if (outcome === 'rejected') {
+          const retries = this.rejectedRetries.get(unit.element) ?? 0
+          if (retries < MAX_REJECTED_RETRIES) {
+            this.rejectedRetries.set(unit.element, retries + 1)
+            this.enqueue(unit)
+          }
+          return
+        }
+        this.rejectedRetries.delete(unit.element)
+        accepted += 1
         this.watcher.watch(unit)
         if (outcome === 'line-shape-lost') lost.push(unit)
       })
       // Consecutive, not cumulative: a run that keeps succeeding has recovered.
       this.failures = 0
-      this.done += batch.length
+      this.done += accepted
       this.emit()
 
       /*

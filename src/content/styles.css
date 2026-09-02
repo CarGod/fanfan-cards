@@ -40,6 +40,43 @@
   box-sizing: border-box;
 }
 
+/*
+ * 三击空格输入翻译的 target-bound loading。
+ *
+ * 它在 shadow root 里 fixed 定位，不进宿主页面布局；位置由组件跟着目标输入框
+ * 实时重算。气泡覆盖在输入框内部的右侧边缘；不改 padding、不挤动宿主布局，
+ * 高度不足时跟着缩小，窄到放不下时宁可隐藏也不溢出。
+ */
+.input-translation-indicator {
+  position: fixed;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  pointer-events: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+}
+
+/* Reuse the shared Spinner component; content UI has its own shadow stylesheet. */
+.input-translation-indicator .spinner {
+  width: var(--ara-input-spinner-size, 14px);
+  height: var(--ara-input-spinner-size, 14px);
+  box-sizing: border-box;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--primary-line);
+  border-radius: 50%;
+  animation: ara-input-spin 700ms linear infinite;
+}
+
+@keyframes ara-input-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ---------- trigger pill ---------- */
 
 /*

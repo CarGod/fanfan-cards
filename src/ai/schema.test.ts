@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AIError } from '@/types/ai.ts'
-import { coerceExplanation, coerceSynonyms } from './schema.ts'
+import { coerceBatchTranslations, coerceExplanation, coerceSynonyms } from './schema.ts'
 
 const GOOD = {
   word: 'accused',
@@ -102,5 +102,18 @@ describe('coerceSynonyms', () => {
 
   it('caps the list so one runaway response cannot flood the card', () => {
     expect(coerceSynonyms(Array.from({ length: 20 }, (_, i) => `w${i}`))).toHaveLength(6)
+  })
+})
+
+describe('coerceBatchTranslations', () => {
+  it('invalidates the whole positional result when the model omits an item', () => {
+    expect(coerceBatchTranslations({ translations: ['译一', '译三'] }, 3)).toEqual(['', '', ''])
+  })
+
+  it('keeps a complete ordered result and trims its members', () => {
+    expect(coerceBatchTranslations({ translations: [' 译一 ', '译二'] }, 2)).toEqual([
+      '译一',
+      '译二',
+    ])
   })
 })

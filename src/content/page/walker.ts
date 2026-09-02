@@ -106,6 +106,16 @@ const HIDDEN_CLASSES = ['sr-only', 'visually-hidden', 'screen-reader-text']
 const ICON_FONTS = /material icons|material symbols|font awesome|fontawesome|google symbols/i
 
 export const TRANSLATION_CLASS = 'ara-translation'
+/**
+ * A reversible wrapper around one visual paragraph inside a larger DOM element.
+ *
+ * Some CMSes publish an entire article section as one `<p>`, using `<br><br>`
+ * where they mean a paragraph boundary. The wrapper gives each of those visual
+ * paragraphs its own source element, so its translation can sit beside it and
+ * keep independent pending/done state. It renders as `display: contents` and is
+ * unwrapped when page translation is turned off.
+ */
+export const SEGMENT_SOURCE_CLASS = 'ara-translation-source'
 export const TRANSLATED_MARK = 'data-ara-translated'
 
 export type TranslationRange = 'content' | 'all'
@@ -201,9 +211,9 @@ function isSkippable(element: Element, context: SkipContext): boolean {
  * `aria-hidden` icon inside a paragraph would otherwise be spliced into the
  * source text and translated as if the reader could see it.
  */
-export function directText(element: Element): string {
+function textFromNodes(nodes: Iterable<Node>): string {
   let text = ''
-  for (const node of element.childNodes) {
+  for (const node of nodes) {
     if (node.nodeType === Node.TEXT_NODE) {
       // Newlines in the source are just whitespace in HTML; only <br> is a line.
       text += (node.textContent ?? '').replace(/\s+/g, ' ')
@@ -232,9 +242,142 @@ export function directText(element: Element): string {
     .trim()
 }
 
+export function directText(element: Element): string {
+  return textFromNodes(element.childNodes)
+}
+
+interface PendingVisualSegment {
+  /** The original nodes that will be wrapped, in document order. */
+  nodes: ChildNode[]
+  /** The first `<br>` in the separating blank line, or null for the last part. */
+  insertBefore: ChildNode | null
+}
+
 export interface TranslationUnit {
   element: Element
   text: string
+  /** Present only until a `<br><br>` visual paragraph has been materialised. */
+  pendingVisualSegment?: PendingVisualSegment
+}
+
+const isIgnorableBetweenBreaks = (node: ChildNode): boolean =>
+  node.nodeType === Node.COMMENT_NODE ||
+  (node.nodeType === Node.TEXT_NODE && !(node.textContent ?? '').trim())
+
+const isTranslationNode = (node: ChildNode): boolean =>
+  node.nodeType === Node.ELEMENT_NODE &&
+  (node as Element).classList.contains(TRANSLATION_CLASS)
+
+/**
+ * Splits only on a *blank line* (`<br><br>`), never on a single `<br>`.
+ *
+ * A single break is meaningful line structure in addresses, poems and social
+ * posts, and continues to be sent as `\n` inside one unit. Comments and
+ * whitespace between two breaks do not make the blank line disappear — React
+ * and template engines commonly leave exactly those nodes in rendered markup.
+ */
+function visualParagraphs(element: Element): PendingVisualSegment[] | null {
+  const children = [...element.childNodes]
+  const segments: PendingVisualSegment[] = []
+  let start = 0
+  let index = 0
+
+  while (index < children.length) {
+    if (!(children[index] instanceof HTMLBRElement)) {
+      index += 1
+      continue
+    }
+
+    let cursor = index + 1
+    let breaks = 1
+    while (cursor < children.length) {
+      const node = children[cursor]!
+      if (node instanceof HTMLBRElement) {
+        breaks += 1
+        cursor += 1
+        continue
+      }
+      if (isIgnorableBetweenBreaks(node)) {
+        cursor += 1
+        continue
+      }
+      break
+    }
+
+    if (breaks < 2) {
+      index += 1
+      continue
+    }
+
+    segments.push({
+      nodes: children.slice(start, index).filter((node) => !isTranslationNode(node)),
+      insertBefore: children[index] ?? null,
+    })
+    start = cursor
+    index = cursor
+  }
+
+  if (segments.length === 0) return null
+  segments.push({
+    nodes: children.slice(start).filter((node) => !isTranslationNode(node)),
+    insertBefore: null,
+  })
+
+  // A trailing/leading blank line is formatting, not an empty paragraph. We
+  // split only when at least two real text groups survive.
+  const nonEmpty = segments.filter((segment) => textFromNodes(segment.nodes).length > 0)
+  return nonEmpty.length >= 2 ? nonEmpty : null
+}
+
+function existingSegmentSource(nodes: ChildNode[]): Element | null {
+  const meaningful = nodes.filter(
+    (node) => !isTranslationNode(node) && !isIgnorableBetweenBreaks(node),
+  )
+  if (meaningful.length !== 1) return null
+  const [only] = meaningful
+  return only instanceof Element && only.classList.contains(SEGMENT_SOURCE_CLASS) ? only : null
+}
+
+/**
+ * Gives a virtual `<br><br>` paragraph a real, reversible source element.
+ *
+ * Collection stays read-only. Materialisation happens immediately before the
+ * unit is queued, and moves (rather than clones) the site's nodes so links,
+ * listeners and live form state survive. Ordinary paragraphs pass through.
+ */
+export function materializeTranslationUnit(unit: TranslationUnit): TranslationUnit {
+  const pending = unit.pendingVisualSegment
+  if (!pending) return unit
+
+  const host = unit.element
+  const connectedNodes = pending.nodes.filter((node) => node.parentNode === host)
+  if (connectedNodes.length === 0) return unit
+
+  const reusable = connectedNodes.find(
+    (node): node is Element =>
+      node instanceof Element && node.classList.contains(SEGMENT_SOURCE_CLASS),
+  )
+  const wrapper = reusable ?? document.createElement('span')
+  wrapper.classList.add(SEGMENT_SOURCE_CLASS)
+
+  if (!reusable) host.insertBefore(wrapper, connectedNodes[0] ?? pending.insertBefore)
+
+  /*
+   * Reconciliation matters when a framework appends text beside an already
+   * wrapped segment. Flatten the old wrapper and the new sibling nodes into the
+   * same wrapper, retaining every original Node object and its event listeners.
+   */
+  const content = document.createDocumentFragment()
+  for (const node of connectedNodes) {
+    if (node === wrapper) {
+      content.append(...wrapper.childNodes)
+    } else if (!isTranslationNode(node)) {
+      content.append(node)
+    }
+  }
+  wrapper.replaceChildren(content)
+
+  return { element: wrapper, text: directText(wrapper) }
 }
 
 /**
@@ -268,7 +411,25 @@ export function collectUnits(root: Element, options: WalkOptions = {}): Translat
       (child) => !INLINE_TAGS.has(child.tagName) && !isSkippable(child, context),
     )
 
-    if (text.length >= minLength && HAS_LETTER.test(text) && shouldTranslateText(text, target)) {
+    const segments = visualParagraphs(element)
+    if (segments) {
+      for (const segment of segments) {
+        const source = existingSegmentSource(segment.nodes)
+        if (source && isSkippable(source, context)) continue
+        const segmentText = source ? directText(source) : textFromNodes(segment.nodes)
+        if (
+          segmentText.length >= minLength &&
+          HAS_LETTER.test(segmentText) &&
+          shouldTranslateText(segmentText, target)
+        ) {
+          units.push(
+            source
+              ? { element: source, text: segmentText }
+              : { element, text: segmentText, pendingVisualSegment: segment },
+          )
+        }
+      }
+    } else if (text.length >= minLength && HAS_LETTER.test(text) && shouldTranslateText(text, target)) {
       // A single element holding a whole page of text defeats viewport gating,
       // so descend instead of translating it as one giant unit.
       const tooTall = blockChildren.length > 0 && heightOf(element) > giantHeight
@@ -360,7 +521,8 @@ export function findUnitAt(
      * 根源是两条路用了两套规则：`directText` 按标签折叠，这里按计算样式判断。
      * 统一成标签之后，「能翻整页却翻不了单段」这类错配就没有生长的地方了。
      */
-    const inline = INLINE_TAGS.has(element.tagName)
+    const segmentSource = element.classList.contains(SEGMENT_SOURCE_CLASS)
+    const inline = INLINE_TAGS.has(element.tagName) && !segmentSource
 
     if (!inline) {
       const text = directText(element)
