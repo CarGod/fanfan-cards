@@ -86,6 +86,41 @@ const INLINE_TAGS = new Set([
 ])
 
 /**
+ * Text containers whose semantics are stronger than the generic length guard.
+ *
+ * A short label in an arbitrary `<div>` is usually interface chrome, while a
+ * short `<p>`, heading or caption is still prose. Keeping that distinction lets
+ * the paragraph gesture translate useful snippets without making every button
+ * and menu item under the pointer eligible.
+ */
+const SEMANTIC_TEXT_TAGS = new Set([
+  'P',
+  'BLOCKQUOTE',
+  'LI',
+  'DT',
+  'DD',
+  'FIGCAPTION',
+  'CAPTION',
+  'SUMMARY',
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6',
+])
+const SEMANTIC_TEXT_ROLES = new Set(['paragraph', 'heading', 'blockquote', 'listitem'])
+
+/**
+ * High-confidence application containers, checked before the generic walk.
+ *
+ * This list is intentionally tiny. x.com renders tweet prose as an inline-
+ * styled `<div>`, so neither HTML tag semantics nor computed layout identify
+ * its boundary. The structural walk below remains the fallback for every site.
+ */
+const PRIORITY_TEXT_BLOCK_SELECTOR = '[data-testid="tweetText"]'
+
+/**
  * Chrome that is not the article.
  *
  * Following read-frog: these are ignored only in "content" range, and only when
@@ -495,8 +530,40 @@ export function findUnitAt(
     range: options.range ?? 'all',
     allowTranslated: true,
   }
-  const minLength = options.minLength ?? 12
+  // Explicit prose containers can be brief; arbitrary structural containers
+  // keep the higher floor that suppresses navigation and control labels.
+  const semanticMinLength = options.minLength ?? 3
+  const fallbackMinLength = options.minLength ?? 12
   const target_ = options.targetLanguage ?? 'zh-CN'
+
+  const unitFrom = (element: Element, minLength: number): TranslationUnit | null => {
+    const text = directText(element)
+    return text.length >= minLength && HAS_LETTER.test(text) && shouldTranslateText(text, target_)
+      ? { element, text }
+      : null
+  }
+
+  const pathIsEligible = (from: Element, through: Element): boolean => {
+    let cursor: Element | null = from
+    while (cursor) {
+      if (cursor === document.body || cursor === document.documentElement) return false
+      if (isSkippable(cursor, context)) return false
+      if (cursor === through) return true
+      cursor = cursor.parentElement
+    }
+    return false
+  }
+
+  /*
+   * x.com's stable semantic boundary wins even if a descendant happens to look
+   * like a standalone block. Resolve it at keypress time, rather than caching a
+   * node, so React's virtualised timeline can replace or recycle tweets freely.
+   */
+  const priority = target?.closest(PRIORITY_TEXT_BLOCK_SELECTOR) ?? null
+  if (target && priority && pathIsEligible(target, priority)) {
+    const unit = unitFrom(priority, semanticMinLength)
+    if (unit) return unit
+  }
 
   let element: Element | null = target
   let depth = 0
@@ -525,10 +592,10 @@ export function findUnitAt(
     const inline = INLINE_TAGS.has(element.tagName) && !segmentSource
 
     if (!inline) {
-      const text = directText(element)
-      if (text.length >= minLength && HAS_LETTER.test(text) && shouldTranslateText(text, target_)) {
-        return { element, text }
-      }
+      const role = element.getAttribute('role') ?? ''
+      const semantic = SEMANTIC_TEXT_TAGS.has(element.tagName) || SEMANTIC_TEXT_ROLES.has(role)
+      const unit = unitFrom(element, semantic ? semanticMinLength : fallbackMinLength)
+      if (unit) return unit
     }
     element = element.parentElement
   }

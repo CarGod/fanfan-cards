@@ -79,6 +79,23 @@ describe('整段翻译的触发键', () => {
     expect(translate).toHaveBeenCalledTimes(1)
   })
 
+  it('SPA 动态插入的 x.com 短推文，无需重新绑定就能用反引号翻译', async () => {
+    document.body.innerHTML = '<main id="feed"></main>'
+    document.getElementById('feed')!.insertAdjacentHTML(
+      'beforeend',
+      '<article data-testid="tweet"><div data-testid="tweetText" id="tweet">' +
+        '<span id="tweet-word">Interesting</span>' +
+        '</div></article>',
+    )
+    document.elementFromPoint = () => document.getElementById('tweet-word')
+
+    await press({ code: 'Backquote', key: '`' })
+
+    expect(translate).toHaveBeenCalledTimes(1)
+    expect(translate.mock.calls[0]![1].texts).toEqual(['Interesting'])
+    expect(document.getElementById('tweet')?.getAttribute('data-ara-translated')).toBe('done')
+  })
+
   it('别的键不触发——不然满键盘都是这个手势', async () => {
     await press({ code: 'KeyA', key: 'a' })
     await press({ code: 'Digit1', key: '1' })

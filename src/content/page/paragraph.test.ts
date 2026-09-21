@@ -63,6 +63,31 @@ describe('findUnitAt', () => {
     }
   })
 
+  it('优先返回 x.com 的 tweetText，短推文也不会被通用噪声阈值丢掉', () => {
+    mount(
+      '<article data-testid="tweet"><div data-testid="tweetText" id="tweet">' +
+        '<span id="word">Interesting</span>' +
+        '</div></article>',
+    )
+
+    const unit = findUnitAt(document.getElementById('word'))
+    expect(unit?.element.id).toBe('tweet')
+    expect(unit?.text).toBe('Interesting')
+  })
+
+  it('通用语义文本块同样接受短正文，不依赖站点选择器', () => {
+    mount('<main><p id="paragraph"><span id="word">Hello</span></p></main>')
+
+    const unit = findUnitAt(document.getElementById('word'))
+    expect(unit?.element.id).toBe('paragraph')
+    expect(unit?.text).toBe('Hello')
+  })
+
+  it('普通容器里的短按钮文案仍按噪声处理', () => {
+    mount('<div id="control"><span id="word">Save</span></div>')
+    expect(findUnitAt(document.getElementById('word'))).toBeNull()
+  })
+
   it('refuses code, which is not prose', () => {
     mount('<pre id="c">ALTER TABLE users ADD COLUMN email_verified boolean;</pre>')
     expect(findUnitAt(document.getElementById('c'))).toBeNull()
