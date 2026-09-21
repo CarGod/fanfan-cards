@@ -38,7 +38,7 @@ export type ProviderConfig = z.infer<typeof providerConfigSchema>
  */
 export const syncConfigSchema = z.object({
   enabled: z.boolean().default(false),
-  /** Personal Access Token. Stored locally, used only from the service worker. */
+  /** Personal Access Token. Included in the user-selected configuration backup mode. */
   token: z.string().default(''),
   /** Resolved from `GET /user` when the token is verified. */
   owner: z.string().default(''),

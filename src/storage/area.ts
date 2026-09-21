@@ -11,6 +11,8 @@ import { isExtensionAlive } from '@/shared/extensionContext.ts'
 export interface StorageAdapter {
   get<T>(key: string): Promise<T | undefined>
   set<T>(key: string, value: T): Promise<void>
+  /** Persist related keys in one storage operation. */
+  setMany(values: Record<string, unknown>): Promise<void>
   remove(key: string): Promise<void>
   getAll(): Promise<Record<string, unknown>>
   /** Bytes currently used, or `null` when the platform cannot report it. */
@@ -34,6 +36,10 @@ export function createMemoryAdapter(): StorageAdapter {
     async set<T>(key: string, value: T) {
       store.set(key, value)
       listeners.get(key)?.forEach((fn) => fn(value))
+    },
+    async setMany(values) {
+      for (const [key, value] of Object.entries(values)) store.set(key, value)
+      for (const [key, value] of Object.entries(values)) listeners.get(key)?.forEach((fn) => fn(value))
     },
     async remove(key: string) {
       store.delete(key)
@@ -64,6 +70,9 @@ function createChromeAdapter(): StorageAdapter {
     },
     async set<T>(key: string, value: T) {
       await area.set({ [key]: value })
+    },
+    async setMany(values) {
+      await area.set(values)
     },
     async remove(key: string) {
       await area.remove(key)

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Field, SegmentedControl, Select, Toggle } from '@/components/index.tsx'
 import { BrandMark } from '@/components/icons.tsx'
-import { useEntries, useSettings, useToast } from '@/components/hooks.ts'
+import { useSettings, useToast } from '@/components/hooks.ts'
 import { resolveProvider } from '@/ai/index.ts'
 import { requestOptionalApiAccess } from '@/ai/hostPermission.ts'
 import { AIError, aiErrorMessage } from '@/types/ai.ts'
@@ -11,15 +11,6 @@ import {
   providerMeta,
   type ProviderConfig,
 } from '@/types/settings.ts'
-import { clearCache } from '@/storage/repositories/cacheRepo.ts'
-import { clearTranslationCache } from '@/storage/repositories/translationCacheRepo.ts'
-import { replaceAll } from '@/storage/repositories/vocabularyRepo.ts'
-import {
-  buildSnapshot,
-  downloadText,
-  importSnapshot,
-  snapshotFilename,
-} from '@/services/exportService.ts'
 import { useI18n } from '@/i18n/react.ts'
 import { UI_LANGUAGES, type MessageKey, type UiLanguage } from '@/i18n/index.ts'
 import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from '@/shared/language.ts'
@@ -27,20 +18,20 @@ import { SyncSection } from './SyncSection.tsx'
 import { ReviewSection } from './ReviewSection.tsx'
 import { ShortcutSection } from './ShortcutSection.tsx'
 import { FanfanSection } from './FanfanSection.tsx'
+import { ConfigurationSection } from './ConfigurationSection.tsx'
 import { truncate } from '@/shared/utils.ts'
 
-type Category = 'model' | 'reading' | 'fanfan' | 'review' | 'shortcut' | 'sync' | 'data'
+type Category = 'configuration' | 'model' | 'reading' | 'fanfan' | 'review' | 'shortcut'
 
 // 存键而不是存文案：这个常量在模块加载时就求值了，那时用户的语言偏好还没读出来。
 // 真正的取词推迟到渲染里的 `t(item.labelKey)`，切换语言才跟得上。
 const CATEGORIES: ReadonlyArray<{ id: Category; labelKey: MessageKey }> = [
+  { id: 'configuration', labelKey: 'config.title' },
   { id: 'model', labelKey: 'options.nav.model' },
   { id: 'reading', labelKey: 'options.nav.reading' },
   { id: 'fanfan', labelKey: 'options.nav.fanfan' },
   { id: 'review', labelKey: 'options.nav.review' },
   { id: 'shortcut', labelKey: 'options.nav.shortcut' },
-  { id: 'sync', labelKey: 'options.nav.sync' },
-  { id: 'data', labelKey: 'options.nav.data' },
 ]
 
 type TestState =
@@ -101,12 +92,12 @@ const pickQuote = (previous?: TestQuote): TestQuote => {
 export function Options() {
   const { t } = useI18n()
   const { settings, update, loading } = useSettings()
-  const { entries } = useEntries()
   const [toast, showToast] = useToast()
   const [test, setTest] = useState<TestState>({ kind: 'idle' })
   // Re-testing gives you a different sentence, so a second run is a second
   // data point rather than a cached-looking repeat of the first.
   const [quote, setQuote] = useState<TestQuote>(() => pickQuote())
+  const [configurationTab, setConfigurationTab] = useState<'github' | 'plugin'>('github')
   const [shortcuts, setShortcuts] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -121,9 +112,8 @@ export function Options() {
   // One long scroll made the important settings hard to find; each category is
   // now a page of its own, and the URL hash keeps a reload where you were.
   const [category, setCategory] = useState<Category>(
-    () => (CATEGORIES.find((item) => `#${item.id}` === location.hash)?.id ?? 'model'),
+    () => (['#sync', '#data'].includes(location.hash) ? 'configuration' : CATEGORIES.find((item) => `#${item.id}` === location.hash)?.id ?? (new URLSearchParams(location.search).has('welcome') ? 'configuration' : 'model')),
   )
-  const fileRef = useRef<HTMLInputElement>(null)
 
   const welcome = new URLSearchParams(location.search).has('welcome')
   const meta = providerMeta(settings.provider)
@@ -181,33 +171,6 @@ export function Options() {
     }
   }
 
-  const exportAll = async () => {
-    const snapshot = await buildSnapshot()
-    downloadText(snapshotFilename(), JSON.stringify(snapshot, null, 2))
-    showToast(t('options.data.exported', { count: snapshot.counts.entries }))
-  }
-
-  const importFile = async (file: File) => {
-    try {
-      const result = await importSnapshot(JSON.parse(await file.text()))
-      showToast(
-        t('options.data.imported', {
-          added: result.added,
-          merged: result.merged,
-          skipped: result.skipped,
-        }),
-      )
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : t('options.data.import_failed'))
-    }
-  }
-
-  const wipe = async () => {
-    if (!confirm(t('options.data.wipe_confirm', { count: entries.length }))) return
-    await replaceAll([])
-    showToast(t('options.data.wiped'))
-  }
-
   if (loading) return <div className="options muted">{t('common.loading')}</div>
 
   const select = (next: Category) => {
@@ -254,6 +217,25 @@ export function Options() {
       {welcome ? (
         <div className="banner">
           <strong>{t('options.welcome.title')}</strong> {t('options.welcome.privacy')}
+        </div>
+      ) : null}
+
+      {category === 'configuration' ? (
+        <div style={{ display: 'grid', gap: 16 }}>
+          <SegmentedControl
+            value={configurationTab}
+            options={[
+              { value: 'github', label: t('config.github_tab') },
+              { value: 'plugin', label: t('config.plugin_tab') },
+            ]}
+            onChange={setConfigurationTab}
+          />
+          <div role="tabpanel" aria-label={t('config.github_tab')} hidden={configurationTab !== 'github'}>
+            <SyncSection onToast={showToast} />
+          </div>
+          <div role="tabpanel" aria-label={t('config.plugin_tab')} hidden={configurationTab !== 'plugin'}>
+            <ConfigurationSection onConfigure={() => select('model')} />
+          </div>
         </div>
       ) : null}
 
@@ -661,48 +643,6 @@ export function Options() {
       {category === 'review' ? <ReviewSection settings={settings} update={update} /> : null}
 
       {category === 'shortcut' ? <ShortcutSection shortcuts={shortcuts} /> : null}
-
-      {category === 'sync' ? <SyncSection onToast={showToast} /> : null}
-
-      {category === 'data' ? (
-      <section className="card section-card">
-        <div className="section-title">{t('options.data.title')}</div>
-        <div className="section-desc">{t('options.data.desc', { count: entries.length })}</div>
-        <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
-          <button className="btn" onClick={() => void exportAll()}>
-            {t('options.data.export')}
-          </button>
-          <button className="btn" onClick={() => fileRef.current?.click()}>
-            {t('options.data.import')}
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/json"
-            style={{ display: 'none' }}
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              if (file) void importFile(file)
-              event.target.value = ''
-            }}
-          />
-          <button
-            className="btn btn-ghost"
-            onClick={() => {
-              void clearCache()
-              void clearTranslationCache()
-              showToast(t('options.data.cache_cleared'))
-            }}
-          >
-            {t('options.data.clear_cache')}
-          </button>
-          <div className="spacer" />
-          <button className="btn btn-danger" onClick={() => void wipe()}>
-            {t('options.data.wipe')}
-          </button>
-        </div>
-      </section>
-      ) : null}
 
       <div className="faint" style={{ textAlign: 'center' }}>
         {t('options.footer', { name: t('app.name') })}

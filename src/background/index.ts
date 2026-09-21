@@ -1,3 +1,4 @@
+import { registerConfigurationSync } from './configuration.ts'
 import { APP_PAGE, OPTIONS_PAGE } from '@/shared/constants.ts'
 import { registerHandlers } from '@/services/messaging.ts'
 import { initStorage } from '@/storage/migrations.ts'
@@ -11,7 +12,7 @@ import { handlePageState, handleShouldTranslate } from './handlers/pageState.ts'
 import { ensureSyncAlarm, registerSyncScheduler, requestSync } from './sync.ts'
 import { ensureReminderAlarm, registerReminder } from './reminder.ts'
 import { initI18n } from '@/i18n/bootstrap.ts'
-import { onLanguageChange, t } from '@/i18n/index.ts'
+import { onLanguageChange } from '@/i18n/index.ts'
 
 /**
  * MV3 service worker.
@@ -23,10 +24,11 @@ import { onLanguageChange, t } from '@/i18n/index.ts'
  * the event that woke the worker.
  */
 
-const CONTEXT_MENU_ID = 'ai-reader-explain'
+import { CONTEXT_MENU_ID, refreshContextMenu } from './contextMenu.ts'
 
 // Registered in the first synchronous turn, before any await: a listener added
 // later would miss the very event that woke this worker up.
+registerConfigurationSync()
 registerSyncScheduler()
 registerReminder()
 
@@ -40,7 +42,7 @@ registerReminder()
  * `setLanguage` 只在值变了才广播，所以语言本来就对的情况下这里一次都不会多跑。
  */
 void initI18n()
-onLanguageChange(() => createContextMenu())
+onLanguageChange(() => void refreshContextMenu())
 
 registerHandlers({
   ping: async () => ({ ok: true, version: chrome.runtime.getManifest().version }),
@@ -69,7 +71,7 @@ registerHandlers({
 chrome.runtime.onInstalled.addListener((details) => {
   void (async () => {
     await initStorage()
-    createContextMenu()
+    void refreshContextMenu()
     await ensureSyncAlarm()
     await ensureReminderAlarm()
     if (details.reason === 'install') {
@@ -82,7 +84,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 // restarts, so re-assert them on startup as well as on install.
 chrome.runtime.onStartup.addListener(() => {
   void initStorage()
-  createContextMenu()
+  void refreshContextMenu()
   void ensureSyncAlarm()
   void ensureReminderAlarm()
 })
@@ -111,17 +113,6 @@ chrome.commands?.onCommand.addListener((command, tab) => {
   }
   if (command === 'open-app') void openAppPage('#/dashboard')
 })
-
-function createContextMenu(): void {
-  chrome.contextMenus.removeAll(() => {
-    // `%s` 是 Chrome 自己替换选中文字的占位符，两种语言里都得原样留着。
-    chrome.contextMenus.create({
-      id: CONTEXT_MENU_ID,
-      title: t('background.menu.explain', { name: t('app.name') }),
-      contexts: ['selection'],
-    })
-  })
-}
 
 async function sendToContent(tabId: number, command: ContentCommand): Promise<void> {
   try {

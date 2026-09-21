@@ -2,6 +2,7 @@ import { STORAGE_KEYS } from '@/shared/constants.ts'
 import { DEFAULT_SETTINGS, settingsSchema, type Settings } from '@/types/settings.ts'
 import { storage } from '../area.ts'
 import { withLock } from '../mutex.ts'
+import { DOCUMENT_KEY, documentForEdit, same } from '@/configuration/document.ts'
 
 /**
  * Settings are always read through the zod schema, so a partially-written or
@@ -17,7 +18,9 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
   return withLock(STORAGE_KEYS.settings, async () => {
     const current = await getSettings()
     const next = settingsSchema.parse({ ...current, ...patch })
-    await storage().set(STORAGE_KEYS.settings, next)
+    if (same(current, next)) return next
+    const document = await documentForEdit(current, next)
+    await storage().setMany({ [STORAGE_KEYS.settings]: next, [DOCUMENT_KEY]: document })
     return next
   })
 }

@@ -69,7 +69,7 @@ globalThis.chrome = {
       },
     },
   },
-  contextMenus: { create: () => {}, removeAll: (cb) => cb?.(), onClicked: { addListener: () => {} } },
+  contextMenus: { create: (_properties, cb) => { cb?.() }, removeAll: (cb) => cb?.(), onClicked: { addListener: () => {} } },
   alarms: {
     created: new Map(),
     get: async function (name) {
@@ -223,12 +223,14 @@ await check('removing an entry hides it but leaves a tombstone for other devices
   assert.ok(words[0].deletedAt > 0, 'deletion must be dated so it can be ordered against edits')
 })
 
-await check('the sync scheduler leaves no alarm behind when sync is off', async () => {
+await check('unconfigured GitHub sync stays off while configuration retry remains scheduled', async () => {
   // A periodic alarm recreated on every worker start would reset its own timer
   // and never fire; an alarm for a feature that is off should not exist at all.
   // This also covers the change-triggered debounce: saving words above must not
   // have scheduled anything while sync is unconfigured.
-  assert.equal(globalThis.chrome.alarms.created.size, 0)
+  assert.equal(globalThis.chrome.alarms.created.has('ara:sync'), false)
+  assert.equal(globalThis.chrome.alarms.created.has('ara:sync-soon'), false)
+  assert.equal(globalThis.chrome.alarms.created.get('fanfan:configuration-retry')?.periodInMinutes, 5)
 })
 
 await check('page translation is remembered per host, not per tab', async () => {

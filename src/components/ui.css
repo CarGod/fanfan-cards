@@ -1772,3 +1772,12 @@ textarea:focus {
 .sense-meaning {
   margin: 0;
 }
+
+/* Configuration transfer reuses the settings palette and remains usable in narrow tabs. */
+.config-status { padding: 16px; border-radius: 12px; background: var(--bg); margin: 16px 0; display: grid; gap: 8px; }
+.config-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.config-choice, .config-directory { padding: 18px; border: 1px solid var(--border); border-radius: 12px; }
+.config-choice[data-active="true"] { border-color: var(--accent); }
+.config-choice h3, .config-directory h3 { font-size: 15px; margin: 0; }
+.config-choice p, .config-directory p { line-height: 1.6; }
+.config-directory { margin: 16px 0; }

@@ -1,3 +1,4 @@
+import { repositoryLinks } from '@/shared/repositoryLinks.ts'
 import { useEffect, useState } from 'react'
 import { Field, Toggle } from '@/components/index.tsx'
 import { useSettings } from '@/components/hooks.ts'
@@ -13,11 +14,8 @@ type Busy = 'idle' | 'connecting' | 'syncing'
 /**
  * Pre-fills scope, note and expiry on GitHub's token page.
  *
- * `default_expires_at=none` is deliberate. GitHub warns against non-expiring
- * tokens, and that warning is right for tokens that travel; this one never
- * leaves the machine it was pasted into. The alternative is worse for this
- * product: an expiring token makes background sync fail silently months later,
- * and the user finds out when they need the data.
+ * The existing token-generation defaults are kept here. Tokens also travel in
+ * configuration sync/export according to the mode selected by the user.
  */
 const TOKEN_URL =
   'https://github.com/settings/tokens/new?scopes=repo&description=AI%20Reader%20Assistant&default_expires_at=none'
@@ -38,6 +36,7 @@ export function SyncSection({ onToast }: { onToast: (message: string) => void })
   const [error, setError] = useState('')
 
   const config = settings.sync
+  const repoLinks = repositoryLinks(config.owner, config.repo)
 
   useEffect(() => {
     void readSyncState().then(setState)
@@ -187,9 +186,9 @@ export function SyncSection({ onToast }: { onToast: (message: string) => void })
         >
           {busy === 'syncing' ? t('options.sync.action.syncing') : t('options.sync.action.sync_now')}
         </button>
-        {state.repoUrl ? (
-          <a className="btn btn-ghost" href={state.repoUrl} target="_blank" rel="noreferrer">
-            {t('options.sync.action.open_repo')}
+        {repoLinks ? (
+          <a className="btn btn-ghost" href={repoLinks.view} target="_blank" rel="noreferrer">
+            {t('repo.view')}
           </a>
         ) : null}
       </div>
