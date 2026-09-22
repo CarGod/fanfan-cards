@@ -1,6 +1,7 @@
 import { t } from '@/i18n/index.ts'
 import { sendMessage } from '@/services/messaging.ts'
 import { noteOrphanError } from '@/shared/extensionContext.ts'
+import { STORAGE_KEYS } from '@/shared/constants.ts'
 import { isInSourceLanguage } from '@/shared/language.ts'
 import { storage } from '@/storage/area.ts'
 import { getSettings, isHostEnabled } from '@/storage/repositories/settingsRepo.ts'
@@ -21,7 +22,7 @@ export const LINE_CLASS = 'fanfan-dom-subtitle'
 export const PICK_BOX_CLASS = 'fanfan-pick-box'
 export const PICK_HINT_CLASS = 'fanfan-pick-hint'
 /** 存在 settings 之外：这是每台机器、每个站各自的事，不该跟着配置同步走。 */
-export const SELECTORS_KEY = 'ara:videoSubtitleSelectors'
+export const SELECTORS_KEY = STORAGE_KEYS.videoSubtitleSelectors
 
 /**
  * 认识的站点。选择器指向**稳定的容器**，不是每一行都重建的那个节点。

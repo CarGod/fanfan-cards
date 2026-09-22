@@ -151,6 +151,7 @@ export const MESSAGES = {
   // ── 设置页 ────────────────────────────────────────────────────────────
   'options.nav.model': { 'zh-CN': 'AI 模型', en: 'AI model' },
   'options.nav.reading': { 'zh-CN': '划词与翻译', en: 'Look-up & translation' },
+  'options.nav.video': { 'zh-CN': '视频翻译', en: 'Video subtitles' },
   'options.nav.fanfan': { 'zh-CN': '翻翻模式', en: 'FanFan mode' },
   'options.nav.review': { 'zh-CN': '复习', en: 'Review' },
   'options.nav.shortcut': { 'zh-CN': '快捷键', en: 'Shortcuts' },
@@ -1214,6 +1215,30 @@ export const MESSAGES = {
   },
 
   // --- v2.2：任意网站的视频字幕 ---
+  'options.video.title': { 'zh-CN': '视频双语字幕', en: 'Bilingual video subtitles' },
+  'options.video.desc': {
+    'zh-CN': 'YouTube、B 站和带字幕轨的视频，鼠标移上去就有开关。只在字幕是你设置的源语言（现在是{lang}）时才会开：中文字幕的视频不会被叠上一层中文。源语言在「划词与翻译」里改。',
+    en: 'YouTube, Bilibili and any video with a subtitle track get a switch when you hover. It only turns on when the subtitles are in your source language (currently {lang}); change that under Look-up & translation.',
+  },
+  'options.video.auto': { 'zh-CN': '打开视频就自动开', en: 'Turn on automatically' },
+  'options.video.auto_desc': {
+    'zh-CN': '在播放器上点过一次开关，也会记成这个选择。',
+    en: 'Flipping the switch on a player sets this too.',
+  },
+  'options.video.mode': { 'zh-CN': '显示', en: 'Display' },
+  'options.video.size': { 'zh-CN': '字号', en: 'Size' },
+  'options.video.background': { 'zh-CN': '字幕底衬', en: 'Background' },
+  'options.video.background_hint': {
+    'zh-CN': '底衬越浅越看得清画面，字靠描边压住。',
+    en: 'Lighter shows more of the picture; the text keeps its outline.',
+  },
+  'options.video.sites.title': { 'zh-CN': '点选过字幕位置的网站', en: 'Sites with a picked subtitle area' },
+  'options.video.sites.desc': {
+    'zh-CN': '弹窗里「翻译视频字幕」点过的位置记在这里，只存本机。点错了就忘掉，下次重新点。',
+    en: 'Areas you picked with "Translate video subtitles" live here, on this device only. Forget one to pick it again.',
+  },
+  'options.video.sites.empty': { 'zh-CN': '还没有。', en: 'None yet.' },
+  'options.video.sites.forget': { 'zh-CN': '忘掉', en: 'Forget' },
   'video.generic.chip_off': { 'zh-CN': '双语字幕', en: 'Bilingual subs' },
   'video.generic.chip_loading': { 'zh-CN': '字幕准备中…', en: 'Loading subs…' },
   'video.generic.chip_on': { 'zh-CN': '双语字幕 · 开', en: 'Bilingual subs · on' },

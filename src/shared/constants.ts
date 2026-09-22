@@ -15,6 +15,8 @@ export const STORAGE_KEYS = {
   explainCache: 'ara:cache:explain',
   translationCache: 'ara:cache:translation',
   syncState: 'ara:syncState',
+  /** 读者点选过的视频字幕位置，按站点存；不进 settings，不随配置同步。 */
+  videoSubtitleSelectors: 'ara:videoSubtitleSelectors',
 } as const
 
 export const SCHEMA_VERSION = 10

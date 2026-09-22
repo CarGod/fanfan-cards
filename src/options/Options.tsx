@@ -19,10 +19,11 @@ import { SyncSection } from './SyncSection.tsx'
 import { ReviewSection } from './ReviewSection.tsx'
 import { ShortcutSection } from './ShortcutSection.tsx'
 import { FanfanSection } from './FanfanSection.tsx'
+import { VideoSection } from './VideoSection.tsx'
 import { ConfigurationSection } from './ConfigurationSection.tsx'
 import { truncate } from '@/shared/utils.ts'
 
-type Category = 'configuration' | 'model' | 'reading' | 'fanfan' | 'review' | 'shortcut'
+type Category = 'configuration' | 'model' | 'reading' | 'video' | 'fanfan' | 'review' | 'shortcut'
 
 /** 欢迎条只在首装那一次出现；关过一次就永远不再出现，刷新也不回来。 */
 const WELCOME_SEEN_KEY = 'ara:welcomeSeen'
@@ -33,6 +34,7 @@ const WELCOME_SEEN_KEY = 'ara:welcomeSeen'
 const CATEGORIES: ReadonlyArray<{ id: Category; labelKey: MessageKey }> = [
   { id: 'model', labelKey: 'options.nav.model' },
   { id: 'reading', labelKey: 'options.nav.reading' },
+  { id: 'video', labelKey: 'options.nav.video' },
   { id: 'fanfan', labelKey: 'options.nav.fanfan' },
   { id: 'review', labelKey: 'options.nav.review' },
   { id: 'shortcut', labelKey: 'options.nav.shortcut' },
@@ -679,6 +681,8 @@ export function Options() {
         </Advanced>
       </section>
       ) : null}
+
+      {category === 'video' ? <VideoSection settings={settings} update={update} /> : null}
 
       {category === 'fanfan' ? <FanfanSection settings={settings} update={update} /> : null}
 
