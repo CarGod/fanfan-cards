@@ -133,4 +133,9 @@ export async function ensureSyncAlarm(): Promise<void> {
     delayInMinutes: sync.intervalMinutes,
     periodInMinutes: sync.intervalMinutes,
   })
+  /*
+   * 周期闹钟第一次要等满一个周期才响。刚装上、刚从浏览器同步空间恢复了 Token 的那一刻，
+   * 读者最想看到的是词卡马上回来——所以顺手排一次半分钟后的同步，不让他等半小时。
+   */
+  chrome.alarms.create(ALARM_SOON, { delayInMinutes: DEBOUNCE_MINUTES })
 }

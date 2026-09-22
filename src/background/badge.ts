@@ -1,14 +1,18 @@
 import { listEntries, watchEntries } from '@/storage/repositories/vocabularyRepo.ts'
+import { getSettings, watchSettings } from '@/storage/repositories/settingsRepo.ts'
+import { readActivity, todayActivity } from '@/storage/repositories/activityRepo.ts'
 import { countDue } from '@/flashcard/scheduler.ts'
+import { STORAGE_KEYS } from '@/shared/constants.ts'
 
 /**
- * 工具栏图标上的待复习数。
+ * 工具栏图标上的数字：**今天还要复习几张**。
  *
- * 复习提醒默认是关的，弹窗要点开才看得见数字——「记」这一环原本没有任何被动触达。
- * 角标是成本最低的那种：不弹窗、不响，只是图标角上多一个数，读者顺手就能看到。
+ * 不是「一共到期几张」——那个数会随着词库变大一直涨，看着只会焦虑。设置里有
+ * 「每日复习目标」，角标就按它算：目标减去今天已复习的，再不超过实际到期的数。
+ * 今天的目标完成了，角标就消失，哪怕还有到期的词。
  *
- * 词库一变（收藏、复习、删除、同步）就重算；到期是随时间推移发生的，所以再用一个
- * 半小时的闹钟兜底。角标只显示到期数，没有到期就是空的，不显示 0。
+ * 词库、活动记录、设置任一变了就重算；到期和「今天」都是随时间推移变的，
+ * 所以再用一个半小时的闹钟兜底（跨过零点后已复习数归零，角标会回来）。
  */
 const ALARM = 'ara:badge'
 const BADGE_COLOR = '#ff6a3d'
@@ -18,6 +22,10 @@ export function registerBadge(): void {
     if (alarm.name === ALARM) void refreshBadge()
   })
   watchEntries(() => void refreshBadge())
+  watchSettings(() => void refreshBadge())
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes[STORAGE_KEYS.activity]) void refreshBadge()
+  })
 }
 
 export async function ensureBadgeAlarm(): Promise<void> {
@@ -26,12 +34,22 @@ export async function ensureBadgeAlarm(): Promise<void> {
   await refreshBadge()
 }
 
+/** 今天还要复习几张：目标减已完成，不超过实际到期数。纯函数，方便测。 */
+export function remainingToday(due: number, dailyGoal: number, reviewedToday: number): number {
+  return Math.max(0, Math.min(due, dailyGoal - reviewedToday))
+}
+
 export async function refreshBadge(): Promise<void> {
   // 冒烟测试用的假 chrome 没有 action；真浏览器里总有。
   const action = chrome.action as typeof chrome.action | undefined
   if (!action?.setBadgeText) return
-  const due = countDue(await listEntries())
-  const text = due === 0 ? '' : due > 99 ? '99+' : String(due)
+  const [entries, settings, activity] = await Promise.all([listEntries(), getSettings(), readActivity()])
+  const remaining = remainingToday(
+    countDue(entries),
+    settings.dailyReviewGoal,
+    todayActivity(activity).reviewed,
+  )
+  const text = remaining === 0 ? '' : remaining > 99 ? '99+' : String(remaining)
   await action.setBadgeBackgroundColor?.({ color: BADGE_COLOR })
   await action.setBadgeText({ text })
 }

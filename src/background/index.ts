@@ -9,7 +9,7 @@ import { handleLookupWord, handleRemoveWord, handleSaveWord } from './handlers/v
 import { handleEnrichEntry } from './handlers/enrich.ts'
 import { handleTranslateInput, handleTranslatePage } from './handlers/translate.ts'
 import { handlePageState, handleShouldTranslate } from './handlers/pageState.ts'
-import { ensureSyncAlarm, registerSyncScheduler, requestSync } from './sync.ts'
+import { ensureSyncAlarm, registerSyncScheduler, requestSync, scheduleSyncSoon } from './sync.ts'
 import { ensureReminderAlarm, registerReminder } from './reminder.ts'
 import { ensureBadgeAlarm, registerBadge } from './badge.ts'
 import { initI18n } from '@/i18n/bootstrap.ts'
@@ -77,6 +77,8 @@ chrome.runtime.onInstalled.addListener((details) => {
     await ensureSyncAlarm()
     await ensureReminderAlarm()
     await ensureBadgeAlarm()
+    // 升级之后周期闹钟还在，ensureSyncAlarm 不会重排；这里明确要一次，新版本一装上就把词卡拉齐。
+    await scheduleSyncSoon()
     if (details.reason === 'install') {
       await chrome.tabs.create({ url: chrome.runtime.getURL(`${OPTIONS_PAGE}?welcome=1`) })
     }
@@ -91,6 +93,8 @@ chrome.runtime.onStartup.addListener(() => {
   void ensureSyncAlarm()
   void ensureReminderAlarm()
   void ensureBadgeAlarm()
+  // 浏览器刚启动：别的设备可能已经推了新词，早点拉一次。
+  void scheduleSyncSoon()
 })
 
 /*
