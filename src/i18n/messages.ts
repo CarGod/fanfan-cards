@@ -990,7 +990,9 @@ export const MESSAGES = {
   // ── 服务商 ────────────────────────────────────────────────────────────
   'provider.badge.recommended': { 'zh-CN': '推荐', en: 'Recommended' },
   'provider.badge.free': { 'zh-CN': '免费', en: 'Free' },
-  'provider.label.custom': { 'zh-CN': 'OpenAI 兼容', en: 'OpenAI-compatible' },
+  'provider.label.custom': { 'zh-CN': '自定义', en: 'Custom' },
+  'provider.label.openai': { 'zh-CN': 'OpenAI（兼容）', en: 'OpenAI (compatible)' },
+  'provider.label.claude': { 'zh-CN': 'Claude（兼容）', en: 'Claude (compatible)' },
   'provider.label.offline_dict': { 'zh-CN': '离线词典', en: 'Offline dictionary' },
 
   // ── 其它 ────────────────────────────────────────────────────────────────
@@ -1151,12 +1153,12 @@ export const MESSAGES = {
     en: 'Prepaid, pay as you go. At 30 lookups a day, roughly ¥7–12 a month (estimate).',
   },
   'options.model.guide.claude': {
-    'zh-CN': '需要海外网络和信用卡。默认用便宜的 Haiku 4.5，查词足够。兼容 Anthropic 协议的网关也能用：展开「高级设置」，把 API 地址换成网关的。',
-    en: 'Needs a card on file. Defaults to Haiku 4.5, which is plenty for lookups. Anthropic-compatible gateways work too: open Advanced and replace the API endpoint.',
+    'zh-CN': '官方接口需要海外网络和信用卡，默认用便宜的 Haiku 4.5，查词足够。任何兼容 Anthropic 协议的网关也能用（比如 MiMo 的 /anthropic 地址）：展开「高级设置」，把 API 地址换成网关的。',
+    en: 'The official API needs a card on file; defaults to Haiku 4.5, plenty for lookups. Any Anthropic-compatible gateway works too (e.g. MiMo\'s /anthropic endpoint): open Advanced and replace the API endpoint.',
   },
   'options.model.guide.openai': {
-    'zh-CN': '需要海外网络和信用卡，预充值。任何 OpenAI 兼容网关（小米 MiMo、硅基流动、OpenRouter…）也能在这里用：展开「高级设置」，把 API 地址换成网关的，模型名填网关的。',
-    en: 'Prepaid; needs a card on file. Any OpenAI-compatible gateway (Xiaomi MiMo, SiliconFlow, OpenRouter…) works here too: open Advanced, replace the API endpoint with the gateway\'s, and enter its model name.',
+    'zh-CN': '官方接口需要海外网络和信用卡，预充值。任何 OpenAI 兼容网关都在这里用——小米 MiMo、硅基流动、OpenRouter、本机的 Ollama / LM Studio：展开「高级设置」，把 API 地址换成网关的，模型名填网关的。买了套餐的服务商要填套餐专用地址，否则会报余额不足。',
+    en: 'The official API is prepaid and needs a card on file. Any OpenAI-compatible gateway goes here too — Xiaomi MiMo, SiliconFlow, OpenRouter, local Ollama / LM Studio: open Advanced, replace the API endpoint with the gateway\'s, and enter its model name. If you bought a plan, use the plan-specific endpoint or you will get a balance error.',
   },
   'options.model.guide.gemini': {
     'zh-CN': '有免费额度，但中国大陆不在服务地区；免费层的内容会被 Google 用于改进产品。',

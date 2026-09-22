@@ -53,6 +53,15 @@ describe('resolveProvider', () => {
     expect(downgradeReason).toBeUndefined()
   })
 
+  it('treats OpenAI with a gateway endpoint as the same provider, not a downgrade', () => {
+    const { provider, downgradeReason } = resolveProvider(
+      settingsFor('openai', { baseUrl: 'https://api.xiaomimimo.com/v1', model: 'mimo-v2.6-pro' }),
+    )
+    expect(downgradeReason).toBeUndefined()
+    expect(provider.id).toBe('openai')
+    expect(provider.model).toBe('mimo-v2.6-pro')
+  })
+
   it('never throws for a provider that needs a base URL it does not have', () => {
     const { provider, downgradeReason } = resolveProvider(settingsFor('custom'))
     expect(provider.id).toBe('google')

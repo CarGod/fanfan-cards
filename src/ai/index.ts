@@ -44,7 +44,13 @@ export function resolveProvider(settings: Settings): ResolvedProvider {
         return { provider: new ClaudeProvider({ apiKey, model, ...(baseUrl ? { baseUrl } : {}) }) }
       case 'gemini':
         return { provider: new GeminiProvider({ apiKey, model, baseUrl }) }
-      case 'openai':
+      case 'openai': {
+        /*
+         * 「OpenAI（兼容）」：地址是官方的就用全套（json_schema、reasoning_effort）；
+         * 换成别家网关（MiMo、硅基流动、OpenRouter、Ollama…）就退到最保守的写法——
+         * 「OpenAI 兼容」是个很宽的说法，不认识的字段常常直接 400。
+         */
+        const official = !baseUrl || /^https:\/\/api\.openai\.com(\/|$)/i.test(baseUrl)
         return {
           provider: new OpenAICompatibleProvider({
             id: 'openai',
@@ -52,11 +58,12 @@ export function resolveProvider(settings: Settings): ResolvedProvider {
             apiKey,
             model,
             baseUrl,
-            structuredOutput: 'json_schema',
-            // o 系列 / gpt-5 认 reasoning_effort。
-            reasoning: 'openai',
+            structuredOutput: official ? 'json_schema' : 'json_object',
+            // o 系列 / gpt-5 认 reasoning_effort；网关不发。
+            reasoning: official ? 'openai' : 'none',
           }),
         }
+      }
       case 'deepseek':
         return {
           provider: new OpenAICompatibleProvider({

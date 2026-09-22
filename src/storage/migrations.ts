@@ -146,6 +146,27 @@ const MIGRATIONS: Record<number, Migration> = {
     settings['provider'] = 'google'
     await storage().set(STORAGE_KEYS.settings, settings)
   },
+
+  /**
+   * v10: 「自定义」并入「OpenAI（兼容）」。
+   *
+   * 两者本来就是同一个协议，区别只在地址。选着自定义的人，把他填的地址、Key、模型
+   * 搬进 openai 那一栏（只在那一栏是空的时候搬，不覆盖别人填过的东西），再把当前
+   * 服务商指过去。custom 的配置原样留着，不删。
+   */
+  10: async (db) => {
+    const settings = db[STORAGE_KEYS.settings] as Record<string, unknown> | undefined
+    if (!settings || settings['provider'] !== 'custom') return
+    const providers = (settings['providers'] ?? {}) as Record<string, Record<string, string> | undefined>
+    const custom = providers['custom']
+    const openai = providers['openai']
+    if (custom && (!openai || !(openai['apiKey'] ?? '').trim())) {
+      providers['openai'] = { ...(openai ?? {}), ...custom }
+      settings['providers'] = providers
+    }
+    settings['provider'] = 'openai'
+    await storage().set(STORAGE_KEYS.settings, settings)
+  },
 }
 
 export async function initStorage(): Promise<StorageMeta> {

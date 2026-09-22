@@ -292,6 +292,7 @@ export const PROVIDER_CATALOGUE: readonly ProviderMeta[] = [
   {
     id: 'claude',
     label: 'Claude',
+    labelKey: 'provider.label.claude',
     // 查一个词用不着 Opus；Haiku 4.5 便宜 5 倍，质量对这个任务够用。
     defaultModel: 'claude-haiku-4-5-20251001',
     defaultBaseUrl: '',
@@ -302,6 +303,7 @@ export const PROVIDER_CATALOGUE: readonly ProviderMeta[] = [
   {
     id: 'openai',
     label: 'OpenAI',
+    labelKey: 'provider.label.openai',
     defaultModel: 'gpt-4o-mini',
     defaultBaseUrl: 'https://api.openai.com/v1',
     modelSuggestions: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'],
@@ -322,6 +324,8 @@ export const PROVIDER_CATALOGUE: readonly ProviderMeta[] = [
     id: 'custom',
     label: '自定义',
     labelKey: 'provider.label.custom',
+    // v2.1 起并入「OpenAI（兼容）」：换个 API 地址就是网关。老设置由 v10 迁移搬过去。
+    hidden: true,
     defaultModel: '',
     defaultBaseUrl: '',
     modelSuggestions: [],
