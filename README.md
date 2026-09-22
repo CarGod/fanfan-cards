@@ -12,6 +12,11 @@
   <a href="https://luffyliu.com/fanfan-cards/"><strong>产品主页</strong></a>
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/demo-degrade.gif" width="720" alt="真机演示：划词 degrade → AI 按这句解释 → 收藏 → 在另一个网页上自动亮起，点一下回看" />
+</p>
+<p align="center"><sub>真机录制，DeepSeek 真实输出，未剪辑拼接。</sub></p>
+
 一个 AI 驱动的英语阅读与学习 Chrome 扩展（Manifest V3）。它不是"英文 → 中文"的翻译插件，
 而是一条完整的学习闭环：
 
@@ -71,18 +76,20 @@
 **YouTube 双语字幕** — 在播放器控制栏直接开启原文 + 译文字幕，也可切换为仅译文，
 并调整字号与背景深浅。
 
-![AI 结合原句解释单词](docs/screenshots/shot-1-context.png)
-![学习面板](docs/screenshots/dashboard.png)
-![翻翻模式：在文章里标出已收藏单词](docs/screenshots/fanfan-mode-highlight.png)
-![YouTube 双语字幕](docs/screenshots/youtube-bilingual-subtitles.png)
+![词典义 vs 这里指什么：AI 按这句话解释](docs/screenshots/shot-1-context.png)
+![查过的词，下次自己亮起来：翻翻模式在文章里标出已收藏的词](docs/screenshots/shot-2-fanfan.png)
+![点一下回看，不再调用 AI](docs/screenshots/shot-3-revisit.png)
+![带着原句复习](docs/screenshots/shot-4-review.png)
+![YouTube 双语字幕](docs/screenshots/shot-5-youtube.png)
 
 **同步到 GitHub 私有仓库** — 填一个 Personal Access Token，扩展自动替你创建私有仓库，
 之后每次同步都是一次提交：`vocabulary.json`（机器读）+ `VOCABULARY.md`（人读，按字母分组）+
 `README.md`（统计首页）。**commit 历史就是你的学习记录**。同步是双向合并，不是覆盖。
 
-**多模型 & 零配置起步** — 默认离线词典模式，装上即可跑通全流程；填入任一 API Key
-（Claude / OpenAI / DeepSeek / Gemini / 任意 OpenAI 兼容网关）即可获得真正的语境解释。
-Key 只存在本机，请求由扩展后台直发服务商。
+**自带 Key，多模型** — 需要你自己的 AI API Key（DeepSeek / Claude / OpenAI / Gemini / 任意 OpenAI 兼容网关）。
+按每天查 30 个词算，用 DeepSeek 一个月约 7–12 元（估算）。请求由扩展后台直发服务商，没有中转。
+Key 默认随你的 Chrome 账号同步（见「配置同步」），可以改成仅本机。
+不配 Key 时只有一个 15 个词的示例词典，用来看界面，不能真正查词，也不能翻译。
 
 ## 品牌
 
@@ -129,7 +136,7 @@ npm run build
 3. 点击 **加载已解压的扩展程序**，选择本项目的 `dist/` 目录
 4. 打开任意英文网页（GitHub README、技术博客、Reddit…），选中一个单词
 
-首次安装会自动打开设置页。不填 Key 也能用（离线词典），填了 Key 才有语境解释。
+首次安装会自动打开设置页：粘贴 Key → 刷新正在读的页面 → 选一个词。不填 Key 只能看示例词典。
 
 ## 开发
 
@@ -198,7 +205,7 @@ src/
 - **自动同步**：同一浏览器账号、开启相应同步、安装同一扩展 ID 后自动读取配置。修改后合并保存，失败时保留本机配置，稍后自动重试。Chrome 与 Edge 的账号空间互不相通。提示中的最后写入时间表示浏览器同步空间的本机写入时间，并非云端上传回执。
 - **手动选择配置**：下载配置 JSON，在另一浏览器导入。仅包含设置、AI 密钥、GitHub 连接配置，不含词卡和缓存。导入后使用本机模式，避免自动覆盖账号中的配置。
 - **iCloud / 本地目录**：在支持 File System Access 的浏览器中手动选择 iCloud Drive 或本地目录，插件读写 `FanFan Cards/config.json`；也可直接选择 FanFan Cards 子目录。首次先读取已有文件，之后自动保存修改，在后台定期和设置页打开时检查更新。Apple 负责云端同步。新设备必须重新选择目录，权限失效时重新授权。不支持目录访问时使用文件导入/下载。
-- **全新安装**：没有配置时可从头填写 AI 密钥，并在 GitHub 同步页连接仓库。默认使用本机模式，随后可启用自动同步。
+- **全新安装**：没有配置时可从头填写 AI 密钥，并在 GitHub 同步页连接仓库。默认开启浏览器自动同步，随时可改成仅本机。
 
 自动同步和配置文件都包含完整密钥，不增加额外口令。自定义 API 的浏览器访问权限不随配置迁移，可能需点击“测试连接”。开发者模式从不同目录加载的扩展 ID 可能不同；这种情况用配置文件迁移，或确保发行包使用相同的扩展身份。不要为旧安装随意更换 manifest key，以免改变扩展 ID 而无法访问原本的数据。
 

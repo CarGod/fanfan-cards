@@ -11,6 +11,7 @@ import { handleTranslateInput, handleTranslatePage } from './handlers/translate.
 import { handlePageState, handleShouldTranslate } from './handlers/pageState.ts'
 import { ensureSyncAlarm, registerSyncScheduler, requestSync } from './sync.ts'
 import { ensureReminderAlarm, registerReminder } from './reminder.ts'
+import { ensureBadgeAlarm, registerBadge } from './badge.ts'
 import { initI18n } from '@/i18n/bootstrap.ts'
 import { onLanguageChange } from '@/i18n/index.ts'
 
@@ -31,6 +32,7 @@ import { CONTEXT_MENU_ID, refreshContextMenu } from './contextMenu.ts'
 registerConfigurationSync()
 registerSyncScheduler()
 registerReminder()
+registerBadge()
 
 /*
  * 后台也要接一次界面语言。
@@ -74,6 +76,7 @@ chrome.runtime.onInstalled.addListener((details) => {
     void refreshContextMenu()
     await ensureSyncAlarm()
     await ensureReminderAlarm()
+    await ensureBadgeAlarm()
     if (details.reason === 'install') {
       await chrome.tabs.create({ url: chrome.runtime.getURL(`${OPTIONS_PAGE}?welcome=1`) })
     }
@@ -87,6 +90,7 @@ chrome.runtime.onStartup.addListener(() => {
   void refreshContextMenu()
   void ensureSyncAlarm()
   void ensureReminderAlarm()
+  void ensureBadgeAlarm()
 })
 
 /*

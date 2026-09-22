@@ -712,3 +712,29 @@
 .sense-meaning {
   margin: 0;
 }
+
+/* v2.0.1：带按钮的提示条（首次收藏后问要不要打开翻翻模式） */
+.toast-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+  max-width: 440px;
+  line-height: 1.4;
+}
+.toast-btn {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--surface);
+  background: transparent;
+  color: var(--surface);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.toast-btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-text);
+}

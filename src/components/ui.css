@@ -1781,3 +1781,39 @@ textarea:focus {
 .config-choice h3, .config-directory h3 { font-size: 15px; margin: 0; }
 .config-choice p, .config-directory p { line-height: 1.6; }
 .config-directory { margin: 16px 0; }
+
+/* v2.0.1：首装三步引导 + 高级设置折叠 */
+.welcome-steps {
+  margin: 8px 0 8px;
+  padding-left: 1.4em;
+  display: grid;
+  gap: 4px;
+}
+.advanced {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.advanced > summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.advanced > summary::-webkit-details-marker {
+  display: none;
+}
+.advanced > summary::before {
+  content: '▸';
+  font-size: 11px;
+  color: var(--text-faint);
+  transition: transform 0.15s;
+}
+.advanced[open] > summary::before {
+  transform: rotate(90deg);
+}
+.advanced-body {
+  margin-top: 14px;
+}

@@ -13,20 +13,20 @@
 
 | 语言 | 文案 | 长度 |
 |---|---|---|
-| 简体中文 | 翻翻词卡 — AI 英语阅读助手 | 15 |
-| English | FanFan Cards — AI English Reading Assistant | 43 |
+| 简体中文 | 翻翻词卡：AI 语境划词 · 生词本 | 15 |
+| English | FanFan Cards — AI Context Lookup & Vocab | 40 |
 
 与 `public/_locales/*/messages.json` 里的 `extName` 保持一致。改一处要改两处。
 
 ### 简短描述（132 字符内，商店列表里唯一会被读到的一句）
 
-**简体中文**（60 字）
+**简体中文**（58 字）
 
-> 在真实英文网页上阅读，AI 结合上下文解释你不认识的词，一键收藏成你自己的英语知识资产，并按记忆曲线复习。
+> 在英文网页上划词，AI 解释它在这句里的意思；收进生词本，查过的词下次在别的网页会自己亮起来。需要你自己的 AI Key。
 
-**English**（131 字符）
+**English**（125 字符）
 
-> Read real English pages, let AI explain unfamiliar words in context, save them as your own word cards, and review them on a memory curve.
+> Look up a word on any English page and see what it means here. Saved words light up on the next page. Bring your own AI key.
 
 ### 详细描述
 
@@ -37,26 +37,22 @@
 > **划词就懂。** 选中一个词，AI 结合它所在的这句话给出解释——不是词典里那条最常见的义项，
 > 而是它在这里到底什么意思。「lock a table for minutes」里的 lock 不是「锁」。
 >
-> **收藏过的词，会在下一篇文章里重新出现。** 打开翻翻模式，词库里的词会在网页上轻轻标出来；
-> 点一下直接看已经保存的释义、例句和近义词，不再调用 AI，也不产生新的模型费用。
+> **查过的词，下次自己亮起来。** 打开翻翻模式，生词本里的词会在任何网页上被轻轻标出来；
+> 点一下直接看已经保存的释义、原句和例句，不再调用 AI，也不产生新的费用。
 >
-> **整段、整页翻译。** 悬停加一个键翻译这一段；一个快捷键翻译整页。译文追加在原文下面，
-> 不替换、不打乱排版。
->
-> **YouTube 双语字幕。** 播放器控制栏里多一颗按钮，点开就是双语字幕：原文一行、中文一行，
-> 也可以只留中文。字号三档、底衬透明度四档，调完记住。
->
-> **收进词卡，按记忆曲线复习。** 收藏时连同它出现的那句话和网址一起存下来——
+> **收进生词本，带着原句复习。** 收藏时连同它出现的那句话和网址一起存下来——
 > 脱离语境的单词表是背不下来的。复习按间隔重复排期。
 >
-> **数据是你的。** 词卡、设置、API Key 默认只存在你自己的浏览器里。开发者没有服务器，
-> 收不到你的任何数据。想要备份和跨设备，可以同步到**你自己的 GitHub 私有仓库**，
-> 存成人能读的 Markdown。
+> **也能翻译。** 悬停加一个键翻译这一段，一个快捷键翻译整页，YouTube 播放器里有双语字幕。
+> 译文追加在原文下面，不替换、不打乱排版。
 >
-> **自带离线词典。** 不配 API Key 也能用，只是解释不结合语境。
+> **需要你自己的 AI Key。** 支持 DeepSeek、Claude、OpenAI、Gemini，以及任何 OpenAI 兼容接口。
+> 按每天查 30 个词算，用 DeepSeek 一个月大约 7–12 元（估算）。没有 Key 时只有一个示例词典，
+> 用来看界面，不能真正查词。
 >
-> 支持 DeepSeek、Claude、OpenAI、Gemini，以及任何 OpenAI 兼容接口。用你自己的 Key，
-> 用量和成本都在你手里。
+> **数据是你的。** 词卡只存在你自己的浏览器里；设置和 API Key 默认随你的 Chrome 账号同步，
+> 可以在设置里改成仅本机。开发者没有服务器，收不到你的任何数据。想备份和跨设备，
+> 可以把词卡同步到**你自己的 GitHub 私有仓库**，存成人能读的 Markdown。
 >
 > 开源：https://github.com/CarGod/fanfan-cards
 
@@ -68,32 +64,25 @@
 > not the most common dictionary sense, but what it means *right here*. The "lock" in
 > "lock a table for minutes" is not a padlock.
 >
-> **Saved words return on the next page.** Turn on FanFan mode to mark words from your library
-> wherever they appear. Click one to revisit the stored meaning, examples and synonyms — no
-> additional AI call and no additional model cost.
+> **Words you looked up light up next time.** Turn on FanFan mode and words from your notebook
+> are marked wherever they appear. Click one to revisit the stored meaning, sentence and
+> examples — no additional AI call, no additional cost.
 >
-> **Translate a paragraph, or the whole page.** Hover and hold one key for a paragraph;
-> one shortcut for the page. Translations are appended below the original — nothing is
-> replaced, nothing is reflowed.
+> **Save to your notebook, review with the sentence.** Every saved word keeps the sentence and
+> the page it came from — word lists stripped of context do not stick. Reviews are scheduled
+> by spaced repetition.
 >
-> **Bilingual subtitles on YouTube.** One more button in the player's control bar. Original
-> on one line, translation on the next — or translation only. Three text sizes, four
-> backdrop levels, remembered across videos and devices.
+> **Translation too.** Hover and hold one key for a paragraph, one shortcut for the page,
+> bilingual subtitles on YouTube. Translations are appended below the original.
 >
-> **Save to cards, review on a memory curve.** Every saved word keeps the sentence and the
-> page it came from — word lists stripped of context do not stick. Reviews are scheduled by
-> spaced repetition.
+> **Bring your own AI key.** Works with DeepSeek, Claude, OpenAI, Gemini, and any
+> OpenAI-compatible endpoint. Without a key there is only a small sample dictionary for
+> trying the interface.
 >
-> **Your data stays yours.** Cards, settings and API keys live in your own browser by
-> default. There is no server behind this extension; the developer receives nothing. For
-> backup and multi-device use, sync to **your own private GitHub repository**, stored as
-> Markdown a human can read.
->
-> **Works without an API key.** A built-in offline dictionary covers you, minus the
-> context-aware part.
->
-> Works with DeepSeek, Claude, OpenAI, Gemini, and any OpenAI-compatible endpoint. Your key,
-> your usage, your cost.
+> **Your data stays yours.** Cards live only in your own browser; settings and API keys sync
+> with your Chrome account by default and can be kept local-only. There is no server behind
+> this extension; the developer receives nothing. For backup and multi-device use, sync to
+> **your own private GitHub repository**, stored as Markdown a human can read.
 >
 > Open source: https://github.com/CarGod/fanfan-cards
 
@@ -151,8 +140,8 @@
 | 身份验证信息 | **是** | 用户自填的 AI API Key 与 GitHub Token，用于连接对应服务商；还可经浏览器账号同步或导出到用户选择的配置文件。开发者不接收。 |
 | 个人通信内容 | 否 | |
 | 位置 | 否 | |
-| 网络历史记录 | 否 | 不记录浏览历史。仅在用户主动划词/翻译时读取当前页的网址，作为词卡的来源信息。 |
-| 用户活动 | 否 | 不做分析或追踪。复习记录属于用户自己的学习数据，只存在本地或其自有仓库。 |
+| 网络历史记录 | **是** | 不记录浏览历史。只在用户主动划词 / 翻译时读取当前页的网址和标题，作为词卡的来源信息保存在用户本地。 |
+| 用户活动 | **是** | 不做分析或追踪。「三击空格翻译」需要监听输入框里的按键，只判断是否连续按了三次空格，不记录输入内容。复习记录属于用户自己的学习数据，只存在本地或其自有仓库。 |
 | 网站内容 | **是** | 用户主动划选的文字、其上下文、页面标题与网址、被翻译的页面文本、YouTube 字幕文本。 |
 
 三项声明全部勾选：
@@ -173,7 +162,7 @@
 | 中文小宣传图 | 440×280 PNG | ✅ [promo-440x280.png](screenshots/promo-440x280.png) |
 | 中文大宣传图 | 1400×560 PNG | ✅ [promo-1400x560.png](screenshots/promo-1400x560.png) |
 | 英文小宣传图 | 440×280 PNG | ✅ [promo-440x280-en.png](screenshots/promo-440x280-en.png) |
-| 真实扩展演示 | ≤30 秒，GIF ≤4 MB，另留 MP4 | ✅ 20.92 秒 / GIF 约 731 KiB：[GIF](screenshots/demo-ship.gif) · [MP4](screenshots/demo-ship.mp4) |
+| 真实扩展演示 | ≤30 秒，GIF ≤4 MB，另留 MP4 | ✅ 20.92 秒 / GIF 约 731 KiB：[GIF](screenshots/demo-degrade.gif) · [MP4](screenshots/demo-degrade.mp4) |
 
 | # | 内容 | 中文 | English |
 |---|---|---|---|
@@ -190,7 +179,7 @@
 ## 六、提交前待办
 
 - [x] 隐私政策发布为公开可访问 URL：<https://luffyliu.com/fanfan-cards/privacy/>
-- [x] 补一张 YouTube 双语字幕的 1280×800 截图：`docs/screenshots/youtube-bilingual-subtitles.png`
+- [x] 补一张 YouTube 双语字幕的 1280×800 截图：`docs/screenshots/shot-5-youtube.png`
 - [x] 开发者账号注册与验证（一次性，5 美元，需两步验证）
 - [ ] 商店列表的中英两版文案分别填入对应语言的列表（扩展已带 `_locales`，
       控制台里的商品详情仍需按语言各填一次）

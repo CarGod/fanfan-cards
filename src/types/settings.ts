@@ -269,18 +269,20 @@ export const PROVIDER_CATALOGUE: readonly ProviderMeta[] = [
     id: 'deepseek',
     label: 'DeepSeek',
     badge: { key: 'provider.badge.recommended', tone: 'recommend' },
-    defaultModel: 'deepseek-v4-flash',
+    // 2026-09：官方现行名是 deepseek-flash（V4.1-Flash）；旧名 deepseek-v4-flash 只是临时转接。
+    defaultModel: 'deepseek-flash',
     defaultBaseUrl: 'https://api.deepseek.com/v1',
-    modelSuggestions: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+    modelSuggestions: ['deepseek-flash', 'deepseek-v4-pro'],
     requiresKey: true,
     keyUrl: 'https://platform.deepseek.com/api_keys',
   },
   {
     id: 'claude',
     label: 'Claude',
-    defaultModel: 'claude-opus-5',
+    // 查一个词用不着 Opus；Haiku 4.5 便宜 5 倍，质量对这个任务够用。
+    defaultModel: 'claude-haiku-4-5-20251001',
     defaultBaseUrl: '',
-    modelSuggestions: ['claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5'],
+    modelSuggestions: ['claude-haiku-4-5-20251001', 'claude-sonnet-5', 'claude-opus-5'],
     requiresKey: true,
     keyUrl: 'https://console.anthropic.com/settings/keys',
   },
@@ -296,9 +298,10 @@ export const PROVIDER_CATALOGUE: readonly ProviderMeta[] = [
   {
     id: 'gemini',
     label: 'Gemini',
-    defaultModel: 'gemini-2.0-flash',
+    // gemini-2.0-flash 已于 2026-06-01 关停，官方建议迁到 gemini-3.6-flash。
+    defaultModel: 'gemini-3.6-flash',
     defaultBaseUrl: '',
-    modelSuggestions: ['gemini-2.0-flash', 'gemini-2.5-flash'],
+    modelSuggestions: ['gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'],
     requiresKey: true,
     keyUrl: 'https://aistudio.google.com/app/apikey',
   },

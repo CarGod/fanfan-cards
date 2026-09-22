@@ -13,7 +13,8 @@ import type { ContentCommand } from '@/types/messages.ts'
 import { DEFAULT_SETTINGS, type Settings } from '@/types/settings.ts'
 import type { VocabularyEntry } from '@/types/vocabulary.ts'
 import { sendMessage } from '@/services/messaging.ts'
-import { getSettings, isHostEnabled, watchSettings } from '@/storage/repositories/settingsRepo.ts'
+import { getSettings, isHostEnabled, saveSettings, watchSettings } from '@/storage/repositories/settingsRepo.ts'
+import { storage } from '@/storage/area.ts'
 import { getEntry, listEntries, watchEntries } from '@/storage/repositories/vocabularyRepo.ts'
 import { clamp, classifySelection, debounce, truncate } from '@/shared/utils.ts'
 import {
@@ -106,6 +107,14 @@ const pageTranslator = new PageTranslator({
 const highlighter = new SavedWordHighlighter()
 
 /**
+ * 第一次收藏成功后问一次「要不要打开翻翻模式」。
+ *
+ * 落地页主打的「重逢」默认是关的，新用户第一天根本碰不到。收藏那一刻正是最该问的时候：
+ * 词库里刚有了第一个词，翻翻模式立刻就有东西可标。只问一次，答过（无论哪个答案）就不再问。
+ */
+const FANFAN_PROMPT_KEY = 'ara:fanfanPromptSeen'
+
+/**
  * Same lifetime, same reason. Its key comes from settings, so it is told about
  * changes rather than rebuilt — rebuilding would drop the listeners mid-hover.
  */
@@ -119,6 +128,7 @@ export function App({ host }: { host: HTMLElement }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [fanfanPrompt, setFanfanPrompt] = useState(false)
   const [inputTranslationTargets, setInputTranslationTargets] = useState(
     () => new Map<HTMLElement, number>(),
   )
@@ -784,6 +794,8 @@ export function App({ host }: { host: HTMLElement }) {
         if (snapshot) void explain(snapshot)
       }
       if (command?.type === 'content/dismiss') dismiss()
+      // 弹窗探活用的；有人应就够了，不用回什么。
+      if (command?.type === 'content/ping') return
       if (command?.type === 'content/toggle-page-translation') {
         injectPageStyles()
         pageTranslator.toggle({
@@ -851,7 +863,12 @@ export function App({ host }: { host: HTMLElement }) {
         },
       })
       setPhase({ ...phase, saved: entry })
-      setToast(created ? t('card.toast.saved') : t('card.toast.updated'))
+      const askFanfan =
+        created &&
+        !settingsRef.current.fanfanMode &&
+        !(await storage().get<boolean>(FANFAN_PROMPT_KEY).catch(() => true))
+      if (askFanfan) setFanfanPrompt(true)
+      else setToast(created ? t('card.toast.saved') : t('card.toast.updated'))
     } catch (error) {
       setToast(
         error instanceof Error
@@ -872,6 +889,12 @@ export function App({ host }: { host: HTMLElement }) {
     }
   }, [phase, t])
 
+
+  const answerFanfanPrompt = useCallback(async (turnOn: boolean) => {
+    setFanfanPrompt(false)
+    await storage().set(FANFAN_PROMPT_KEY, true).catch(() => undefined)
+    if (turnOn) await saveSettings({ fanfanMode: true }).catch(() => undefined)
+  }, [])
 
   const openSettings = useCallback(() => {
     void sendMessage('options/open', {})
@@ -912,7 +935,17 @@ export function App({ host }: { host: HTMLElement }) {
     return inputIndicators || notice ? (
       <>
         {inputIndicators}
-        {notice ? <Toast text={notice} /> : null}
+        {fanfanPrompt ? (
+        <PromptToast
+          text={t('card.fanfan_prompt')}
+          acceptLabel={t('card.fanfan_prompt.on')}
+          dismissLabel={t('card.fanfan_prompt.later')}
+          onAccept={() => void answerFanfanPrompt(true)}
+          onDismiss={() => void answerFanfanPrompt(false)}
+        />
+      ) : notice ? (
+        <Toast text={notice} />
+      ) : null}
       </>
     ) : null
   }
@@ -992,8 +1025,44 @@ export function App({ host }: { host: HTMLElement }) {
           />
         ) : null}
       </FloatingLayer>
-      {notice ? <Toast text={notice} /> : null}
+      {fanfanPrompt ? (
+        <PromptToast
+          text={t('card.fanfan_prompt')}
+          acceptLabel={t('card.fanfan_prompt.on')}
+          dismissLabel={t('card.fanfan_prompt.later')}
+          onAccept={() => void answerFanfanPrompt(true)}
+          onDismiss={() => void answerFanfanPrompt(false)}
+        />
+      ) : notice ? (
+        <Toast text={notice} />
+      ) : null}
     </>
+  )
+}
+
+function PromptToast({
+  text,
+  acceptLabel,
+  dismissLabel,
+  onAccept,
+  onDismiss,
+}: {
+  text: string
+  acceptLabel: string
+  dismissLabel: string
+  onAccept: () => void
+  onDismiss: () => void
+}) {
+  return (
+    <div className="toast toast-actions" style={{ right: '20px', bottom: '20px' }} role="status">
+      <span>{text}</span>
+      <button className="toast-btn toast-btn-primary" onClick={onAccept}>
+        {acceptLabel}
+      </button>
+      <button className="toast-btn" onClick={onDismiss}>
+        {dismissLabel}
+      </button>
+    </div>
   )
 }
 

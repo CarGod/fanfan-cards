@@ -148,3 +148,4 @@ export type ContentCommand =
   | { type: 'content/explain-selection' }
   | { type: 'content/dismiss' }
   | { type: 'content/toggle-page-translation' }
+  | { type: 'content/ping' }

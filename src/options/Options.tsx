@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Field, SegmentedControl, Select, Toggle } from '@/components/index.tsx'
 import { BrandMark } from '@/components/icons.tsx'
 import { useSettings, useToast } from '@/components/hooks.ts'
@@ -25,13 +25,14 @@ type Category = 'configuration' | 'model' | 'reading' | 'fanfan' | 'review' | 's
 
 // 存键而不是存文案：这个常量在模块加载时就求值了，那时用户的语言偏好还没读出来。
 // 真正的取词推迟到渲染里的 `t(item.labelKey)`，切换语言才跟得上。
+// 「配置同步」排最后：它是换设备时才用的进阶项。首装第一眼该看到的是选服务商、粘 Key。
 const CATEGORIES: ReadonlyArray<{ id: Category; labelKey: MessageKey }> = [
-  { id: 'configuration', labelKey: 'config.title' },
   { id: 'model', labelKey: 'options.nav.model' },
   { id: 'reading', labelKey: 'options.nav.reading' },
   { id: 'fanfan', labelKey: 'options.nav.fanfan' },
   { id: 'review', labelKey: 'options.nav.review' },
   { id: 'shortcut', labelKey: 'options.nav.shortcut' },
+  { id: 'configuration', labelKey: 'config.title' },
 ]
 
 type TestState =
@@ -112,7 +113,7 @@ export function Options() {
   // One long scroll made the important settings hard to find; each category is
   // now a page of its own, and the URL hash keeps a reload where you were.
   const [category, setCategory] = useState<Category>(
-    () => (['#sync', '#data'].includes(location.hash) ? 'configuration' : CATEGORIES.find((item) => `#${item.id}` === location.hash)?.id ?? (new URLSearchParams(location.search).has('welcome') ? 'configuration' : 'model')),
+    () => (['#sync', '#data'].includes(location.hash) ? 'configuration' : CATEGORIES.find((item) => `#${item.id}` === location.hash)?.id ?? 'model'),
   )
 
   const welcome = new URLSearchParams(location.search).has('welcome')
@@ -216,7 +217,13 @@ export function Options() {
       <div>
       {welcome ? (
         <div className="banner">
-          <strong>{t('options.welcome.title')}</strong> {t('options.welcome.privacy')}
+          <strong>{t('options.welcome.title')}</strong> {t('options.welcome.lead')}
+          <ol className="welcome-steps">
+            <li>{t('options.welcome.step1')}</li>
+            <li>{t('options.welcome.step2')}</li>
+            <li>{t('options.welcome.step3')}</li>
+          </ol>
+          <div className="faint">{t('options.welcome.privacy')}</div>
         </div>
       ) : null}
 
@@ -264,6 +271,12 @@ export function Options() {
             </button>
           ))}
         </div>
+
+        {settings.provider !== 'mock' ? (
+          <div className="section-desc" style={{ marginTop: 12 }}>
+            {t(`options.model.guide.${settings.provider}` as MessageKey)}
+          </div>
+        ) : null}
 
         {settings.provider === 'mock' ? (
           <div className="banner">{t('options.provider.mock_notice')}</div>
@@ -314,6 +327,7 @@ export function Options() {
               </datalist>
             </Field>
 
+            <Advanced>
             <Field
               label={t('options.model.base_url')}
               hint={
@@ -347,6 +361,7 @@ export function Options() {
                 onChange={(next) => void update({ thinkingLevel: next })}
               />
             </Field>
+            </Advanced>
           </>
         )}
 
@@ -383,40 +398,61 @@ export function Options() {
         <div className="section-title">{t('options.reading.title')}</div>
         <div className="section-desc">{t('options.reading.desc')}</div>
 
-        <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
-          <div style={{ flex: 1 }}>
-            <Field
-              label={t('options.reading.source_language')}
-              hint={t('options.reading.source_language.hint')}
-            >
-              <Select
-                value={settings.sourceLanguage}
-                label={t('options.reading.source_language')}
-                options={SOURCE_LANGUAGES.map((item) => ({
-                  value: item.code,
-                  label: t(item.labelKey),
-                }))}
-                onChange={(next) => void update({ sourceLanguage: next })}
-              />
-            </Field>
+        <div className="row-between" style={{ marginBottom: 16 }}>
+          <div>
+            <div style={{ fontWeight: 600 }}>{t('options.reading.enable')}</div>
+            <div className="faint">{t('options.reading.enable.hint')}</div>
           </div>
-          <div style={{ flex: 1 }}>
-            <Field
-              label={t('options.reading.target_language')}
-              hint={t('options.reading.target_language.hint')}
-            >
-              <Select
-                value={settings.targetLanguage}
-                label={t('options.reading.target_language')}
-                options={TARGET_LANGUAGES.map((item) => ({
-                  value: item.code,
-                  label: t(item.labelKey),
-                }))}
-                onChange={(next) => void update({ targetLanguage: next })}
-              />
-            </Field>
-          </div>
+          <Toggle
+            checked={settings.enabled}
+            onChange={(next) => void update({ enabled: next })}
+            label={t('options.reading.enable')}
+          />
         </div>
+
+        <Field label={t('options.reading.trigger')}>
+          <SegmentedControl
+            value={settings.triggerMode}
+            options={[
+              { value: 'button', label: t('options.reading.trigger.button') },
+              { value: 'auto', label: t('options.reading.trigger.auto') },
+              { value: 'hotkey', label: t('options.reading.trigger.hotkey') },
+            ]}
+            onChange={(next) => void update({ triggerMode: next })}
+          />
+        </Field>
+
+
+        <Field
+          label={t('options.reading.target_language')}
+          hint={t('options.reading.target_language.hint')}
+        >
+          <Select
+            value={settings.targetLanguage}
+            label={t('options.reading.target_language')}
+            options={TARGET_LANGUAGES.map((item) => ({
+              value: item.code,
+              label: t(item.labelKey),
+            }))}
+            onChange={(next) => void update({ targetLanguage: next })}
+          />
+        </Field>
+
+        <Advanced>
+        <Field
+          label={t('options.reading.source_language')}
+          hint={t('options.reading.source_language.hint')}
+        >
+          <Select
+            value={settings.sourceLanguage}
+            label={t('options.reading.source_language')}
+            options={SOURCE_LANGUAGES.map((item) => ({
+              value: item.code,
+              label: t(item.labelKey),
+            }))}
+            onChange={(next) => void update({ sourceLanguage: next })}
+          />
+        </Field>
 
         <Field
           label={t('options.reading.input_translation_language')}
@@ -448,30 +484,6 @@ export function Options() {
               },
             ]}
             onChange={(next) => void update({ inputTranslationTargetLanguage: next })}
-          />
-        </Field>
-
-        <div className="row-between" style={{ marginBottom: 16 }}>
-          <div>
-            <div style={{ fontWeight: 600 }}>{t('options.reading.enable')}</div>
-            <div className="faint">{t('options.reading.enable.hint')}</div>
-          </div>
-          <Toggle
-            checked={settings.enabled}
-            onChange={(next) => void update({ enabled: next })}
-            label={t('options.reading.enable')}
-          />
-        </div>
-
-        <Field label={t('options.reading.trigger')}>
-          <SegmentedControl
-            value={settings.triggerMode}
-            options={[
-              { value: 'button', label: t('options.reading.trigger.button') },
-              { value: 'auto', label: t('options.reading.trigger.auto') },
-              { value: 'hotkey', label: t('options.reading.trigger.hotkey') },
-            ]}
-            onChange={(next) => void update({ triggerMode: next })}
           />
         </Field>
 
@@ -635,6 +647,7 @@ export function Options() {
             </div>
           </Field>
         ) : null}
+        </Advanced>
       </section>
       ) : null}
 
@@ -651,5 +664,24 @@ export function Options() {
       </div>
       {toast ? <div className="toast-fixed">{toast}</div> : null}
     </div>
+  )
+}
+
+/**
+ * 折进「高级」里的设置。
+ *
+ * 新用户真正必须做的只有「选服务商 + 粘 Key」，其余几十项平时不用动——全摊开放着，
+ * 首装那一眼看到的就是一堵墙。折起来不删，要用的人点一下就在。
+ */
+function Advanced({ children }: { children: ReactNode }) {
+  const { t } = useI18n()
+  return (
+    <details className="advanced">
+      <summary>
+        {t('options.advanced')}
+        <span className="faint"> · {t('options.advanced.hint')}</span>
+      </summary>
+      <div className="advanced-body">{children}</div>
+    </details>
   )
 }

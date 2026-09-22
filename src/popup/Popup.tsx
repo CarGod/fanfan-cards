@@ -67,6 +67,8 @@ export function Popup() {
   const [host, setHost] = useState('')
   const [tabId, setTabId] = useState<number | null>(null)
   const [translating, setTranslating] = useState(false)
+  // 安装前就开着的标签页里没有内容脚本；这里探一下，没人应就提示刷新，不再静默失败。
+  const [needsReload, setNeedsReload] = useState(false)
   const [shortcuts, setShortcuts] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -92,6 +94,12 @@ export function Popup() {
       }
       if (tab?.id === undefined) return
       setTabId(tab.id)
+      if (/^https?:/i.test(url)) {
+        chrome.tabs
+          .sendMessage(tab.id, { type: 'content/ping' })
+          .then(() => setNeedsReload(false))
+          .catch(() => setNeedsReload(true))
+      }
 
       // Host-keyed, like the worker stores it: a tab id would go stale the
       // moment the site navigated.
@@ -108,6 +116,12 @@ export function Popup() {
       setTranslating(stored[key] === true)
     })
   }, [])
+
+  const reloadTab = () => {
+    if (tabId === null) return
+    void chrome.tabs.reload(tabId)
+    window.close()
+  }
 
   const togglePageTranslation = () => {
     if (tabId === null) return
@@ -185,6 +199,15 @@ export function Popup() {
           </button>
         </div>
       </div>
+
+      {needsReload ? (
+        <div className="banner" style={{ marginBottom: 10, display: 'flex', gap: 10, alignItems: 'center' }}>
+          <span style={{ flex: 1 }}>{t('popup.reload.hint')}</span>
+          <button className="btn btn-primary btn-sm" onClick={reloadTab}>
+            {t('popup.reload.action')}
+          </button>
+        </div>
+      ) : null}
 
       {/* The popup gets ~200ms of first impression; rendering 0 and then
           snapping to the real number reads as a broken extension. */}

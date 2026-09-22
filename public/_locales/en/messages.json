@@ -1,10 +1,10 @@
 {
   "extName": {
-    "message": "FanFan Cards — AI English Reading Assistant",
+    "message": "FanFan Cards — AI Context Lookup & Vocab",
     "description": "Extension name shown in the Chrome Web Store and chrome://extensions."
   },
   "extDescription": {
-    "message": "Read real English pages, let AI explain unfamiliar words in context, save them as your own word cards, and review them on a memory curve.",
+    "message": "Look up a word on any English page and see what it means here. Saved words light up on the next page. Bring your own AI key.",
     "description": "One-line summary shown in the store listing."
   },
   "actionTitle": {

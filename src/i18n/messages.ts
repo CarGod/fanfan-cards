@@ -152,13 +152,16 @@ export const MESSAGES = {
   'options.nav.sync': { 'zh-CN': 'GitHub 同步', en: 'GitHub sync' },
   'options.nav.data': { 'zh-CN': 'GitHub 仓库', en: 'GitHub repository' },
   'options.welcome.title': { 'zh-CN': '欢迎使用！', en: 'Welcome!' },
-  "options.welcome.privacy": {"zh-CN": "阅读内容直接发给你选择的模型服务商，词卡可同步到你自己的 GitHub 仓库。配置和密钥支持浏览器自动同步，也可手动导入或仅保存在本机。开发者不运营中转服务器。不配置密钥也可使用离线词典。", "en": "Reading content goes directly to your chosen AI provider; word cards can sync to your GitHub repository. Settings and keys support browser sync, file import, or local storage. The developer operates no relay server. The offline dictionary needs no key."},
+  'options.welcome.privacy': {
+    'zh-CN': '划词内容直接发给你选的服务商，开发者没有中转服务器。设置和密钥默认随 Chrome 账号同步，可在「配置同步」改成仅本机。',
+    en: 'What you look up goes straight to the provider you chose; there is no relay server. Settings and keys sync with your Chrome account by default; switch to local-only under Configuration sync.',
+  },
   "options.model.desc": {"zh-CN": "AI 请求直接发往你选择的服务商。密钥保存在本机，并按“配置同步”中选择的模式同步或导出。", "en": "AI requests go directly to your chosen provider. Keys are stored locally and synced or exported according to your Configuration mode."},
   'options.provider.badge_recommend': { 'zh-CN': '推荐', en: 'Recommended' },
   'options.provider.badge_free': { 'zh-CN': '免费', en: 'Free' },
   'options.provider.mock_notice': {
-    'zh-CN': '离线词典模式：无需联网、无需 Key，但只能给出词典释义，无法结合上下文推断。',
-    en: 'Offline dictionary: no network, no key — but it only gives dictionary definitions, never a meaning read from the context.',
+    'zh-CN': '示例词典：只有 15 个技术词，用来看界面，不能真正查词，也不能翻译。填一个 Key 才能用。',
+    en: 'Sample dictionary: 15 technical words for trying the interface. It cannot look up other words or translate — add a key to use the extension.',
   },
   'options.model.api_key': { 'zh-CN': 'API Key', en: 'API key' },
   'options.model.api_key_hint': {
@@ -982,7 +985,7 @@ export const MESSAGES = {
 
   // ── 服务商 ────────────────────────────────────────────────────────────
   'provider.badge.recommended': { 'zh-CN': '推荐', en: 'Recommended' },
-  'provider.badge.free': { 'zh-CN': '免费', en: 'Free' },
+  'provider.badge.free': { 'zh-CN': '示例', en: 'Sample' },
   'provider.label.custom': { 'zh-CN': '自定义', en: 'Custom' },
   'provider.label.offline_dict': { 'zh-CN': '离线词典', en: 'Offline dictionary' },
 
@@ -1121,6 +1124,54 @@ export const MESSAGES = {
   'pos.determiner': { 'zh-CN': '限定词', en: 'determiner' },
   'pos.numeral': { 'zh-CN': '数词', en: 'numeral' },
   'pos.phrase': { 'zh-CN': '短语', en: 'phrase' },
+
+  // --- v2.0.1：首装引导、高级设置折叠、Key 指引、弹窗刷新提示、首次收藏提示 ---
+  'options.welcome.lead': { 'zh-CN': '三步就能用：', en: 'Three steps to get going:' },
+  'options.welcome.step1': {
+    'zh-CN': '选一个服务商，粘贴你的 API Key（推荐 DeepSeek：国内可直连，需先充值，按每天查 30 个词算一个月约 7–12 元）',
+    en: 'Pick a provider and paste your API key (DeepSeek recommended: prepaid, roughly ¥7–12 a month at 30 lookups a day)',
+  },
+  'options.welcome.step2': {
+    'zh-CN': '回到正在读的英文网页，刷新一次——安装前就开着的页面要刷新才生效',
+    en: 'Go back to the English page you were reading and reload it once — pages opened before installing need a reload',
+  },
+  'options.welcome.step3': {
+    'zh-CN': '选中一个词，点小按钮，看它在这句里指什么',
+    en: 'Select a word, click the small button, and see what it means in this sentence',
+  },
+  'options.advanced': { 'zh-CN': '高级设置', en: 'Advanced' },
+  'options.advanced.hint': { 'zh-CN': '平时不用动', en: 'Rarely needed' },
+  'options.model.guide.deepseek': {
+    'zh-CN': '国内可直连。需要先在 platform.deepseek.com 充值，按量扣费；按每天查 30 个词算，一个月约 7–12 元（估算）。',
+    en: 'Prepaid, pay as you go. At 30 lookups a day, roughly ¥7–12 a month (estimate).',
+  },
+  'options.model.guide.claude': {
+    'zh-CN': '需要海外网络和信用卡。默认用便宜的 Haiku 4.5，查词足够。',
+    en: 'Needs a card on file. Defaults to Haiku 4.5, which is plenty for lookups.',
+  },
+  'options.model.guide.openai': {
+    'zh-CN': '需要海外网络和信用卡，预充值。',
+    en: 'Prepaid; needs a card on file.',
+  },
+  'options.model.guide.gemini': {
+    'zh-CN': '有免费额度，但中国大陆不在服务地区；免费层的内容会被 Google 用于改进产品。',
+    en: 'Has a free tier, but free-tier content may be used by Google to improve its products.',
+  },
+  'options.model.guide.custom': {
+    'zh-CN': '填你的网关地址和模型名；本机模型（Ollama、LM Studio）也走这里。',
+    en: 'Enter your gateway URL and model name; local models (Ollama, LM Studio) go here too.',
+  },
+  'popup.reload.hint': {
+    'zh-CN': '这个页面是在安装前打开的，刷新后就能用。',
+    en: 'This page was open before the extension was installed. Reload it to use FanFan here.',
+  },
+  'popup.reload.action': { 'zh-CN': '刷新此页', en: 'Reload page' },
+  'card.fanfan_prompt': {
+    'zh-CN': '已收藏。打开翻翻模式，下次在别的网页遇到这个词会自动标出来。',
+    en: 'Saved. Turn on FanFan mode and this word will be marked the next time you meet it on any page.',
+  },
+  'card.fanfan_prompt.on': { 'zh-CN': '打开翻翻模式', en: 'Turn on' },
+  'card.fanfan_prompt.later': { 'zh-CN': '以后再说', en: 'Not now' },
 
 } as const satisfies Record<string, Entry>
 
