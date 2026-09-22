@@ -1790,7 +1790,7 @@ textarea:focus {
   gap: 4px;
 }
 .advanced {
-  margin-top: 8px;
+  margin: 10px 0 20px;
   border-top: 1px solid var(--border);
   padding-top: 12px;
 }
@@ -1800,19 +1800,28 @@ textarea:focus {
   list-style: none;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  padding: 4px 0;
+  user-select: none;
 }
 .advanced > summary::-webkit-details-marker {
   display: none;
 }
+/* 箭头用边框画，比字符 ▸ 清楚，也跟着文字色走。收起时朝右，展开后朝下。 */
 .advanced > summary::before {
-  content: '▸';
-  font-size: 11px;
-  color: var(--text-faint);
+  content: '';
+  width: 7px;
+  height: 7px;
+  margin: 0 2px 2px 1px;
+  border-right: 2px solid var(--text-soft);
+  border-bottom: 2px solid var(--text-soft);
+  transform: rotate(-45deg);
   transition: transform 0.15s;
+  flex: none;
 }
 .advanced[open] > summary::before {
-  transform: rotate(90deg);
+  transform: rotate(45deg);
+  margin-bottom: 5px;
 }
 .advanced-body {
   margin-top: 14px;

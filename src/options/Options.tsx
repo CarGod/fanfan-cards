@@ -706,10 +706,7 @@ function Advanced({ children }: { children: ReactNode }) {
   const { t } = useI18n()
   return (
     <details className="advanced">
-      <summary>
-        {t('options.advanced')}
-        <span className="faint"> · {t('options.advanced.hint')}</span>
-      </summary>
+      <summary>{t('options.advanced')}</summary>
       <div className="advanced-body">{children}</div>
     </details>
   )
