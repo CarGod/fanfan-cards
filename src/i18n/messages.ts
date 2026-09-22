@@ -805,7 +805,7 @@ export const MESSAGES = {
 
   // ── 语言名 ────────────────────────────────────────────────────────────
   'language.source.auto': { 'zh-CN': '自动识别', en: 'Auto-detect' },
-  'language.source.en': { 'zh-CN': '英语 English', en: 'English' },
+  'language.source.en': { 'zh-CN': '英语', en: 'English' },
   'language.source.ja': { 'zh-CN': '日语 日本語', en: 'Japanese' },
   'language.source.ko': { 'zh-CN': '韩语 한국어', en: 'Korean' },
   'language.source.de': { 'zh-CN': '德语 Deutsch', en: 'German' },
@@ -1218,7 +1218,7 @@ export const MESSAGES = {
   'video.generic.chip_loading': { 'zh-CN': '字幕准备中…', en: 'Loading subs…' },
   'video.generic.chip_on': { 'zh-CN': '双语字幕 · 开', en: 'Bilingual subs · on' },
   'video.generic.chip_error': { 'zh-CN': '没找到字幕轨', en: 'No subtitle track' },
-  'video.generic.chip_own_language': { 'zh-CN': '字幕已经是{lang}', en: 'Subs already in {lang}' },
+  'video.generic.chip_not_source': { 'zh-CN': '字幕不是{lang}，不开', en: 'Subs are not {lang}' },
   'video.generic.chip_login': { 'zh-CN': '登录 B 站后再试', en: 'Sign in to Bilibili first' },
   'video.generic.chip_network': { 'zh-CN': '字幕没拿到，再点一次', en: 'Could not fetch subs, tap again' },
   'video.generic.chip_title': {

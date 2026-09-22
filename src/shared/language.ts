@@ -143,6 +143,39 @@ export function shouldTranslateText(text: string, targetCode: string): boolean {
   return true
 }
 
+const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}]/u
+
+/**
+ * 这些文字是不是读者要学的那门语言（设置里的「源语言」）。
+ *
+ * 双语字幕只在字幕是这门语言时才开：读者设了英语，一支中文字幕的视频不该被叠上一层
+ * 一模一样的中文。按文字系统判断，不信网站的语言标签——B 站的 AI 字幕一律标「中文」，
+ * `<track srclang>` 经常是空的或者错的。「自动」按英语算，这个产品是学英语的。
+ *
+ * 门槛是六成的字母属于那个文字系统：中文字幕里夹几个 AI、GPT 不算英文，
+ * 英文字幕里夹一个人名不算中文。日文和中文共用汉字，得真有假名才算日文。
+ */
+export function isInSourceLanguage(texts: readonly string[], sourceCode: string): boolean {
+  const source = sourceLanguage(sourceCode === 'auto' ? 'en' : sourceCode)
+  const script = source.script
+  if (!script) return true
+  let letters = 0
+  let hits = 0
+  let kana = 0
+  for (const text of texts) {
+    for (const char of text) {
+      if (!/\p{L}/u.test(char)) continue
+      letters += 1
+      if (script.test(char)) hits += 1
+      if (KANA.test(char)) kana += 1
+    }
+  }
+  if (letters === 0) return false
+  if (hits / letters < 0.6) return false
+  if (source.code === 'ja' && kana / letters < 0.05) return false
+  return true
+}
+
 /**
  * True when a translation says nothing the original did not.
  *

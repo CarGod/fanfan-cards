@@ -1,7 +1,7 @@
 import { t } from '@/i18n/index.ts'
 import { sendMessage } from '@/services/messaging.ts'
 import { noteOrphanError } from '@/shared/extensionContext.ts'
-import { shouldTranslateText } from '@/shared/language.ts'
+import { isInSourceLanguage } from '@/shared/language.ts'
 import { storage } from '@/storage/area.ts'
 import { getSettings, isHostEnabled } from '@/storage/repositories/settingsRepo.ts'
 import { injectVideoStyles } from './styles.ts'
@@ -103,12 +103,12 @@ export class DomSubtitleWatcher {
   private inFlight = new Set<string>()
   private disposers: Array<() => void> = []
   private picking: (() => void) | null = null
-  private targetLanguage = 'zh-CN'
+  private sourceLanguage = 'auto'
 
   async start(): Promise<void> {
     const settings = await getSettings()
     if (!settings.enabled || !isHostEnabled(settings, location.hostname)) return
-    this.targetLanguage = settings.targetLanguage
+    this.sourceLanguage = settings.sourceLanguage
     injectVideoStyles()
 
     const onPick = (): void => this.startPicking()
@@ -176,8 +176,8 @@ export class DomSubtitleWatcher {
     const text = element ? normalizeText(element.innerText || element.textContent || '') : ''
     if (text === this.lastText) return
     this.lastText = text
-    // 空行，或者字幕本来就是读者自己的语言（B 站的中文 CC）：不画、不请求。
-    if (!text || !shouldTranslateText(text, this.targetLanguage)) {
+    // 空行，或者这一行不是读者设置的源语言（中文 CC）：不画、不请求。
+    if (!text || !isInSourceLanguage([text], this.sourceLanguage)) {
       this.hideLine()
       return
     }

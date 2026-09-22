@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isInSourceLanguage,
   conformLineShape,
   isLookupCandidate,
   isRedundantTranslation,
@@ -167,5 +168,25 @@ describe('译文的行结构', () => {
 
   it('两边都只有一行时什么也不用做', () => {
     expect(conformLineShape('Hello', '你好')).toBe('你好')
+  })
+})
+
+describe('isInSourceLanguage', () => {
+  it('treats auto as English and accepts an English track', () => {
+    expect(isInSourceLanguage(['Hello there', "I didn't set out to be a parenting expert."], 'auto')).toBe(true)
+  })
+
+  it('rejects a Chinese track even when it is sprinkled with AI and GPT', () => {
+    expect(isInSourceLanguage(['请所有 AI 博主别再贩卖 AI 焦虑了', 'ChatGPT 的本质是什么'], 'auto')).toBe(false)
+  })
+
+  it('tells Japanese from Chinese by the kana', () => {
+    expect(isInSourceLanguage(['今日はいい天気ですね'], 'ja')).toBe(true)
+    expect(isInSourceLanguage(['今天天气很好'], 'ja')).toBe(false)
+  })
+
+  it('accepts a Cyrillic track for a Russian learner and nothing without letters', () => {
+    expect(isInSourceLanguage(['Привет, мир'], 'ru')).toBe(true)
+    expect(isInSourceLanguage(['123 ...'], 'auto')).toBe(false)
   })
 })

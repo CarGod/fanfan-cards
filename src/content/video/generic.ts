@@ -2,7 +2,7 @@ import { t } from '@/i18n/index.ts'
 import type { MessageKey } from '@/i18n/messages.ts'
 import { sendMessage } from '@/services/messaging.ts'
 import { noteOrphanError } from '@/shared/extensionContext.ts'
-import { shouldTranslateText, targetLanguage } from '@/shared/language.ts'
+import { isInSourceLanguage, sourceLanguage } from '@/shared/language.ts'
 import { getSettings, isHostEnabled, saveSettings, watchSettings } from '@/storage/repositories/settingsRepo.ts'
 import type { Settings } from '@/types/settings.ts'
 import { BilibiliCueSource, isBilibiliPlayer } from './bilibili.ts'
@@ -39,12 +39,6 @@ const SCAN_DEBOUNCE_MS = 500
 /** 读者点过按钮之后，按钮多露这么久再随鼠标走；出错时更久，得让人看清那句话。 */
 const REVEAL_MS = 2_500
 const REVEAL_ERROR_MS = 4_000
-/**
- * 至少这么大比例的 cue 不是读者自己的语言，才值得开双语。
- * 门槛定得很低：中文 up 主放几段英文片段也算数，那几段正是想看的。
- * 低于它就是整条都是中文（B 站给英文演讲配的中文 AI 字幕）：翻了也是同一句，不如直说。
- */
-const MIN_FOREIGN_RATIO = 0.05
 
 export interface TrackLike {
   kind: string
@@ -141,13 +135,13 @@ function hostParent(): HTMLElement {
   return document.documentElement
 }
 
-type FailReason = CueSourceFailure | 'own_language'
+type FailReason = CueSourceFailure | 'not_source'
 
 const FAIL_LABEL: Record<FailReason, MessageKey> = {
   no_track: 'video.generic.chip_error',
   login: 'video.generic.chip_login',
   network: 'video.generic.chip_network',
-  own_language: 'video.generic.chip_own_language',
+  not_source: 'video.generic.chip_not_source',
 }
 
 class VideoBinding {
@@ -161,7 +155,7 @@ class VideoBinding {
   private perCue: string[] = []
   /** 上次加载 cue 时媒体的身份，见 {@link CueSource.key}。 */
   private mediaKey = ''
-  private targetCode = 'zh-CN'
+  private sourceCode = 'auto'
 
   private enabled = false
   private hovering = false
@@ -268,7 +262,8 @@ class VideoBinding {
       on: 'video.generic.chip_on',
       error: FAIL_LABEL[this.failReason],
     } as const
-    this.chip.textContent = t(labelKey[this.status], { lang: t(targetLanguage(this.targetCode).labelKey) })
+    const source = sourceLanguage(this.sourceCode === 'auto' ? 'en' : this.sourceCode)
+    this.chip.textContent = t(labelKey[this.status], { lang: t(source.labelKey) })
     this.chip.dataset['status'] = this.status
     this.chip.title = t('video.generic.chip_title')
     this.updateShow()
@@ -306,7 +301,7 @@ class VideoBinding {
 
     const settings = await getSettings()
     if (run !== this.run) return
-    this.targetCode = settings.targetLanguage
+    this.sourceCode = settings.sourceLanguage
     this.mediaKey = this.source.key?.() ?? ''
 
     let cues: Cue[]
@@ -324,10 +319,9 @@ class VideoBinding {
       this.fail('no_track')
       return
     }
-    // 字幕本来就是读者自己的语言：翻出来还是同一句，不如在按钮上直说。
-    const foreign = cues.filter((cue) => shouldTranslateText(cue.text, settings.targetLanguage)).length
-    if (foreign < cues.length * MIN_FOREIGN_RATIO) {
-      this.fail('own_language')
+    // 只在字幕是读者设置的源语言时才开：中文字幕的视频叠一层中文，不是帮忙是添乱。
+    if (!isInSourceLanguage(cues.map((cue) => cue.text), settings.sourceLanguage)) {
+      this.fail('not_source')
       return
     }
 
