@@ -291,7 +291,7 @@ export const PROVIDER_CATALOGUE: readonly ProviderMeta[] = [
   },
   {
     id: 'claude',
-    label: 'Claude',
+    label: 'Anthropic',
     badge: { key: 'provider.badge.compatible', tone: 'compatible' },
     // 查一个词用不着 Opus；Haiku 4.5 便宜 5 倍，质量对这个任务够用。
     defaultModel: 'claude-haiku-4-5-20251001',
