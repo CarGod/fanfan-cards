@@ -133,6 +133,19 @@ const MIGRATIONS: Record<number, Migration> = {
     settings['fanfanPalette'] = palette
     await storage().set(STORAGE_KEYS.settings, settings)
   },
+
+  /**
+   * v9: 离线词典退场，不配 Key 的默认后端改成谷歌翻译免费接口。
+   *
+   * 还停在 `mock` 上的老用户直接换过去——他们装的时候只有 15 个词的示例词典，
+   * 换成真能翻译的接口只会更好。选了别的服务商的一律不动。
+   */
+  9: async (db) => {
+    const settings = db[STORAGE_KEYS.settings] as Record<string, unknown> | undefined
+    if (!settings || settings['provider'] !== 'mock') return
+    settings['provider'] = 'google'
+    await storage().set(STORAGE_KEYS.settings, settings)
+  },
 }
 
 export async function initStorage(): Promise<StorageMeta> {

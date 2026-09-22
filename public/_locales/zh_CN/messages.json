@@ -4,7 +4,7 @@
     "description": "Chrome 应用商店与 chrome://extensions 里显示的扩展名称。"
   },
   "extDescription": {
-    "message": "在英文网页上划词，AI 解释它在这句里的意思；收进生词本，查过的词下次在别的网页会自己亮起来。需要你自己的 AI Key。",
+    "message": "在英文网页上划词，AI 解释它在这句里的意思；收进生词本，查过的词下次在别的网页会自己亮起来。翻译免费，语境解释需自己的 AI Key。",
     "description": "商店列表里的一句话简介。"
   },
   "actionTitle": {

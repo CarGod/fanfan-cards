@@ -1817,3 +1817,14 @@ textarea:focus {
 .advanced-body {
   margin-top: 14px;
 }
+
+/* v2.0.1：欢迎条可关闭 */
+.welcome-banner {
+  position: relative;
+  padding-right: 44px;
+}
+.welcome-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}

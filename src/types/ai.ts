@@ -11,7 +11,7 @@ import type {
 
 export type { Synonym, CefrLevel, ExampleSentence, WordSense }
 
-export type ProviderId = 'mock' | 'openai' | 'claude' | 'deepseek' | 'gemini' | 'custom'
+export type ProviderId = 'mock' | 'google' | 'openai' | 'claude' | 'deepseek' | 'gemini' | 'custom'
 
 /** The structured explanation every provider must return. */
 export interface WordExplanation {
@@ -141,6 +141,13 @@ export interface AIProvider {
   readonly model: string
   /** True for providers that never leave the device. */
   readonly offline: boolean
+  /**
+   * 能不能回答「这个词在这句里指什么」。
+   *
+   * 模型可以；翻译接口和离线词典只能给词典义。界面靠它决定要不要去要例句和近义词，
+   * 以及卡片上语境那一栏该不该标出来「这不是语境解释」。
+   */
+  readonly contextual: boolean
 
   explainWord(input: ExplainWordInput, signal?: AbortSignal): Promise<WordExplanation>
   translate(input: TranslateInput, signal?: AbortSignal): Promise<TranslateResult>

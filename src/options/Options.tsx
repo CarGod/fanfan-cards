@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Field, SegmentedControl, Select, Toggle } from '@/components/index.tsx'
-import { BrandMark } from '@/components/icons.tsx'
+import { BrandMark, CloseIcon } from '@/components/icons.tsx'
+import { storage } from '@/storage/area.ts'
 import { useSettings, useToast } from '@/components/hooks.ts'
 import { resolveProvider } from '@/ai/index.ts'
 import { requestOptionalApiAccess } from '@/ai/hostPermission.ts'
@@ -22,6 +23,9 @@ import { ConfigurationSection } from './ConfigurationSection.tsx'
 import { truncate } from '@/shared/utils.ts'
 
 type Category = 'configuration' | 'model' | 'reading' | 'fanfan' | 'review' | 'shortcut'
+
+/** 欢迎条只在首装那一次出现；关过一次就永远不再出现，刷新也不回来。 */
+const WELCOME_SEEN_KEY = 'ara:welcomeSeen'
 
 // 存键而不是存文案：这个常量在模块加载时就求值了，那时用户的语言偏好还没读出来。
 // 真正的取词推迟到渲染里的 `t(item.labelKey)`，切换语言才跟得上。
@@ -116,11 +120,26 @@ export function Options() {
     () => (['#sync', '#data'].includes(location.hash) ? 'configuration' : CATEGORIES.find((item) => `#${item.id}` === location.hash)?.id ?? 'model'),
   )
 
-  const welcome = new URLSearchParams(location.search).has('welcome')
+  const [welcome, setWelcome] = useState(false)
+  useEffect(() => {
+    if (!new URLSearchParams(location.search).has('welcome')) return
+    void storage()
+      .get<boolean>(WELCOME_SEEN_KEY)
+      .then((seen) => setWelcome(!seen))
+      .catch(() => setWelcome(true))
+  }, [])
+  const dismissWelcome = () => {
+    setWelcome(false)
+    void storage().set(WELCOME_SEEN_KEY, true).catch(() => undefined)
+    const url = new URL(location.href)
+    url.searchParams.delete('welcome')
+    history.replaceState(null, '', url.toString())
+  }
   const meta = providerMeta(settings.provider)
-  // `mock` is the one provider with nothing to configure, so it has no entry in
-  // `settings.providers`; the blank config keeps the form code branch-free.
-  const activeKey = settings.provider === 'mock' ? null : settings.provider
+  // 免费翻译和离线词典没有东西可配，`settings.providers` 里也没有它们的条目；
+  // 空配置让下面的表单代码不用分支。
+  const activeKey =
+    settings.provider === 'mock' || settings.provider === 'google' ? null : settings.provider
   const config: ProviderConfig = activeKey
     ? settings.providers[activeKey]
     : { apiKey: '', model: '', baseUrl: '' }
@@ -216,7 +235,15 @@ export function Options() {
 
       <div>
       {welcome ? (
-        <div className="banner">
+        <div className="banner welcome-banner">
+          <button
+            className="icon-btn welcome-close"
+            title={t('options.welcome.dismiss')}
+            aria-label={t('options.welcome.dismiss')}
+            onClick={dismissWelcome}
+          >
+            <CloseIcon size={14} />
+          </button>
           <strong>{t('options.welcome.title')}</strong> {t('options.welcome.lead')}
           <ol className="welcome-steps">
             <li>{t('options.welcome.step1')}</li>
@@ -252,7 +279,7 @@ export function Options() {
         <div className="section-desc">{t('options.model.desc')}</div>
 
         <div className="provider-grid">
-          {PROVIDER_CATALOGUE.map((item) => (
+          {PROVIDER_CATALOGUE.filter((item) => !item.hidden).map((item) => (
             <button
               key={item.id}
               className="provider-option"
@@ -280,6 +307,8 @@ export function Options() {
 
         {settings.provider === 'mock' ? (
           <div className="banner">{t('options.provider.mock_notice')}</div>
+        ) : settings.provider === 'google' ? (
+          <div className="banner">{t('options.provider.free_notice')}</div>
         ) : (
           <>
             <Field

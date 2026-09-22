@@ -54,6 +54,7 @@ const extras = (over: Record<string, unknown> = {}) => ({
   providerId: 'deepseek',
   model: 'x',
   offline: false,
+  contextual: true,
   cached: false,
 })
 
@@ -185,7 +186,7 @@ describe('拿回来的东西不合用时', () => {
   /** 离线词典给不出第二段，写回空值只会让这张卡看起来「补过了但还是空的」。 */
   it('降级到离线词典时不写回', async () => {
     const entry = await save()
-    explain.mockResolvedValue({ ...extras(), offline: true })
+    explain.mockResolvedValue({ ...extras(), offline: true, contextual: false })
 
     const result = await handleEnrichEntry({ id: entry.id })
     expect(result.filled).toEqual([])

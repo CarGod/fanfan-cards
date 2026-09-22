@@ -125,6 +125,7 @@ export class OpenAICompatibleProvider implements AIProvider {
   readonly label: string
   readonly model: string
   readonly offline = false
+  readonly contextual = true
 
   private readonly apiKey: string
   private readonly baseUrl: string

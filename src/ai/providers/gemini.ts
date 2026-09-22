@@ -90,6 +90,7 @@ export class GeminiProvider implements AIProvider {
   readonly label = 'Google Gemini'
   readonly model: string
   readonly offline = false
+  readonly contextual = true
 
   private readonly apiKey: string
   private readonly baseUrl: string

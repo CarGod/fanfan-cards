@@ -17,7 +17,7 @@ export const STORAGE_KEYS = {
   syncState: 'ara:syncState',
 } as const
 
-export const SCHEMA_VERSION = 8
+export const SCHEMA_VERSION = 9
 
 /** Element id of the shadow host injected into pages. */
 export const CONTENT_HOST_ID = 'fanfan-root'

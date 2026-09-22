@@ -9,7 +9,7 @@ import {
 
 /** Zod is the single source of truth for settings: parse on read, migrate on miss. */
 
-export const providerIdSchema = z.enum(['mock', 'openai', 'claude', 'deepseek', 'gemini', 'custom'])
+export const providerIdSchema = z.enum(['mock', 'google', 'openai', 'claude', 'deepseek', 'gemini', 'custom'])
 
 /** How the word card is summoned after a selection. */
 export const triggerModeSchema = z.enum(['button', 'auto', 'hotkey'])
@@ -51,8 +51,8 @@ export const syncConfigSchema = z.object({
 export type SyncConfig = z.infer<typeof syncConfigSchema>
 
 export const settingsSchema = z.object({
-  /** Active provider. `mock` keeps the whole product usable with zero setup. */
-  provider: providerIdSchema.default('mock'),
+  /** Active provider. `google`（免费翻译接口）让不配 Key 的人也能查词典义和翻译。 */
+  provider: providerIdSchema.default('google'),
   providers: z
     .object({
       openai: providerConfigSchema,
@@ -257,6 +257,8 @@ export interface ProviderMeta {
    * `tone` 跟着一起走，免得渲染处靠比对中文字符串来决定配色。
    */
   badge?: { key: MessageKey; tone: 'recommend' | 'free' }
+  /** 不在设置页里列出。只为老数据和测试保留。 */
+  hidden?: boolean
   defaultModel: string
   defaultBaseUrl: string
   modelSuggestions: string[]
@@ -265,6 +267,17 @@ export interface ProviderMeta {
 }
 
 export const PROVIDER_CATALOGUE: readonly ProviderMeta[] = [
+  {
+    id: 'google',
+    label: 'Google Translate',
+    labelKey: 'provider.label.google',
+    badge: { key: 'provider.badge.free', tone: 'free' },
+    defaultModel: 'gtx',
+    defaultBaseUrl: '',
+    modelSuggestions: [],
+    requiresKey: false,
+    keyUrl: '',
+  },
   {
     id: 'deepseek',
     label: 'DeepSeek',
@@ -319,7 +332,7 @@ export const PROVIDER_CATALOGUE: readonly ProviderMeta[] = [
     id: 'mock',
     label: '离线词典',
     labelKey: 'provider.label.offline_dict',
-    badge: { key: 'provider.badge.free', tone: 'free' },
+    hidden: true,
     defaultModel: 'local-heuristic-v1',
     defaultBaseUrl: '',
     modelSuggestions: [],
@@ -332,6 +345,13 @@ export function providerMeta(id: Settings['provider']): ProviderMeta {
   const found = PROVIDER_CATALOGUE.find((p) => p.id === id)
   if (!found) throw new Error(`Unknown provider: ${id}`)
   return found
+}
+
+/** 当前服务商填的 Key；不需要 Key 的服务商返回 null。 */
+export function providerApiKey(settings: Settings): string | null {
+  const id = settings.provider
+  if (id === 'mock' || id === 'google') return null
+  return settings.providers[id].apiKey
 }
 
 /** 界面上显示的服务商名。专有名词直接返回，描述性的名字按当前界面语言取。 */

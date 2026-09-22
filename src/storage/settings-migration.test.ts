@@ -123,7 +123,7 @@ describe('settings migrations', () => {
     })
 
     const meta = await initStorage()
-    expect(meta.schemaVersion).toBe(8)
+    expect(meta.schemaVersion).toBe(SCHEMA_VERSION)
     expect((await getSettings()).fanfanPalette).toBe('warmField')
     expect((await getSettings()).fanfanMode).toBe(true)
 
@@ -140,5 +140,25 @@ describe('settings migrations', () => {
     })
     expect((await getSettings()).fanfanPalette).toBe('warmField')
     expect((await getSettings()).fanfanShowMastered).toBe(false)
+  })
+
+  it('v9: moves the retired offline dictionary default onto the free translator', async () => {
+    const adapter = createMemoryAdapter()
+    setStorageAdapter(adapter)
+    await adapter.set(STORAGE_KEYS.meta, { schemaVersion: 8, installedAt: 1, lastOpenedAt: 1 })
+    await adapter.set(STORAGE_KEYS.settings, { provider: 'mock', fanfanMode: true })
+
+    const meta = await initStorage()
+    expect(meta.schemaVersion).toBe(SCHEMA_VERSION)
+    expect((await getSettings()).provider).toBe('google')
+    expect((await getSettings()).fanfanMode).toBe(true)
+
+    // 选了别的服务商的一律不动。
+    const keyed = createMemoryAdapter()
+    setStorageAdapter(keyed)
+    await keyed.set(STORAGE_KEYS.meta, { schemaVersion: 8, installedAt: 1, lastOpenedAt: 1 })
+    await keyed.set(STORAGE_KEYS.settings, { provider: 'deepseek' })
+    await initStorage()
+    expect((await getSettings()).provider).toBe('deepseek')
   })
 })

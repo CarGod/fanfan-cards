@@ -69,6 +69,7 @@ export class ClaudeProvider implements AIProvider {
   readonly label = 'Claude (Anthropic)'
   readonly model: string
   readonly offline = false
+  readonly contextual = true
 
   private readonly client: Anthropic
   /** Flips to false the first time the account rejects the fallback beta. */

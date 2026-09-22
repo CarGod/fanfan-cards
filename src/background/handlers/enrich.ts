@@ -76,7 +76,8 @@ async function enrichOnce(id: string): Promise<MessageResponse<'vocab/enrich'>> 
    * 走到这里说明用户当前配的是离线词典（或者真实服务商不可用被降级了）。
    * 硬把它的空结果写回去没有意义，返回原样，界面会显示「补不了」而不是转圈。
    */
-  if (result.offline) return { entry, filled: [] }
+  // 翻译接口和离线词典都补不出语境例句，别白发。
+  if (!result.contextual) return { entry, filled: [] }
 
   /*
    * 只填空着的，绝不覆盖已有的。

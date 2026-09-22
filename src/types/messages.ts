@@ -32,7 +32,7 @@ export interface MessageMap {
   ping: { req: Record<string, never>; res: { ok: true; version: string } }
   'ai/explain': {
     /**
-     * `forceOffline` retries with the local dictionary after a provider error.
+     * `forceOffline` retries with the free translator after a provider error.
      * `refresh` skips the cache — what "retry" has to mean to be worth clicking.
      */
     req: ExplainWordInput & { forceOffline?: boolean; refresh?: boolean }
@@ -43,6 +43,8 @@ export interface MessageMap {
       providerId: string
       model: string
       offline: boolean
+      /** False for translators and the offline dictionary: no "what it means here". */
+      contextual: boolean
       cached: boolean
       /** Set when the configured provider was unusable and we downgraded. */
       downgradeReason?: string

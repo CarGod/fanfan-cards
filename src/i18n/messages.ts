@@ -842,8 +842,8 @@ export const MESSAGES = {
 
   // ── 错误与提示 ────────────────────────────────────────────────────────
   'error.ai.no_api_key': {
-    'zh-CN': '还没有配置 API Key，正在使用离线词典模式',
-    en: 'No API key yet — using the offline dictionary',
+    'zh-CN': '还没有配置 API Key，正在用免费翻译（只有词典义）',
+    en: 'No API key yet — using free translation (dictionary sense only)',
   },
   'error.ai.auth': {
     'zh-CN': 'API Key 无效或已过期，请到设置页检查',
@@ -985,7 +985,7 @@ export const MESSAGES = {
 
   // ── 服务商 ────────────────────────────────────────────────────────────
   'provider.badge.recommended': { 'zh-CN': '推荐', en: 'Recommended' },
-  'provider.badge.free': { 'zh-CN': '示例', en: 'Sample' },
+  'provider.badge.free': { 'zh-CN': '免费', en: 'Free' },
   'provider.label.custom': { 'zh-CN': '自定义', en: 'Custom' },
   'provider.label.offline_dict': { 'zh-CN': '离线词典', en: 'Offline dictionary' },
 
@@ -1128,8 +1128,8 @@ export const MESSAGES = {
   // --- v2.0.1：首装引导、高级设置折叠、Key 指引、弹窗刷新提示、首次收藏提示 ---
   'options.welcome.lead': { 'zh-CN': '三步就能用：', en: 'Three steps to get going:' },
   'options.welcome.step1': {
-    'zh-CN': '选一个服务商，粘贴你的 API Key（推荐 DeepSeek：国内可直连，需先充值，按每天查 30 个词算一个月约 7–12 元）',
-    en: 'Pick a provider and paste your API key (DeepSeek recommended: prepaid, roughly ¥7–12 a month at 30 lookups a day)',
+    'zh-CN': '不配 Key 也能用：默认走谷歌翻译免费接口，能查词典义、翻译整页和字幕。想要「这句里指什么」，选一个 AI 服务商粘贴 Key（推荐 DeepSeek：国内可直连，需先充值，按每天查 30 个词算一个月约 7–12 元）',
+    en: 'Works without a key: Google Translate (free) gives dictionary senses, page and subtitle translation. For "what it means in this sentence", pick an AI provider and paste your key (DeepSeek recommended: prepaid, roughly ¥7–12 a month at 30 lookups a day)',
   },
   'options.welcome.step2': {
     'zh-CN': '回到正在读的英文网页，刷新一次——安装前就开着的页面要刷新才生效',
@@ -1139,6 +1139,7 @@ export const MESSAGES = {
     'zh-CN': '选中一个词，点小按钮，看它在这句里指什么',
     en: 'Select a word, click the small button, and see what it means in this sentence',
   },
+  'options.welcome.dismiss': { 'zh-CN': '关闭，不再显示', en: 'Dismiss for good' },
   'options.advanced': { 'zh-CN': '高级设置', en: 'Advanced' },
   'options.advanced.hint': { 'zh-CN': '平时不用动', en: 'Rarely needed' },
   'options.model.guide.deepseek': {
@@ -1172,6 +1173,35 @@ export const MESSAGES = {
   },
   'card.fanfan_prompt.on': { 'zh-CN': '打开翻翻模式', en: 'Turn on' },
   'card.fanfan_prompt.later': { 'zh-CN': '以后再说', en: 'Not now' },
+
+  // --- v2.0.1：免费翻译后端（不配 Key 时的默认） ---
+  'provider.label.google': { 'zh-CN': '谷歌翻译', en: 'Google Translate' },
+  'card.tag.free': { 'zh-CN': '免费翻译', en: 'Free translation' },
+  'card.action.use_free': { 'zh-CN': '改用免费翻译', en: 'Use free translation' },
+  'error.provider.no_key_free': {
+    'zh-CN': '{provider} 尚未填写 API Key，已改用谷歌翻译（免费，只有词典义）',
+    en: 'No API key for {provider} yet — using Google Translate (free, dictionary sense only)',
+  },
+  'error.provider.bad_config_free': {
+    'zh-CN': '{provider} 配置有误（{reason}），已改用谷歌翻译',
+    en: '{provider} is misconfigured ({reason}) — using Google Translate',
+  },
+  'free.context_hint': {
+    'zh-CN': '免费翻译只能给词典义，判断不了它在这句里指什么。要「这里指什么」，到设置页填一个 AI Key。',
+    en: 'Free translation gives the dictionary sense only; it cannot tell what the word means in this sentence. Add an AI key in Settings for that.',
+  },
+  'free.cannot_generate': {
+    'zh-CN': '免费翻译不能生成例句',
+    en: 'Free translation cannot generate example sentences',
+  },
+  'options.provider.free_notice': {
+    'zh-CN': '谷歌翻译免费接口：不用 Key，能查词典义、翻译整页和字幕，但没有「这句里指什么」。中国大陆网络可能连不上；接口不是官方公开的，可能会变。',
+    en: 'Google Translate, free: no key needed. Dictionary senses, page and subtitle translation, but no "what it means here". May be unreachable from mainland China; the endpoint is unofficial and may change.',
+  },
+  'options.model.guide.google': {
+    'zh-CN': '免费，不用配置。要「这句里指什么」再选下面的 AI 服务商。',
+    en: 'Free, nothing to configure. Pick an AI provider below for "what it means in this sentence".',
+  },
 
 } as const satisfies Record<string, Entry>
 

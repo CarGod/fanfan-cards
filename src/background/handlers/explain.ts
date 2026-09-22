@@ -1,5 +1,4 @@
-import { resolveProvider } from '@/ai/index.ts'
-import { MockProvider } from '@/ai/providers/mock.ts'
+import { fallbackProvider, resolveProvider } from '@/ai/index.ts'
 import { PROMPT_VERSION } from '@/ai/prompts.ts'
 import { dateKey } from '@/shared/utils.ts'
 import { bumpActivity } from '@/storage/repositories/activityRepo.ts'
@@ -21,7 +20,7 @@ export async function handleExplain(
 ): Promise<MessageResponse<'ai/explain'>> {
   const settings = await getSettings()
   const resolved = payload.forceOffline
-    ? { provider: new MockProvider(), downgradeReason: undefined }
+    ? { provider: fallbackProvider(), downgradeReason: undefined }
     : resolveProvider(settings)
   const provider = resolved.provider
 
@@ -51,6 +50,7 @@ export async function handleExplain(
       providerId: provider.id,
       model: provider.model,
       offline: provider.offline,
+      contextual: provider.contextual,
       cached: true,
       ...(resolved.downgradeReason ? { downgradeReason: resolved.downgradeReason } : {}),
     }
@@ -76,6 +76,7 @@ export async function handleExplain(
     providerId: provider.id,
     model: provider.model,
     offline: provider.offline,
+    contextual: provider.contextual,
     cached: false,
     ...(resolved.downgradeReason ? { downgradeReason: resolved.downgradeReason } : {}),
   }

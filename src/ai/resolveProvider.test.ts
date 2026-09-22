@@ -9,7 +9,7 @@ function settingsFor(provider: Settings['provider'], patch: Partial<{ apiKey: st
     provider,
     providers: {
       ...DEFAULT_SETTINGS.providers,
-      ...(provider === 'mock'
+      ...(provider === 'mock' || provider === 'google'
         ? {}
         : { [provider]: { apiKey: 'k', model: '', baseUrl: '', ...patch } }),
     } as Settings['providers'],
@@ -38,17 +38,24 @@ describe('resolveProvider', () => {
   // 比的是 `t()` 的返回值而不是写死的中文片段：这条消息现在有中英两版，断言任何
   // 一版的字面量都会在另一种界面语言下变成假失败。这样写还顺带把「用了哪个键、
   // 填了哪个占位符」也一起断言了，比原来的 `toContain('API Key')` 更严。
-  it('downgrades to the offline dictionary instead of throwing when the key is missing', () => {
+  it('downgrades to the free translator instead of throwing when the key is missing', () => {
     const { provider, downgradeReason } = resolveProvider(settingsFor('deepseek', { apiKey: '' }))
-    expect(provider.id).toBe('mock')
+    expect(provider.id).toBe('google')
+    expect(provider.contextual).toBe(false)
     expect(downgradeReason).toBe(
-      t('error.provider.no_key_offline', { provider: providerMeta('deepseek').label }),
+      t('error.provider.no_key_free', { provider: providerMeta('deepseek').label }),
     )
+  })
+
+  it('uses the free translator as the zero-setup default', () => {
+    const { provider, downgradeReason } = resolveProvider(DEFAULT_SETTINGS)
+    expect(provider.id).toBe('google')
+    expect(downgradeReason).toBeUndefined()
   })
 
   it('never throws for a provider that needs a base URL it does not have', () => {
     const { provider, downgradeReason } = resolveProvider(settingsFor('custom'))
-    expect(provider.id).toBe('mock')
+    expect(provider.id).toBe('google')
     expect(downgradeReason).toBeTruthy()
   })
 })

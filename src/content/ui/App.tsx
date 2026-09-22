@@ -567,13 +567,14 @@ export function App({ host }: { host: HTMLElement }) {
       /*
        * 该不该同时去要例句和近义词。
        *
-       * 只在能提前确定的两种情况下放弃：本地已经判定这是个句子，或者用的是
-       * 离线词典。其余一律并发——多花一次请求换掉一整轮等待，是划算的；
+       * 只在能提前确定的两种情况下放弃：本地已经判定这是个句子，或者用的不是
+       * 模型（免费翻译、离线词典）——它们一次就把能给的全给了。其余一律并发——多花一次请求换掉一整轮等待，是划算的；
        * 而真判错了（模型说这是句子），下面会把结果丢掉，读者看不到任何异常。
        */
       const wantsExtras =
         !options.forceOffline &&
         settingsRef.current.provider !== 'mock' &&
+        settingsRef.current.provider !== 'google' &&
         classifySelection(snapshot.text) !== 'sentence'
 
       /*
@@ -603,6 +604,7 @@ export function App({ host }: { host: HTMLElement }) {
             providerId: core.providerId,
             model: core.model,
             offline: core.offline,
+            contextual: core.contextual,
             cached: core.cached,
             downgradeReason: core.downgradeReason,
           },
@@ -615,11 +617,11 @@ export function App({ host }: { host: HTMLElement }) {
            * 否则读者会一直等一个永远不会到的东西。
            */
           enriching:
-            extrasRequest !== null && !core.offline && core.explanation.kind !== 'sentence',
+            extrasRequest !== null && core.contextual && core.explanation.kind !== 'sentence',
         })
 
         // 本地判成词、模型判成句子：那一次并发白发了，结果丢掉。
-        if (!extrasRequest || core.offline || core.explanation.kind === 'sentence') return
+        if (!extrasRequest || !core.contextual || core.explanation.kind === 'sentence') return
 
         const extras = await extrasRequest
         if (requestId !== requestRef.current) return

@@ -136,6 +136,9 @@ await check('ping reaches the worker', async () => {
   assert.equal(reply.ok, true)
 })
 
+// 冒烟测试不能碰网络：默认后端现在是谷歌翻译接口，这里显式钉回离线词典。
+store.set('ara:settings', { provider: 'mock' })
+
 await check('explain returns a contextual explanation (offline provider)', async () => {
   explained = await send('ai/explain', {
     text: 'migration',

@@ -7,7 +7,7 @@ import { countDue } from '@/flashcard/scheduler.ts'
 import { APP_PAGE } from '@/shared/constants.ts'
 import { useI18n } from '@/i18n/react.ts'
 import type { ResolvedLanguage } from '@/i18n/index.ts'
-import { providerMeta, type Settings } from '@/types/settings.ts'
+import { providerApiKey, providerLabel, providerMeta, type Settings } from '@/types/settings.ts'
 import { unique } from '@/shared/utils.ts'
 
 /**
@@ -164,10 +164,8 @@ export function Popup() {
         <div style={{ lineHeight: 1.3 }}>
           <div style={{ fontWeight: 700 }}>{t('app.name')}</div>
           <div className="faint">
-            {provider.label}
-            {settings.provider !== 'mock' && !settings.providers[settings.provider].apiKey
-              ? t('popup.provider.no_key')
-              : ''}
+            {providerLabel(provider)}
+            {provider.requiresKey && !providerApiKey(settings) ? t('popup.provider.no_key') : ''}
           </div>
         </div>
         {/*

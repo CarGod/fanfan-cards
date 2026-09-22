@@ -272,7 +272,7 @@ function CardShowcase() {
           selection="migration"
           sentence={SENTENCE}
           explanation={SAMPLE_EXPLANATION}
-          meta={{ providerId: 'claude', model: 'claude-opus-5', offline: false, cached: false }}
+          meta={{ providerId: 'claude', model: 'claude-opus-5', offline: false, contextual: true, cached: false }}
           savedEntry={null}
           saving={false}
           enriching={false}
@@ -295,7 +295,7 @@ function CardShowcase() {
             selection={sample.word}
             sentence={sample.sentence}
             explanation={sample.explanation}
-            meta={{ providerId: 'claude', model: 'claude-opus-5', offline: false, cached: false }}
+            meta={{ providerId: 'claude', model: 'claude-opus-5', offline: false, contextual: true, cached: false }}
             savedEntry={null}
             saving={false}
             enriching={false}
@@ -440,7 +440,7 @@ function StoreReaderShowcase() {
             selection="migration"
             sentence={SENTENCE}
             explanation={SAMPLE_EXPLANATION}
-            meta={{ providerId: 'claude', model: 'claude-opus-5', offline: false, cached: false }}
+            meta={{ providerId: 'claude', model: 'claude-opus-5', offline: false, contextual: true, cached: false }}
             savedEntry={null}
             saving={false}
             enriching={false}

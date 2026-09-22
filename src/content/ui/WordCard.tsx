@@ -11,6 +11,8 @@ export interface ExplainMeta {
   providerId: string
   model: string
   offline: boolean
+  /** 是不是模型给的语境解释；翻译接口和离线词典都是 false。 */
+  contextual: boolean
   cached: boolean
   downgradeReason?: string | undefined
 }
@@ -102,7 +104,11 @@ export function WordCard({
               模型名字对读在半句话中间的人是噪音，但「这条解释来自离线词典」不是——
               它决定了这句话能信到什么程度，所以要和词性、音标待在一起。
             */}
-            {meta.offline ? <span className="provider-tag">{t('card.tag.offline')}</span> : null}
+            {meta.offline ? (
+              <span className="provider-tag">{t('card.tag.offline')}</span>
+            ) : !meta.contextual ? (
+              <span className="provider-tag">{t('card.tag.free')}</span>
+            ) : null}
           </div>
         </div>
         {/*
@@ -349,7 +355,7 @@ export function CardError({
               {t('card.action.retry')}
             </button>
             <button className="btn btn-ghost" onClick={onOffline}>
-              {t('card.action.use_offline')}
+              {t('card.action.use_free')}
             </button>
           </>
         )}

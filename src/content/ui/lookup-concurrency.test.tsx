@@ -125,6 +125,7 @@ describe('查询的两段并发', () => {
         providerId: 'deepseek',
         model: 'x',
         offline: false,
+        contextual: true,
         cached: false,
       })
       await vi.advanceTimersByTimeAsync(50)
@@ -137,6 +138,7 @@ describe('查询的两段并发', () => {
         providerId: 'deepseek',
         model: 'x',
         offline: false,
+        contextual: true,
         cached: false,
       })
       await vi.advanceTimersByTimeAsync(50)

@@ -4,7 +4,7 @@
     "description": "Extension name shown in the Chrome Web Store and chrome://extensions."
   },
   "extDescription": {
-    "message": "Look up a word on any English page and see what it means here. Saved words light up on the next page. Bring your own AI key.",
+    "message": "Look up a word, see what it means in this sentence. Saved words light up next time. Translation free; context needs your AI key.",
     "description": "One-line summary shown in the store listing."
   },
   "actionTitle": {

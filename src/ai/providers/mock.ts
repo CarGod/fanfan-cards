@@ -245,6 +245,7 @@ export class MockProvider implements AIProvider {
   readonly label = '离线词典'
   readonly model = 'local-heuristic-v1'
   readonly offline = true
+  readonly contextual = false
 
   async explainWord(input: ExplainWordInput): Promise<WordExplanation> {
     await delay(120)

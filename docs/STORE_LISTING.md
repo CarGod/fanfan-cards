@@ -22,11 +22,11 @@
 
 **简体中文**（58 字）
 
-> 在英文网页上划词，AI 解释它在这句里的意思；收进生词本，查过的词下次在别的网页会自己亮起来。需要你自己的 AI Key。
+> 在英文网页上划词，AI 解释它在这句里的意思；收进生词本，查过的词下次在别的网页会自己亮起来。翻译免费，语境解释需自己的 AI Key。
 
-**English**（125 字符）
+**English**（131 字符）
 
-> Look up a word on any English page and see what it means here. Saved words light up on the next page. Bring your own AI key.
+> Look up a word, see what it means in this sentence. Saved words light up next time. Translation free; context needs your AI key.
 
 ### 详细描述
 
@@ -46,9 +46,9 @@
 > **也能翻译。** 悬停加一个键翻译这一段，一个快捷键翻译整页，YouTube 播放器里有双语字幕。
 > 译文追加在原文下面，不替换、不打乱排版。
 >
-> **需要你自己的 AI Key。** 支持 DeepSeek、Claude、OpenAI、Gemini，以及任何 OpenAI 兼容接口。
-> 按每天查 30 个词算，用 DeepSeek 一个月大约 7–12 元（估算）。没有 Key 时只有一个示例词典，
-> 用来看界面，不能真正查词。
+> **翻译免费，语境解释要你自己的 AI Key。** 不配 Key 时走谷歌翻译接口：词典义、整页和字幕翻译都能用，
+> 只是没有「这句里指什么」。要语境解释，填一个 DeepSeek、Claude、OpenAI、Gemini 或任何 OpenAI 兼容接口的 Key；
+> 按每天查 30 个词算，用 DeepSeek 一个月大约 7–12 元（估算）。
 >
 > **数据是你的。** 词卡只存在你自己的浏览器里；设置和 API Key 默认随你的 Chrome 账号同步，
 > 可以在设置里改成仅本机。开发者没有服务器，收不到你的任何数据。想备份和跨设备，
@@ -75,9 +75,10 @@
 > **Translation too.** Hover and hold one key for a paragraph, one shortcut for the page,
 > bilingual subtitles on YouTube. Translations are appended below the original.
 >
-> **Bring your own AI key.** Works with DeepSeek, Claude, OpenAI, Gemini, and any
-> OpenAI-compatible endpoint. Without a key there is only a small sample dictionary for
-> trying the interface.
+> **Translation is free; context needs your own AI key.** Without a key, lookups and
+> translation go through Google Translate: dictionary senses, page and subtitle translation,
+> just no "what it means here". For that, add a key from DeepSeek, Claude, OpenAI, Gemini,
+> or any OpenAI-compatible endpoint.
 >
 > **Your data stays yours.** Cards live only in your own browser; settings and API keys sync
 > with your Chrome account by default and can be kept local-only. There is no server behind
@@ -120,6 +121,7 @@
 | 内容脚本 `http://*/*`、`https://*/*` | 划词解释与整页翻译的作用对象就是「用户正在读的任意网页」——无法预先枚举域名。脚本只注入 UI，**不主动读取页面内容**：只有在用户划词、按下整段翻译键或触发整页翻译时才读取相应文本。用户可以在弹窗里按站点关闭，也可以全局关闭。 |
 | 内容脚本 `youtube.com`（`world: "MAIN"`） | 双语字幕功能需要读取播放器公开的字幕轨信息，并取得播放器为字幕请求生成的一次性校验参数——这些只存在于页面自身的 JavaScript 上下文中，隔离世界读不到。该脚本不访问任何扩展 API，只做这一件事。详见隐私政策。 |
 | `host_permissions`：`api.anthropic.com`、`api.openai.com`、`api.deepseek.com`、`generativelanguage.googleapis.com` | 直接把解释与翻译请求发给用户选定的 AI 服务商。不经过任何中转服务器，因此必须直连这些域名。 |
+| `host_permissions`：`translate.googleapis.com` | 不配 Key 时的默认后端：把选中的词、所在句子、被翻译的段落和字幕发给谷歌翻译接口。同样不经中转。 |
 | `host_permissions`：`api.github.com` | 用户主动启用 GitHub 同步后，把词卡写入**用户自己的**仓库。 |
 | `optional_host_permissions`：`https://*/*` | 仅用于用户自行填写的 OpenAI 兼容 API 地址。**不预先申请**：用户在设置页点击「测试连接」时，才按其填写的那个域名单独请求授权。 |
 | `optional_host_permissions`：`http://localhost/*` | 支持把本机运行的模型服务（Ollama、LM Studio 等）作为服务商。同样按需申请。 |

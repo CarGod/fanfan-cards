@@ -213,9 +213,26 @@ describe('input translation', () => {
   })
 
   it('does not replace a draft with the offline provider placeholder', async () => {
+    await saveSettings({ provider: 'mock' })
     await expect(handleTranslateInput({ text: 'Hello world' })).rejects.toMatchObject({
       code: 'no_api_key',
     })
+  })
+
+  // 不配 Key 的默认后端是谷歌翻译接口：草稿要真的被翻译，而不是被拒绝。
+  it('translates a draft through the free translator when no key is configured', async () => {
+    const urls: string[] = []
+    vi.stubGlobal('fetch', async (url: string) => {
+      urls.push(String(url))
+      return new Response(JSON.stringify({ sentences: [{ trans: '你好世界', orig: 'Hello world' }], src: 'en' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    const result = await handleTranslateInput({ text: 'Hello world' })
+    expect(result.translation).toBe('你好世界')
+    expect(urls[0]).toContain('translate.googleapis.com/translate_a/single')
+    expect(urls[0]).toContain('tl=en')
   })
 })
 

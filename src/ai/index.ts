@@ -4,11 +4,12 @@ import { providerLabel, providerMeta, type Settings } from '@/types/settings.ts'
 import { ClaudeProvider } from './providers/claude.ts'
 import { GeminiProvider } from './providers/gemini.ts'
 import { MockProvider } from './providers/mock.ts'
+import { GoogleFreeProvider } from './providers/google.ts'
 import { OpenAICompatibleProvider } from './providers/openaiCompatible.ts'
 
 export interface ResolvedProvider {
   provider: AIProvider
-  /** Set when we silently downgraded to the offline provider. */
+  /** Set when we silently downgraded to the free translator. */
   downgradeReason?: string
 }
 
@@ -16,13 +17,14 @@ export interface ResolvedProvider {
  * The one place that turns settings into a provider.
  *
  * Never throws: an unconfigured or broken provider config downgrades to the
- * offline dictionary, because the user is mid-sentence and wants *something*.
+ * free translator, because the user is mid-sentence and wants *something*.
  * The reason is returned so the UI can nudge them to the settings page.
  */
 export function resolveProvider(settings: Settings): ResolvedProvider {
   const meta = providerMeta(settings.provider)
 
   if (settings.provider === 'mock') return { provider: new MockProvider() }
+  if (settings.provider === 'google') return { provider: new GoogleFreeProvider() }
 
   const config = settings.providers[settings.provider]
   const apiKey = config.apiKey.trim()
@@ -31,8 +33,8 @@ export function resolveProvider(settings: Settings): ResolvedProvider {
 
   if (meta.requiresKey && !apiKey) {
     return {
-      provider: new MockProvider(),
-      downgradeReason: t('error.provider.no_key_offline', { provider: providerLabel(meta) }),
+      provider: new GoogleFreeProvider(),
+      downgradeReason: t('error.provider.no_key_free', { provider: providerLabel(meta) }),
     }
   }
 
@@ -95,8 +97,8 @@ export function resolveProvider(settings: Settings): ResolvedProvider {
     }
   } catch (error) {
     return {
-      provider: new MockProvider(),
-      downgradeReason: t('error.provider.bad_config_offline', {
+      provider: new GoogleFreeProvider(),
+      downgradeReason: t('error.provider.bad_config_free', {
         provider: providerLabel(meta),
         reason: error instanceof Error ? error.message : String(error),
       }),
@@ -104,11 +106,13 @@ export function resolveProvider(settings: Settings): ResolvedProvider {
   }
 }
 
-export function offlineProvider(): AIProvider {
-  return new MockProvider()
+/** 报错卡上「改用免费翻译」按钮走的后端。 */
+export function fallbackProvider(): AIProvider {
+  return new GoogleFreeProvider()
 }
 
 export { MockProvider } from './providers/mock.ts'
+export { GoogleFreeProvider } from './providers/google.ts'
 export { ClaudeProvider } from './providers/claude.ts'
 export { GeminiProvider } from './providers/gemini.ts'
 export { OpenAICompatibleProvider } from './providers/openaiCompatible.ts'
