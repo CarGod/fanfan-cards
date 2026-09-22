@@ -23,11 +23,13 @@ export const PICK_HINT_CLASS = 'fanfan-pick-hint'
 /** 存在 settings 之外：这是每台机器、每个站各自的事，不该跟着配置同步走。 */
 export const SELECTORS_KEY = 'ara:videoSubtitleSelectors'
 
-/** 认识的站点。选择器指向**稳定的容器**，不是每一行都重建的那个节点。 */
-export const PRESETS: ReadonlyArray<{ host: RegExp; selector: string }> = [
-  // 2026-09 实测：B 站播放器的字幕主行在 .bili-subtitle-x-subtitle-panel-major-group 里。
-  { host: /(^|\.)bilibili\.com$/, selector: '.bili-subtitle-x-subtitle-panel-major-group' },
-]
+/**
+ * 认识的站点。选择器指向**稳定的容器**，不是每一行都重建的那个节点。
+ *
+ * B 站不在这里：它有字幕接口，走 `bilibili.ts` 拿整条轨，比盯 DOM 好得多。
+ * 这里留给那些只能盯 DOM 的站。
+ */
+export const PRESETS: ReadonlyArray<{ host: RegExp; selector: string }> = []
 
 const CHECK_THROTTLE_MS = 120
 const LOOKUP_INTERVAL_MS = 1000

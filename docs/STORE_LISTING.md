@@ -43,8 +43,8 @@
 > **收进生词本，带着原句复习。** 收藏时连同它出现的那句话和网址一起存下来——
 > 脱离语境的单词表是背不下来的。复习按间隔重复排期。
 >
-> **也能翻译。** 悬停加一个键翻译这一段，一个快捷键翻译整页；YouTube 播放器里有双语字幕，
-> 其他网站带字幕轨的视频鼠标移上去就有开关，自己画字幕的播放器点一下字幕区域也能翻。
+> **也能翻译。** 悬停加一个键翻译这一段，一个快捷键翻译整页；YouTube、B 站和带字幕轨的视频
+> 鼠标移上去就有双语字幕开关，自己画字幕的播放器点一下字幕区域也能翻。
 > 译文追加在原文下面，不替换、不打乱排版。
 >
 > **翻译免费，语境解释要你自己的 AI Key。** 不配 Key 时走谷歌翻译接口：词典义、整页和字幕翻译都能用，
@@ -74,8 +74,8 @@
 > by spaced repetition.
 >
 > **Translation too.** Hover and hold one key for a paragraph, one shortcut for the page;
-> bilingual subtitles on YouTube, on any video with a subtitle track, and on players that draw
-> their own subtitles once you point at the subtitle area. Translations are appended below the original.
+> bilingual subtitles on YouTube, Bilibili and any video with a subtitle track, and on players
+> that draw their own subtitles once you point at the subtitle area. Translations are appended below the original.
 >
 > **Translation is free; context needs your own AI key.** Without a key, lookups and
 > translation go through Google Translate: dictionary senses, page and subtitle translation,

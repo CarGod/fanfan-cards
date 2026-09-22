@@ -34,8 +34,8 @@ describe('buildSelector', () => {
 })
 
 describe('presetFor', () => {
-  it('knows bilibili and nothing else', () => {
-    expect(presetFor('www.bilibili.com')).toMatch(/bili-subtitle/)
+  it('returns null for hosts without a preset (bilibili goes through its API, not here)', () => {
+    expect(presetFor('www.bilibili.com')).toBeNull()
     expect(presetFor('example.com')).toBeNull()
   })
 })

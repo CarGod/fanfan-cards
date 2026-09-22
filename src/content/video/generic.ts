@@ -1,19 +1,24 @@
 import { t } from '@/i18n/index.ts'
+import type { MessageKey } from '@/i18n/messages.ts'
 import { sendMessage } from '@/services/messaging.ts'
 import { noteOrphanError } from '@/shared/extensionContext.ts'
+import { shouldTranslateText, targetLanguage } from '@/shared/language.ts'
 import { getSettings, isHostEnabled, saveSettings, watchSettings } from '@/storage/repositories/settingsRepo.ts'
 import type { Settings } from '@/types/settings.ts'
+import { BilibiliCueSource, isBilibiliPlayer } from './bilibili.ts'
+import { CueSourceError, type CueSource, type CueSourceFailure } from './cueSource.ts'
 import { SubtitleOverlay, type OverlayOptions } from './subtitleOverlay.ts'
 import { groupCues, orderFromPlayhead, planBatches, spreadTranslations, type CueGroup } from './segment.ts'
 import type { Cue } from './timedtext.ts'
 import { injectVideoStyles } from './styles.ts'
 
 /**
- * 任何网站上带字幕轨的 `<video>`。
+ * 任何网站上的视频，只要能拿到整条字幕轨。
  *
  * YouTube 那一套是专门写的：字幕要从它的接口拿，按钮要长进它的控制栏。可绝大多数
  * 网站的视频就是一个标准 `<video>`，字幕就是 `<track>`——浏览器已经把每一条 cue 和
  * 时间轴都给了，只差翻译和一层双语显示。这里做的就是这一段，不认识任何站点。
+ * 认识的站点（B 站）只是换一个拿 cue 的地方，见 {@link CueSource}。
  *
  * 和 YouTube 一样的原则：不动网站自己的 DOM。所有东西都放在一个 `position: fixed`
  * 的宿主里，按视频的位置跟着走；全屏时再把宿主搬进全屏元素。
@@ -31,6 +36,15 @@ const CUES_WAIT_MS = 8_000
 const MIN_WIDTH = 240
 /** 页面 DOM 一直在变（播放器每秒都在改进度条），扫描要节流。 */
 const SCAN_DEBOUNCE_MS = 500
+/** 读者点过按钮之后，按钮多露这么久再随鼠标走；出错时更久，得让人看清那句话。 */
+const REVEAL_MS = 2_500
+const REVEAL_ERROR_MS = 4_000
+/**
+ * 至少这么大比例的 cue 不是读者自己的语言，才值得开双语。
+ * 门槛定得很低：中文 up 主放几段英文片段也算数，那几段正是想看的。
+ * 低于它就是整条都是中文（B 站给英文演讲配的中文 AI 字幕）：翻了也是同一句，不如直说。
+ */
+const MIN_FOREIGN_RATIO = 0.05
 
 export interface TrackLike {
   kind: string
@@ -81,6 +95,45 @@ export function cuesFromTrack(
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
+/** 标准 `<video>` 的 `<track>`：把轨设成 hidden 让浏览器照常加载 cue，我们只读。 */
+export class TrackCueSource implements CueSource {
+  private track: TextTrack | null = null
+  private originalMode: TextTrackMode = 'disabled'
+
+  async load(video: HTMLVideoElement, settings: Settings): Promise<Cue[]> {
+    const track = pickTextTrack(Array.from(video.textTracks), settings.sourceLanguage)
+    if (!track) throw new CueSourceError('no_track')
+    this.track = track
+    this.originalMode = track.mode
+    // `hidden`：浏览器照常加载 cue、照常触发时间轴，只是不再自己画——这一层交给我们。
+    track.mode = 'hidden'
+
+    const deadline = Date.now() + CUES_WAIT_MS
+    while ((!track.cues || track.cues.length === 0) && Date.now() < deadline) await sleep(200)
+    const cues = track.cues ? cuesFromTrack(track.cues) : []
+    if (cues.length === 0) throw new CueSourceError('no_track')
+    return cues
+  }
+
+  release(): void {
+    if (this.track) {
+      try {
+        this.track.mode = this.originalMode
+      } catch {
+        // 轨已经被网站换掉了，没什么可恢复的。
+      }
+    }
+    this.track = null
+  }
+}
+
+/** 这支视频的字幕从哪拿；哪都拿不到就不挂按钮。 */
+function sourceFor(video: HTMLVideoElement): CueSource | null {
+  if (isBilibiliPlayer(video)) return new BilibiliCueSource()
+  const hasTrack = Array.from(video.textTracks).some(isSubtitleTrack) || video.querySelector('track') !== null
+  return hasTrack ? new TrackCueSource() : null
+}
+
 /** 全屏时宿主得进全屏元素里，否则看不见。全屏的是 `<video>` 本身时进不去，只能放弃。 */
 function hostParent(): HTMLElement {
   const full = document.fullscreenElement
@@ -88,27 +141,42 @@ function hostParent(): HTMLElement {
   return document.documentElement
 }
 
+type FailReason = CueSourceFailure | 'own_language'
+
+const FAIL_LABEL: Record<FailReason, MessageKey> = {
+  no_track: 'video.generic.chip_error',
+  login: 'video.generic.chip_login',
+  network: 'video.generic.chip_network',
+  own_language: 'video.generic.chip_own_language',
+}
+
 class VideoBinding {
   private readonly host: HTMLElement
   private readonly chip: HTMLButtonElement
   private readonly overlay: SubtitleOverlay
-  private track: TextTrack | null = null
-  private originalMode: TextTrackMode = 'disabled'
 
   private cues: Cue[] = []
   private groups: CueGroup[] = []
   private groupTranslations: string[] = []
   private perCue: string[] = []
+  /** 上次加载 cue 时媒体的身份，见 {@link CueSource.key}。 */
+  private mediaKey = ''
+  private targetCode = 'zh-CN'
 
   private enabled = false
   private hovering = false
   private status: 'off' | 'loading' | 'on' | 'error' = 'off'
+  private failReason: FailReason = 'no_track'
   private run = 0
   private frame = 0
+  private revealTimer = 0
+  /** 这次开关是读者点的，还是页面一打开自动开的。自动失败不打扰人，点了失败得告诉人。 */
+  private userTriggered = false
   private disposers: Array<() => void> = []
 
   constructor(
     readonly video: HTMLVideoElement,
+    private readonly source: CueSource,
     options: OverlayOptions,
     private readonly onToggled: (enabled: boolean) => void,
   ) {
@@ -122,6 +190,8 @@ class VideoBinding {
     this.chip.addEventListener('click', (event) => {
       event.preventDefault()
       event.stopPropagation()
+      this.userTriggered = true
+      this.reveal(REVEAL_MS)
       void this.setEnabled(!this.enabled)
     })
     this.host.append(this.chip)
@@ -130,21 +200,6 @@ class VideoBinding {
     this.overlay.element.style.visibility = 'hidden'
     this.host.append(this.overlay.element)
     hostParent().append(this.host)
-
-    const onEnter = (): void => this.setHover(true)
-    const onLeave = (event: MouseEvent): void => {
-      // 从视频滑到按钮上不算离开：按钮就浮在视频上面。
-      if (event.relatedTarget instanceof Node && this.host.contains(event.relatedTarget)) return
-      this.setHover(false)
-    }
-    video.addEventListener('mouseenter', onEnter)
-    video.addEventListener('mouseleave', onLeave)
-    this.chip.addEventListener('mouseenter', onEnter)
-    this.chip.addEventListener('mouseleave', onLeave)
-    this.disposers.push(() => {
-      video.removeEventListener('mouseenter', onEnter)
-      video.removeEventListener('mouseleave', onLeave)
-    })
 
     const onFullscreen = (): void => {
       const parent = hostParent()
@@ -160,10 +215,6 @@ class VideoBinding {
     return this.enabled
   }
 
-  hasSubtitleTrack(): boolean {
-    return Array.from(this.video.textTracks).some(isSubtitleTrack)
-  }
-
   setOptions(options: OverlayOptions): void {
     this.overlay.setOptions(options)
   }
@@ -172,14 +223,42 @@ class VideoBinding {
     this.disable()
     for (const dispose of this.disposers) dispose()
     this.disposers = []
+    if (this.revealTimer) clearTimeout(this.revealTimer)
     this.overlay.destroy()
     this.host.remove()
   }
 
   private setHover(hovering: boolean): void {
+    if (hovering === this.hovering) return
     this.hovering = hovering
-    this.host.dataset['show'] = String(hovering || this.enabled)
+    this.updateShow()
     this.ensureLoop()
+  }
+
+  /**
+   * 按钮什么时候露出来：鼠标在视频上、正在准备字幕、或者刚点过 / 刚出错的那几秒。
+   * 字幕开着的时候按钮不常驻——看片的人不需要一颗一直亮着的按钮，字幕本身就是状态。
+   */
+  private updateShow(): void {
+    this.host.dataset['show'] = String(this.hovering || this.revealTimer !== 0 || this.status === 'loading')
+  }
+
+  private reveal(ms: number): void {
+    if (this.revealTimer) clearTimeout(this.revealTimer)
+    this.revealTimer = window.setTimeout(() => {
+      this.revealTimer = 0
+      this.updateShow()
+    }, ms)
+    this.updateShow()
+  }
+
+  /**
+   * 鼠标在哪。按坐标算「在不在视频上」，不听 `<video>` 自己的 mouseenter：
+   * 播放器几乎都在视频上面盖着弹幕层、控制层，`<video>` 本身摸不到鼠标。
+   */
+  pointerAt(x: number, y: number): void {
+    const rect = this.video.getBoundingClientRect()
+    this.setHover(x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom)
   }
 
   private renderChip(): void {
@@ -187,12 +266,12 @@ class VideoBinding {
       off: 'video.generic.chip_off',
       loading: 'video.generic.chip_loading',
       on: 'video.generic.chip_on',
-      error: 'video.generic.chip_error',
+      error: FAIL_LABEL[this.failReason],
     } as const
-    this.chip.textContent = t(labelKey[this.status])
+    this.chip.textContent = t(labelKey[this.status], { lang: t(targetLanguage(this.targetCode).labelKey) })
     this.chip.dataset['status'] = this.status
     this.chip.title = t('video.generic.chip_title')
-    this.host.dataset['show'] = String(this.hovering || this.enabled)
+    this.updateShow()
   }
 
   async setEnabled(enabled: boolean): Promise<void> {
@@ -203,6 +282,22 @@ class VideoBinding {
     else this.disable()
   }
 
+  /**
+   * 网站换了片子（B 站换 P）但 `<video>` 还是那一个：手里的 cue 是上一支的，重新拿。
+   * 上一支没开起来、读者又是要自动开的，新的一支也再试一次。
+   */
+  refreshIfStale(auto: boolean): void {
+    if (!this.source.key) return
+    if (this.source.key() === this.mediaKey) return
+    if (this.enabled) {
+      this.disable()
+      this.enabled = true
+      void this.enable()
+    } else if (auto) {
+      void this.setEnabled(true)
+    }
+  }
+
   private async enable(): Promise<void> {
     const run = (this.run += 1)
     this.status = 'loading'
@@ -210,25 +305,29 @@ class VideoBinding {
     this.ensureLoop()
 
     const settings = await getSettings()
-    const track = pickTextTrack(Array.from(this.video.textTracks), settings.sourceLanguage)
-    if (!track) {
-      this.fail()
+    if (run !== this.run) return
+    this.targetCode = settings.targetLanguage
+    this.mediaKey = this.source.key?.() ?? ''
+
+    let cues: Cue[]
+    try {
+      cues = await this.source.load(this.video, settings)
+    } catch (error) {
+      if (run !== this.run) return
+      // 按钮上只放一句人话；具体是哪一步没通留在控制台，排查时要看。
+      console.warn('[fanfan] video subtitles unavailable:', error)
+      this.fail(error instanceof CueSourceError ? error.reason : 'network')
       return
     }
-    this.track = track
-    this.originalMode = track.mode
-    // `hidden`：浏览器照常加载 cue、照常触发时间轴，只是不再自己画——这一层交给我们。
-    track.mode = 'hidden'
-
-    const deadline = Date.now() + CUES_WAIT_MS
-    while ((!track.cues || track.cues.length === 0) && Date.now() < deadline) {
-      await sleep(200)
-      if (run !== this.run) return
-    }
     if (run !== this.run) return
-    const cues = track.cues ? cuesFromTrack(track.cues) : []
     if (cues.length === 0) {
-      this.fail()
+      this.fail('no_track')
+      return
+    }
+    // 字幕本来就是读者自己的语言：翻出来还是同一句，不如在按钮上直说。
+    const foreign = cues.filter((cue) => shouldTranslateText(cue.text, settings.targetLanguage)).length
+    if (foreign < cues.length * MIN_FOREIGN_RATIO) {
+      this.fail('own_language')
       return
     }
 
@@ -237,19 +336,26 @@ class VideoBinding {
     this.groupTranslations = new Array<string>(this.groups.length).fill('')
     this.perCue = new Array<string>(cues.length).fill('')
     this.status = 'on'
+    this.userTriggered = false
     this.renderChip()
     this.ensureLoop()
     void this.translateAll(run)
   }
 
-  private fail(): void {
+  /**
+   * 没开起来。只关掉这一次，不碰「下一支默认开」的设置——失败不是读者的选择，
+   * 一支没字幕的视频不该把以后每一支都关掉。
+   */
+  private fail(reason: FailReason): void {
     this.run += 1
     this.status = 'error'
+    this.failReason = reason
     this.enabled = false
-    this.onToggled(false)
-    this.restoreTrack()
+    this.source.release()
     this.overlay.element.style.visibility = 'hidden'
     this.renderChip()
+    if (this.userTriggered) this.reveal(REVEAL_ERROR_MS)
+    this.userTriggered = false
   }
 
   private disable(): void {
@@ -260,22 +366,11 @@ class VideoBinding {
     this.groups = []
     this.groupTranslations = []
     this.perCue = []
-    this.restoreTrack()
+    this.source.release()
     this.overlay.element.style.visibility = 'hidden'
     this.overlay.refresh()
     this.renderChip()
     this.ensureLoop()
-  }
-
-  private restoreTrack(): void {
-    if (this.track) {
-      try {
-        this.track.mode = this.originalMode
-      } catch {
-        // 轨已经被网站换掉了，没什么可恢复的。
-      }
-    }
-    this.track = null
   }
 
   /** 只在需要的时候跑帧循环：按钮露出来或字幕开着。其余时间一帧都不占。 */
@@ -371,6 +466,34 @@ export class GenericVideoSubtitles {
     this.scan()
     this.observer = new MutationObserver(() => this.scheduleScan())
     this.observer.observe(document.documentElement, { childList: true, subtree: true })
+    // 单页站换片子只改地址不一定动 DOM，地址一变也扫一遍。
+    const onNavigate = (): void => this.scheduleScan()
+    window.addEventListener('popstate', onNavigate)
+    this.disposers.push(() => window.removeEventListener('popstate', onNavigate))
+
+    // 一个 mousemove 喂给所有绑定，一帧最多算一次。
+    let pointer: { x: number; y: number } | null = null
+    let pending = 0
+    const flush = (): void => {
+      pending = 0
+      if (!pointer) return
+      for (const binding of this.bindings.values()) binding.pointerAt(pointer.x, pointer.y)
+    }
+    const onMove = (event: MouseEvent): void => {
+      pointer = { x: event.clientX, y: event.clientY }
+      if (!pending) pending = requestAnimationFrame(flush)
+    }
+    const onLeave = (): void => {
+      pointer = { x: -1, y: -1 }
+      if (!pending) pending = requestAnimationFrame(flush)
+    }
+    document.addEventListener('mousemove', onMove, { capture: true, passive: true })
+    document.addEventListener('mouseleave', onLeave)
+    this.disposers.push(() => {
+      document.removeEventListener('mousemove', onMove, { capture: true })
+      document.removeEventListener('mouseleave', onLeave)
+      if (pending) cancelAnimationFrame(pending)
+    })
   }
 
   destroy(): void {
@@ -408,14 +531,16 @@ export class GenericVideoSubtitles {
       if (!video.isConnected) {
         binding.destroy()
         this.bindings.delete(video)
+        continue
       }
+      binding.refreshIfStale(this.auto)
     }
     for (const video of Array.from(document.querySelectorAll('video'))) {
       if (this.bindings.has(video)) continue
-      const hasTrack = Array.from(video.textTracks).some(isSubtitleTrack) || video.querySelector('track') !== null
-      if (!hasTrack) continue
       if (video.clientWidth > 0 && video.clientWidth < MIN_WIDTH) continue
-      const binding = new VideoBinding(video, this.options, (enabled) => {
+      const source = sourceFor(video)
+      if (!source) continue
+      const binding = new VideoBinding(video, source, this.options, (enabled) => {
         // 和 YouTube 一样：读者按下开关表达的是「我要看双语」，下一支也默认开着。
         void saveSettings({ videoSubtitleAuto: enabled }).catch(() => undefined)
       })

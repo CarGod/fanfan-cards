@@ -1,6 +1,7 @@
 import { OVERLAY_CLASS } from './subtitleOverlay.ts'
 import { BUTTON_CLASS, PANEL_CLASS } from './controlButton.ts'
 import { CHIP_CLASS, HOST_CLASS } from './generic.ts'
+import { HIDE_NATIVE_ATTR, NATIVE_SUBTITLE_SELECTOR } from './bilibili.ts'
 import { LINE_CLASS, PICK_BOX_CLASS, PICK_HINT_CLASS } from './domSubtitles.ts'
 
 /**
@@ -124,6 +125,11 @@ const CSS = `
 }
 .${CHIP_CLASS}[data-status="error"] {
   background: rgba(206, 44, 49, 0.85);
+}
+
+/* B 站：我们的双语层开着时，把它自己画的那行字幕收起来，免得三行叠在一起。 */
+html[${HIDE_NATIVE_ATTR}] ${NATIVE_SUBTITLE_SELECTOR} {
+  visibility: hidden !important;
 }
 
 /* 自己画字幕的播放器：贴在原字幕下面的那一行译文。 */

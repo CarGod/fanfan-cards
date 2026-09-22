@@ -1213,9 +1213,12 @@ export const MESSAGES = {
   'video.generic.chip_loading': { 'zh-CN': '字幕准备中…', en: 'Loading subs…' },
   'video.generic.chip_on': { 'zh-CN': '双语字幕 · 开', en: 'Bilingual subs · on' },
   'video.generic.chip_error': { 'zh-CN': '没找到字幕轨', en: 'No subtitle track' },
+  'video.generic.chip_own_language': { 'zh-CN': '字幕已经是{lang}', en: 'Subs already in {lang}' },
+  'video.generic.chip_login': { 'zh-CN': '登录 B 站后再试', en: 'Sign in to Bilibili first' },
+  'video.generic.chip_network': { 'zh-CN': '字幕没拿到，再点一次', en: 'Could not fetch subs, tap again' },
   'video.generic.chip_title': {
-    'zh-CN': '用这支视频自带的字幕轨，叠一层译文',
-    en: 'Overlay a translation on this video\'s own subtitle track',
+    'zh-CN': '用这支视频自己的字幕，叠一层译文',
+    en: 'Overlay a translation on this video\'s own subtitles',
   },
   'video.pick.hint': {
     'zh-CN': '点一下视频上的字幕文字，之后那里会自动翻译 · Esc 取消',
@@ -1227,7 +1230,7 @@ export const MESSAGES = {
   },
   'popup.action.pick_subtitle': { 'zh-CN': '翻译视频字幕', en: 'Translate video subtitles' },
   'popup.action.pick_subtitle.hint': {
-    'zh-CN': '播放器自己画的字幕（B 站、课程网站）：点一下字幕区域，之后自动翻译。带字幕轨的视频不用这个，鼠标移上去就有开关。',
+    'zh-CN': '播放器自己画字幕的网站：点一下字幕区域，之后自动翻译。YouTube、B 站和带字幕轨的视频不用这个，鼠标移上去就有开关。',
     en: 'For players that draw their own subtitles (Bilibili, course sites): click the subtitle area once. Videos with a subtitle track show a toggle on hover instead.',
   },
 
