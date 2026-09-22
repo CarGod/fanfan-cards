@@ -798,6 +798,9 @@ export function App({ host }: { host: HTMLElement }) {
       if (command?.type === 'content/dismiss') dismiss()
       // 弹窗探活用的；有人应就够了，不用回什么。
       if (command?.type === 'content/ping') return
+      if (command?.type === 'content/pick-subtitle') {
+        document.dispatchEvent(new CustomEvent('fanfan:pick-subtitle'))
+      }
       if (command?.type === 'content/toggle-page-translation') {
         injectPageStyles()
         pageTranslator.toggle({

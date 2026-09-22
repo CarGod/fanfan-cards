@@ -1208,6 +1208,29 @@ export const MESSAGES = {
     en: 'Free, nothing to configure. Pick an AI provider below for "what it means in this sentence".',
   },
 
+  // --- v2.2：任意网站的视频字幕 ---
+  'video.generic.chip_off': { 'zh-CN': '双语字幕', en: 'Bilingual subs' },
+  'video.generic.chip_loading': { 'zh-CN': '字幕准备中…', en: 'Loading subs…' },
+  'video.generic.chip_on': { 'zh-CN': '双语字幕 · 开', en: 'Bilingual subs · on' },
+  'video.generic.chip_error': { 'zh-CN': '没找到字幕轨', en: 'No subtitle track' },
+  'video.generic.chip_title': {
+    'zh-CN': '用这支视频自带的字幕轨，叠一层译文',
+    en: 'Overlay a translation on this video\'s own subtitle track',
+  },
+  'video.pick.hint': {
+    'zh-CN': '点一下视频上的字幕文字，之后那里会自动翻译 · Esc 取消',
+    en: 'Click the subtitle text on the video; it will be translated from now on · Esc to cancel',
+  },
+  'video.pick.saved': {
+    'zh-CN': '已记住这个网站的字幕位置，字幕一变就翻译',
+    en: 'Subtitle area saved for this site; each new line will be translated',
+  },
+  'popup.action.pick_subtitle': { 'zh-CN': '翻译视频字幕', en: 'Translate video subtitles' },
+  'popup.action.pick_subtitle.hint': {
+    'zh-CN': '播放器自己画的字幕（B 站、课程网站）：点一下字幕区域，之后自动翻译。带字幕轨的视频不用这个，鼠标移上去就有开关。',
+    en: 'For players that draw their own subtitles (Bilibili, course sites): click the subtitle area once. Videos with a subtitle track show a toggle on hover instead.',
+  },
+
 } as const satisfies Record<string, Entry>
 
 export type MessageKey = keyof typeof MESSAGES

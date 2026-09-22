@@ -43,7 +43,8 @@
 > **收进生词本，带着原句复习。** 收藏时连同它出现的那句话和网址一起存下来——
 > 脱离语境的单词表是背不下来的。复习按间隔重复排期。
 >
-> **也能翻译。** 悬停加一个键翻译这一段，一个快捷键翻译整页，YouTube 播放器里有双语字幕。
+> **也能翻译。** 悬停加一个键翻译这一段，一个快捷键翻译整页；YouTube 播放器里有双语字幕，
+> 其他网站带字幕轨的视频鼠标移上去就有开关，自己画字幕的播放器点一下字幕区域也能翻。
 > 译文追加在原文下面，不替换、不打乱排版。
 >
 > **翻译免费，语境解释要你自己的 AI Key。** 不配 Key 时走谷歌翻译接口：词典义、整页和字幕翻译都能用，
@@ -72,8 +73,9 @@
 > the page it came from — word lists stripped of context do not stick. Reviews are scheduled
 > by spaced repetition.
 >
-> **Translation too.** Hover and hold one key for a paragraph, one shortcut for the page,
-> bilingual subtitles on YouTube. Translations are appended below the original.
+> **Translation too.** Hover and hold one key for a paragraph, one shortcut for the page;
+> bilingual subtitles on YouTube, on any video with a subtitle track, and on players that draw
+> their own subtitles once you point at the subtitle area. Translations are appended below the original.
 >
 > **Translation is free; context needs your own AI key.** Without a key, lookups and
 > translation go through Google Translate: dictionary senses, page and subtitle translation,
@@ -144,7 +146,7 @@
 | 位置 | 否 | |
 | 网络历史记录 | **是** | 不记录浏览历史。只在用户主动划词 / 翻译时读取当前页的网址和标题，作为词卡的来源信息保存在用户本地。 |
 | 用户活动 | **是** | 不做分析或追踪。「三击空格翻译」需要监听输入框里的按键，只判断是否连续按了三次空格，不记录输入内容。复习记录属于用户自己的学习数据，只存在本地或其自有仓库。 |
-| 网站内容 | **是** | 用户主动划选的文字、其上下文、页面标题与网址、被翻译的页面文本、YouTube 字幕文本。 |
+| 网站内容 | **是** | 用户主动划选的文字、其上下文、页面标题与网址、被翻译的页面文本、视频字幕文本（YouTube 及其他网站）。 |
 
 三项声明全部勾选：
 

@@ -151,3 +151,5 @@ export type ContentCommand =
   | { type: 'content/dismiss' }
   | { type: 'content/toggle-page-translation' }
   | { type: 'content/ping' }
+  /** 弹窗里的「翻译视频字幕」：让读者点一下页面上的字幕区域。 */
+  | { type: 'content/pick-subtitle' }

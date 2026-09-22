@@ -347,6 +347,19 @@ export function Popup() {
         <button className="btn" onClick={() => open('#/vocabulary')}>
           {t('popup.action.vocabulary')}
         </button>
+        {/* 自己画字幕的播放器（B 站、课程网站）：点一下字幕区域，之后那里自动翻译。 */}
+        <button
+          className="btn"
+          disabled={tabId === null || needsReload}
+          title={t('popup.action.pick_subtitle.hint')}
+          onClick={() => {
+            if (tabId === null) return
+            void chrome.tabs.sendMessage(tabId, { type: 'content/pick-subtitle' }).catch(() => undefined)
+            window.close()
+          }}
+        >
+          {t('popup.action.pick_subtitle')}
+        </button>
       </div>
 
       <div className="popup-foot faint">

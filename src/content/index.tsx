@@ -5,6 +5,8 @@ import { warmUpVoices } from '@/services/speech.ts'
 import styles from './styles.css?inline'
 import { App } from './ui/App.tsx'
 import { YouTubeSubtitles } from './video/youtube.ts'
+import { GenericVideoSubtitles } from './video/generic.ts'
+import { DomSubtitleWatcher } from './video/domSubtitles.ts'
 
 /**
  * Content-script bootstrap.
@@ -79,12 +81,19 @@ const root = mount()
 if (root) {
   warmUpVoices()
   const subtitles = mountYouTube()
+  // 其余网站：标准 <video> 带字幕轨的走通用层；自己画字幕的播放器由读者点一下告诉我们位置。
+  const generic = subtitles ? null : new GenericVideoSubtitles()
+  const domSubtitles = subtitles ? null : new DomSubtitleWatcher()
+  void generic?.start()
+  void domSubtitles?.start()
   // Chrome fires this when the extension is reloaded or updated; without the
   // teardown the page keeps a React tree bound to a dead message channel.
   window.addEventListener(
     'pagehide',
     () => {
       subtitles?.destroy()
+      generic?.destroy()
+      domSubtitles?.destroy()
       root.unmount()
     },
     { once: true },

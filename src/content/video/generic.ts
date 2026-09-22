@@ -1,0 +1,426 @@
+import { t } from '@/i18n/index.ts'
+import { sendMessage } from '@/services/messaging.ts'
+import { noteOrphanError } from '@/shared/extensionContext.ts'
+import { getSettings, isHostEnabled, saveSettings, watchSettings } from '@/storage/repositories/settingsRepo.ts'
+import type { Settings } from '@/types/settings.ts'
+import { SubtitleOverlay, type OverlayOptions } from './subtitleOverlay.ts'
+import { groupCues, orderFromPlayhead, planBatches, spreadTranslations, type CueGroup } from './segment.ts'
+import type { Cue } from './timedtext.ts'
+import { injectVideoStyles } from './styles.ts'
+
+/**
+ * 任何网站上带字幕轨的 `<video>`。
+ *
+ * YouTube 那一套是专门写的：字幕要从它的接口拿，按钮要长进它的控制栏。可绝大多数
+ * 网站的视频就是一个标准 `<video>`，字幕就是 `<track>`——浏览器已经把每一条 cue 和
+ * 时间轴都给了，只差翻译和一层双语显示。这里做的就是这一段，不认识任何站点。
+ *
+ * 和 YouTube 一样的原则：不动网站自己的 DOM。所有东西都放在一个 `position: fixed`
+ * 的宿主里，按视频的位置跟着走；全屏时再把宿主搬进全屏元素。
+ */
+
+export const HOST_CLASS = 'fanfan-video-host'
+export const CHIP_CLASS = 'fanfan-video-chip'
+
+const GROUPS_PER_REQUEST = 12
+const FIRST_BATCHES = [2, 4]
+const MAX_CONCURRENT = 3
+/** 等 `<track>` 把 cue 加载出来的上限。 */
+const CUES_WAIT_MS = 8_000
+/** 视频比这还小的多半是预览图、背景装饰，不值得挂一颗按钮。 */
+const MIN_WIDTH = 240
+/** 页面 DOM 一直在变（播放器每秒都在改进度条），扫描要节流。 */
+const SCAN_DEBOUNCE_MS = 500
+
+export interface TrackLike {
+  kind: string
+  language: string
+  label: string
+  mode: string
+}
+
+/** 有可翻的字幕轨才算：章节、元数据轨不是字幕。 */
+export function isSubtitleTrack(track: { kind: string }): boolean {
+  return track.kind === 'subtitles' || track.kind === 'captions'
+}
+
+/**
+ * 挑一条轨。
+ *
+ * 读者设了源语言就按它挑；没设（自动）就当英文——这个产品是学英文的。都没有，
+ * 就用网站正在显示的那条；再没有，第一条。
+ */
+export function pickTextTrack<T extends TrackLike>(tracks: readonly T[], sourceLanguage: string): T | null {
+  const usable = tracks.filter(isSubtitleTrack)
+  if (usable.length === 0) return null
+  const want = (sourceLanguage === 'auto' ? 'en' : sourceLanguage).toLowerCase()
+  return (
+    usable.find((track) => track.language.toLowerCase().startsWith(want)) ??
+    usable.find((track) => track.mode === 'showing') ??
+    usable[0]!
+  )
+}
+
+/** 浏览器的 cue 列表 → 我们的 Cue。去标签、并空白，空行丢掉。 */
+export function cuesFromTrack(
+  list: ArrayLike<{ startTime: number; endTime: number; text?: string }>,
+): Cue[] {
+  const cues: Cue[] = []
+  for (let i = 0; i < list.length; i += 1) {
+    const item = list[i]!
+    // 浏览器给的是 TextTrackCue；字幕轨上实际都是 VTTCue，带 text。别的种类没有，跳过。
+    const text = (item.text ?? '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!text) continue
+    cues.push({ startMs: item.startTime * 1000, endMs: item.endTime * 1000, text })
+  }
+  return cues
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** 全屏时宿主得进全屏元素里，否则看不见。全屏的是 `<video>` 本身时进不去，只能放弃。 */
+function hostParent(): HTMLElement {
+  const full = document.fullscreenElement
+  if (full instanceof HTMLElement && !(full instanceof HTMLVideoElement)) return full
+  return document.documentElement
+}
+
+class VideoBinding {
+  private readonly host: HTMLElement
+  private readonly chip: HTMLButtonElement
+  private readonly overlay: SubtitleOverlay
+  private track: TextTrack | null = null
+  private originalMode: TextTrackMode = 'disabled'
+
+  private cues: Cue[] = []
+  private groups: CueGroup[] = []
+  private groupTranslations: string[] = []
+  private perCue: string[] = []
+
+  private enabled = false
+  private hovering = false
+  private status: 'off' | 'loading' | 'on' | 'error' = 'off'
+  private run = 0
+  private frame = 0
+  private disposers: Array<() => void> = []
+
+  constructor(
+    readonly video: HTMLVideoElement,
+    options: OverlayOptions,
+    private readonly onToggled: (enabled: boolean) => void,
+  ) {
+    this.host = document.createElement('div')
+    this.host.className = `${HOST_CLASS} notranslate`
+    this.host.setAttribute('translate', 'no')
+
+    this.chip = document.createElement('button')
+    this.chip.type = 'button'
+    this.chip.className = CHIP_CLASS
+    this.chip.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      void this.setEnabled(!this.enabled)
+    })
+    this.host.append(this.chip)
+
+    this.overlay = new SubtitleOverlay(options)
+    this.overlay.element.style.visibility = 'hidden'
+    this.host.append(this.overlay.element)
+    hostParent().append(this.host)
+
+    const onEnter = (): void => this.setHover(true)
+    const onLeave = (event: MouseEvent): void => {
+      // 从视频滑到按钮上不算离开：按钮就浮在视频上面。
+      if (event.relatedTarget instanceof Node && this.host.contains(event.relatedTarget)) return
+      this.setHover(false)
+    }
+    video.addEventListener('mouseenter', onEnter)
+    video.addEventListener('mouseleave', onLeave)
+    this.chip.addEventListener('mouseenter', onEnter)
+    this.chip.addEventListener('mouseleave', onLeave)
+    this.disposers.push(() => {
+      video.removeEventListener('mouseenter', onEnter)
+      video.removeEventListener('mouseleave', onLeave)
+    })
+
+    const onFullscreen = (): void => {
+      const parent = hostParent()
+      if (this.host.parentElement !== parent) parent.append(this.host)
+    }
+    document.addEventListener('fullscreenchange', onFullscreen)
+    this.disposers.push(() => document.removeEventListener('fullscreenchange', onFullscreen))
+
+    this.renderChip()
+  }
+
+  get isEnabled(): boolean {
+    return this.enabled
+  }
+
+  hasSubtitleTrack(): boolean {
+    return Array.from(this.video.textTracks).some(isSubtitleTrack)
+  }
+
+  setOptions(options: OverlayOptions): void {
+    this.overlay.setOptions(options)
+  }
+
+  destroy(): void {
+    this.disable()
+    for (const dispose of this.disposers) dispose()
+    this.disposers = []
+    this.overlay.destroy()
+    this.host.remove()
+  }
+
+  private setHover(hovering: boolean): void {
+    this.hovering = hovering
+    this.host.dataset['show'] = String(hovering || this.enabled)
+    this.ensureLoop()
+  }
+
+  private renderChip(): void {
+    const labelKey = {
+      off: 'video.generic.chip_off',
+      loading: 'video.generic.chip_loading',
+      on: 'video.generic.chip_on',
+      error: 'video.generic.chip_error',
+    } as const
+    this.chip.textContent = t(labelKey[this.status])
+    this.chip.dataset['status'] = this.status
+    this.chip.title = t('video.generic.chip_title')
+    this.host.dataset['show'] = String(this.hovering || this.enabled)
+  }
+
+  async setEnabled(enabled: boolean): Promise<void> {
+    if (enabled === this.enabled) return
+    this.enabled = enabled
+    this.onToggled(enabled)
+    if (enabled) await this.enable()
+    else this.disable()
+  }
+
+  private async enable(): Promise<void> {
+    const run = (this.run += 1)
+    this.status = 'loading'
+    this.renderChip()
+    this.ensureLoop()
+
+    const settings = await getSettings()
+    const track = pickTextTrack(Array.from(this.video.textTracks), settings.sourceLanguage)
+    if (!track) {
+      this.fail()
+      return
+    }
+    this.track = track
+    this.originalMode = track.mode
+    // `hidden`：浏览器照常加载 cue、照常触发时间轴，只是不再自己画——这一层交给我们。
+    track.mode = 'hidden'
+
+    const deadline = Date.now() + CUES_WAIT_MS
+    while ((!track.cues || track.cues.length === 0) && Date.now() < deadline) {
+      await sleep(200)
+      if (run !== this.run) return
+    }
+    if (run !== this.run) return
+    const cues = track.cues ? cuesFromTrack(track.cues) : []
+    if (cues.length === 0) {
+      this.fail()
+      return
+    }
+
+    this.cues = cues
+    this.groups = groupCues(cues)
+    this.groupTranslations = new Array<string>(this.groups.length).fill('')
+    this.perCue = new Array<string>(cues.length).fill('')
+    this.status = 'on'
+    this.renderChip()
+    this.ensureLoop()
+    void this.translateAll(run)
+  }
+
+  private fail(): void {
+    this.run += 1
+    this.status = 'error'
+    this.enabled = false
+    this.onToggled(false)
+    this.restoreTrack()
+    this.overlay.element.style.visibility = 'hidden'
+    this.renderChip()
+  }
+
+  private disable(): void {
+    this.run += 1
+    this.enabled = false
+    this.status = 'off'
+    this.cues = []
+    this.groups = []
+    this.groupTranslations = []
+    this.perCue = []
+    this.restoreTrack()
+    this.overlay.element.style.visibility = 'hidden'
+    this.overlay.refresh()
+    this.renderChip()
+    this.ensureLoop()
+  }
+
+  private restoreTrack(): void {
+    if (this.track) {
+      try {
+        this.track.mode = this.originalMode
+      } catch {
+        // 轨已经被网站换掉了，没什么可恢复的。
+      }
+    }
+    this.track = null
+  }
+
+  /** 只在需要的时候跑帧循环：按钮露出来或字幕开着。其余时间一帧都不占。 */
+  private ensureLoop(): void {
+    const wanted = this.hovering || this.enabled || this.status === 'loading'
+    if (!wanted) {
+      if (this.frame) cancelAnimationFrame(this.frame)
+      this.frame = 0
+      return
+    }
+    if (this.frame) return
+    const tick = (): void => {
+      this.frame = 0
+      this.position()
+      if (this.enabled && this.status === 'on') {
+        this.overlay.render(this.cues, this.perCue, this.video.currentTime * 1000)
+      }
+      if (this.hovering || this.enabled || this.status === 'loading') {
+        this.frame = requestAnimationFrame(tick)
+      }
+    }
+    this.frame = requestAnimationFrame(tick)
+  }
+
+  private position(): void {
+    const rect = this.video.getBoundingClientRect()
+    // 视频被网站藏起来（换集、折叠）时，按钮和字幕也一起藏。
+    const visible = rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < innerHeight
+    this.host.style.display = visible ? '' : 'none'
+    if (!visible) return
+    const parent = hostParent()
+    // 宿主在全屏元素里时，坐标要减掉那个元素自己的偏移。
+    const base = parent === document.documentElement ? { left: 0, top: 0 } : parent.getBoundingClientRect()
+    this.host.style.left = `${rect.left - base.left}px`
+    this.host.style.top = `${rect.top - base.top}px`
+    this.host.style.width = `${rect.width}px`
+    this.host.style.height = `${rect.height}px`
+    this.overlay.setPlayerWidth(rect.width)
+  }
+
+  private async translateAll(run: number): Promise<void> {
+    const now = this.video.currentTime * 1000
+    const order = orderFromPlayhead(this.groups, this.cues, now)
+    const batches = planBatches(order, FIRST_BATCHES, GROUPS_PER_REQUEST)
+
+    let cursor = 0
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        if (run !== this.run) return
+        const batch = batches[cursor]
+        cursor += 1
+        if (!batch) return
+        try {
+          const result = await sendMessage('page/translate', {
+            texts: batch.map((index) => this.groups[index]!.text),
+            hint: document.title,
+          })
+          if (run !== this.run) return
+          batch.forEach((groupIndex, offset) => {
+            this.groupTranslations[groupIndex] = result.translations[offset] ?? ''
+          })
+          this.perCue = spreadTranslations(this.cues, this.groups, this.groupTranslations)
+          this.overlay.refresh()
+        } catch (error) {
+          if (run !== this.run) return
+          if (noteOrphanError(error)) return
+          // 一批失败只丢这一批，整条轨不该因为一次抖动全没。
+          console.warn('[fanfan] video subtitle batch failed:', error)
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: MAX_CONCURRENT }, worker))
+  }
+}
+
+export class GenericVideoSubtitles {
+  private readonly bindings = new Map<HTMLVideoElement, VideoBinding>()
+  private options: OverlayOptions = { mode: 'bilingual', fontScale: 1, background: 0.7 }
+  private auto = false
+  private observer: MutationObserver | null = null
+  private scanTimer = 0
+  private disposers: Array<() => void> = []
+  private started = false
+
+  async start(): Promise<void> {
+    const settings = await getSettings()
+    if (!settings.enabled || !isHostEnabled(settings, location.hostname)) return
+    injectVideoStyles()
+    this.started = true
+    this.applySettings(settings)
+    this.disposers.push(watchSettings((next) => this.applySettings(next)))
+
+    this.scan()
+    this.observer = new MutationObserver(() => this.scheduleScan())
+    this.observer.observe(document.documentElement, { childList: true, subtree: true })
+  }
+
+  destroy(): void {
+    for (const dispose of this.disposers) dispose()
+    this.disposers = []
+    this.observer?.disconnect()
+    this.observer = null
+    if (this.scanTimer) clearTimeout(this.scanTimer)
+    for (const binding of this.bindings.values()) binding.destroy()
+    this.bindings.clear()
+  }
+
+  private applySettings(settings: Settings): void {
+    this.options = {
+      mode: settings.videoSubtitleMode,
+      fontScale: settings.videoSubtitleFontScale,
+      background: settings.videoSubtitleBackground,
+    }
+    this.auto = settings.videoSubtitleAuto
+    for (const binding of this.bindings.values()) binding.setOptions(this.options)
+  }
+
+  private scheduleScan(): void {
+    if (this.scanTimer) return
+    this.scanTimer = window.setTimeout(() => {
+      this.scanTimer = 0
+      this.scan()
+    }, SCAN_DEBOUNCE_MS)
+  }
+
+  private scan(): void {
+    if (!this.started) return
+    // 已经绑定的视频从页面上消失了：拆掉，别留着一个宿主在那儿跟着一个不存在的元素。
+    for (const [video, binding] of this.bindings) {
+      if (!video.isConnected) {
+        binding.destroy()
+        this.bindings.delete(video)
+      }
+    }
+    for (const video of Array.from(document.querySelectorAll('video'))) {
+      if (this.bindings.has(video)) continue
+      const hasTrack = Array.from(video.textTracks).some(isSubtitleTrack) || video.querySelector('track') !== null
+      if (!hasTrack) continue
+      if (video.clientWidth > 0 && video.clientWidth < MIN_WIDTH) continue
+      const binding = new VideoBinding(video, this.options, (enabled) => {
+        // 和 YouTube 一样：读者按下开关表达的是「我要看双语」，下一支也默认开着。
+        void saveSettings({ videoSubtitleAuto: enabled }).catch(() => undefined)
+      })
+      this.bindings.set(video, binding)
+      if (this.auto) void binding.setEnabled(true)
+    }
+  }
+}

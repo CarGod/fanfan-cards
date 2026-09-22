@@ -1,5 +1,7 @@
 import { OVERLAY_CLASS } from './subtitleOverlay.ts'
 import { BUTTON_CLASS, PANEL_CLASS } from './controlButton.ts'
+import { CHIP_CLASS, HOST_CLASS } from './generic.ts'
+import { LINE_CLASS, PICK_BOX_CLASS, PICK_HINT_CLASS } from './domSubtitles.ts'
 
 /**
  * 播放器上那一层的样式。
@@ -77,6 +79,96 @@ const CSS = `
   margin: 0 auto;
   color: #fff;
   font-weight: 600;
+}
+
+/*
+ * 通用视频：宿主是一个跟着 <video> 走的 fixed 盒子，字幕层和按钮都在它里面。
+ * 宿主本身不吃鼠标，只有按钮吃。
+ */
+.${HOST_CLASS} {
+  position: fixed;
+  z-index: 2147483000;
+  pointer-events: none;
+  overflow: hidden;
+}
+.${HOST_CLASS} .${OVERLAY_CLASS} {
+  bottom: 9%;
+}
+.${CHIP_CLASS} {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(8, 8, 8, 0.74);
+  color: #fff;
+  font: 600 12px/1 "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+.${HOST_CLASS}[data-show="true"] .${CHIP_CLASS} {
+  opacity: 1;
+}
+.${CHIP_CLASS}[data-status="on"] {
+  background: #ff6a3d;
+}
+.${CHIP_CLASS}[data-status="loading"] {
+  background: rgba(255, 106, 61, 0.6);
+}
+.${CHIP_CLASS}[data-status="error"] {
+  background: rgba(206, 44, 49, 0.85);
+}
+
+/* 自己画字幕的播放器：贴在原字幕下面的那一行译文。 */
+.${LINE_CLASS} {
+  position: fixed;
+  z-index: 2147483000;
+  pointer-events: none;
+  transform: translateX(-50%);
+  text-align: center;
+  line-height: 1.35;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+}
+.${LINE_CLASS} > span {
+  display: inline-block;
+  padding: 0.1em 0.42em;
+  border-radius: 4px;
+  background: rgba(8, 8, 8, 0.7);
+  color: #fff;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  white-space: pre-wrap;
+}
+
+/* 选字幕区域时的框和提示。 */
+.${PICK_BOX_CLASS} {
+  position: fixed;
+  z-index: 2147483001;
+  pointer-events: none;
+  border: 2px solid #ff6a3d;
+  border-radius: 4px;
+  background: rgba(255, 106, 61, 0.12);
+  box-sizing: border-box;
+}
+.${PICK_HINT_CLASS} {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483002;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(8, 8, 8, 0.88);
+  color: #fff;
+  font: 500 13px/1.4 "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  pointer-events: none;
 }
 
 /* 我们在画字幕的时候，原生字幕必须让位，否则下方会叠两层字。 */
