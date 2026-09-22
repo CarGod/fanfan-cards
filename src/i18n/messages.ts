@@ -991,8 +991,7 @@ export const MESSAGES = {
   'provider.badge.recommended': { 'zh-CN': '推荐', en: 'Recommended' },
   'provider.badge.free': { 'zh-CN': '免费', en: 'Free' },
   'provider.label.custom': { 'zh-CN': '自定义', en: 'Custom' },
-  'provider.label.openai': { 'zh-CN': 'OpenAI（兼容）', en: 'OpenAI (compatible)' },
-  'provider.label.claude': { 'zh-CN': 'Claude（兼容）', en: 'Claude (compatible)' },
+  'provider.badge.compatible': { 'zh-CN': '兼容', en: 'Compatible' },
   'provider.label.offline_dict': { 'zh-CN': '离线词典', en: 'Offline dictionary' },
 
   // ── 其它 ────────────────────────────────────────────────────────────────

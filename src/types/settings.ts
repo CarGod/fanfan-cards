@@ -256,7 +256,7 @@ export interface ProviderMeta {
    * 存的是键，取值在渲染里做——这张表是模块级常量，写死文案会把语言定在加载那一刻。
    * `tone` 跟着一起走，免得渲染处靠比对中文字符串来决定配色。
    */
-  badge?: { key: MessageKey; tone: 'recommend' | 'free' }
+  badge?: { key: MessageKey; tone: 'recommend' | 'free' | 'compatible' }
   /** 不在设置页里列出。只为老数据和测试保留。 */
   hidden?: boolean
   defaultModel: string
@@ -292,7 +292,7 @@ export const PROVIDER_CATALOGUE: readonly ProviderMeta[] = [
   {
     id: 'claude',
     label: 'Claude',
-    labelKey: 'provider.label.claude',
+    badge: { key: 'provider.badge.compatible', tone: 'compatible' },
     // 查一个词用不着 Opus；Haiku 4.5 便宜 5 倍，质量对这个任务够用。
     defaultModel: 'claude-haiku-4-5-20251001',
     defaultBaseUrl: '',
@@ -303,7 +303,7 @@ export const PROVIDER_CATALOGUE: readonly ProviderMeta[] = [
   {
     id: 'openai',
     label: 'OpenAI',
-    labelKey: 'provider.label.openai',
+    badge: { key: 'provider.badge.compatible', tone: 'compatible' },
     defaultModel: 'gpt-4o-mini',
     defaultBaseUrl: 'https://api.openai.com/v1',
     modelSuggestions: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'],

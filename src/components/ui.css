@@ -1709,6 +1709,12 @@ textarea:focus {
   color: var(--success);
 }
 
+/* 「兼容」：这家的协议别家网关也认，换个地址就能用。用 AI 的紫，不抢橙色的「推荐」。 */
+.provider-badge[data-tone='compatible'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .banner {
   padding: 12px 14px;
   border-radius: var(--radius-sm);
