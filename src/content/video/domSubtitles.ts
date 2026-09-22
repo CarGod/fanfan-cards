@@ -1,6 +1,7 @@
 import { t } from '@/i18n/index.ts'
 import { sendMessage } from '@/services/messaging.ts'
 import { noteOrphanError } from '@/shared/extensionContext.ts'
+import { shouldTranslateText } from '@/shared/language.ts'
 import { storage } from '@/storage/area.ts'
 import { getSettings, isHostEnabled } from '@/storage/repositories/settingsRepo.ts'
 import { injectVideoStyles } from './styles.ts'
@@ -100,10 +101,12 @@ export class DomSubtitleWatcher {
   private inFlight = new Set<string>()
   private disposers: Array<() => void> = []
   private picking: (() => void) | null = null
+  private targetLanguage = 'zh-CN'
 
   async start(): Promise<void> {
     const settings = await getSettings()
     if (!settings.enabled || !isHostEnabled(settings, location.hostname)) return
+    this.targetLanguage = settings.targetLanguage
     injectVideoStyles()
 
     const onPick = (): void => this.startPicking()
@@ -171,7 +174,8 @@ export class DomSubtitleWatcher {
     const text = element ? normalizeText(element.innerText || element.textContent || '') : ''
     if (text === this.lastText) return
     this.lastText = text
-    if (!text) {
+    // 空行，或者字幕本来就是读者自己的语言（B 站的中文 CC）：不画、不请求。
+    if (!text || !shouldTranslateText(text, this.targetLanguage)) {
       this.hideLine()
       return
     }
@@ -181,17 +185,22 @@ export class DomSubtitleWatcher {
   private async translate(text: string): Promise<void> {
     const cached = this.cache.get(text)
     if (cached !== undefined) {
-      this.showLine(text, cached)
+      if (cached) this.showLine(text, cached)
+      else this.hideLine()
       return
     }
+    // 原文换了、译文还没到：先把上一句的译文收掉，别让它挂在不相干的句子下面。
+    this.hideLine()
     if (this.inFlight.has(text)) return
     this.inFlight.add(text)
     try {
       const { translations } = await sendMessage('page/translate', { texts: [text], hint: document.title })
-      const translation = translations[0] ?? ''
-      if (translation) this.cache.set(text, translation)
+      const translation = normalizeText(translations[0] ?? '')
+      // 字幕本来就是目标语言时译文和原文一样，记成空串，下次直接不画也不再请求。
+      const useful = translation && translation !== text ? translation : ''
+      this.cache.set(text, useful)
       // 翻回来的时候字幕已经换行了：那就不画，等它的那一行自己回来。
-      if (this.lastText === text && translation) this.showLine(text, translation)
+      if (this.lastText === text && useful) this.showLine(text, useful)
     } catch (error) {
       if (noteOrphanError(error)) this.unwatch()
     } finally {

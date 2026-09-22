@@ -29,7 +29,8 @@ export default defineConfig({
     emptyOutDir: true,
     target: 'esnext',
     sourcemap: true,
-    modulePreload: { polyfill: false },
+    // 扩展页面不要 <link rel="modulepreload">：Chrome 会把没用上的预加载记成扩展错误。
+    modulePreload: false,
     rollupOptions: {
       input: {
         background: r('./src/background/index.ts'),
