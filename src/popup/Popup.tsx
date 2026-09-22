@@ -3,7 +3,7 @@ import { Select, Toggle } from '@/components/index.tsx'
 import { BrandMark, ExternalIcon, SettingsIcon } from '@/components/icons.tsx'
 import { useActivity, useEntries, useSettings } from '@/components/hooks.ts'
 import { computeStreak, todayActivity } from '@/storage/repositories/activityRepo.ts'
-import { countDue } from '@/flashcard/scheduler.ts'
+import { countDue, remainingToday } from '@/flashcard/scheduler.ts'
 import { APP_PAGE } from '@/shared/constants.ts'
 import { useI18n } from '@/i18n/react.ts'
 import type { ResolvedLanguage } from '@/i18n/index.ts'
@@ -133,13 +133,17 @@ export function Popup() {
 
   const stats = useMemo(() => {
     const now = Date.now()
+    const due = countDue(entries, now)
+    const today = todayActivity(activity, now)
     return {
       total: entries.length,
-      due: countDue(entries, now),
+      due,
+      // 和工具栏角标、复习页一个口径：今天还要复习几张，不是一共到期几张。
+      todayLeft: remainingToday(due, settings.dailyReviewGoal, today.reviewed),
       streak: computeStreak(activity, now),
-      today: todayActivity(activity, now),
+      today,
     }
-  }, [entries, activity])
+  }, [entries, activity, settings.dailyReviewGoal])
 
   const siteEnabled = host ? !settings.blockedHosts.includes(host) : true
   const provider = providerMeta(settings.provider)
@@ -215,10 +219,18 @@ export function Popup() {
           <div className="faint">{t('popup.stat.saved')}</div>
         </div>
         <div className="card popup-stat">
-          <div className="stat-value" style={{ color: stats.due > 0 ? 'var(--primary-ink)' : undefined }}>
-            {loading ? '—' : stats.due}
+          <div
+            className="stat-value"
+            style={{ color: stats.todayLeft > 0 ? 'var(--primary-ink)' : undefined }}
+            title={t('popup.stat.due_today.title', {
+              due: stats.due,
+              goal: settings.dailyReviewGoal,
+              reviewed: stats.today.reviewed,
+            })}
+          >
+            {loading ? '—' : stats.todayLeft}
           </div>
-          <div className="faint">{t('common.due')}</div>
+          <div className="faint">{t('popup.stat.due_today')}</div>
         </div>
         <div className="card popup-stat">
           <div className="stat-value">{loading ? '—' : stats.streak}</div>
@@ -340,8 +352,8 @@ export function Popup() {
           ) : null}
         </button>
         <button className="btn" onClick={() => open('#/flashcard')}>
-          {!loading && stats.due > 0
-            ? t('popup.action.review_count', { count: stats.due })
+          {!loading && stats.todayLeft > 0
+            ? t('popup.action.review_count', { count: stats.todayLeft })
             : t('popup.action.review')}
         </button>
         <button className="btn" onClick={() => open('#/vocabulary')}>

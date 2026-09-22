@@ -79,6 +79,11 @@ export const MESSAGES = {
   'popup.provider.no_key': { 'zh-CN': ' · 未配置 Key', en: ' · No API key' },
   'popup.stat.saved': { 'zh-CN': '收藏', en: 'Saved' },
   'popup.stat.streak': { 'zh-CN': '连续天数', en: 'Day streak' },
+  'popup.stat.due_today': { 'zh-CN': '今日待复习', en: 'Due today' },
+  'popup.stat.due_today.title': {
+    'zh-CN': '到期 {due} 张 · 每日目标 {goal} 张 · 今天已复习 {reviewed} 张',
+    en: '{due} due · daily goal {goal} · {reviewed} reviewed today',
+  },
   'popup.paragraph.title': { 'zh-CN': '整段翻译', en: 'Paragraph translation' },
   'popup.paragraph.off': { 'zh-CN': '已关闭', en: 'Turned off' },
   'popup.paragraph.hint': {

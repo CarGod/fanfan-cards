@@ -1,7 +1,7 @@
 import { listEntries, watchEntries } from '@/storage/repositories/vocabularyRepo.ts'
 import { getSettings, watchSettings } from '@/storage/repositories/settingsRepo.ts'
 import { readActivity, todayActivity } from '@/storage/repositories/activityRepo.ts'
-import { countDue } from '@/flashcard/scheduler.ts'
+import { countDue, remainingToday } from '@/flashcard/scheduler.ts'
 import { STORAGE_KEYS } from '@/shared/constants.ts'
 
 /**
@@ -32,11 +32,6 @@ export async function ensureBadgeAlarm(): Promise<void> {
   const existing = await chrome.alarms.get(ALARM)
   if (!existing) chrome.alarms.create(ALARM, { periodInMinutes: 30 })
   await refreshBadge()
-}
-
-/** 今天还要复习几张：目标减已完成，不超过实际到期数。纯函数，方便测。 */
-export function remainingToday(due: number, dailyGoal: number, reviewedToday: number): number {
-  return Math.max(0, Math.min(due, dailyGoal - reviewedToday))
 }
 
 export async function refreshBadge(): Promise<void> {

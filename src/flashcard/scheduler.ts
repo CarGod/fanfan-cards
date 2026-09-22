@@ -177,6 +177,16 @@ export function countDue(entries: VocabularyEntry[], now: number = Date.now()): 
   return entries.reduce((total, entry) => total + (isDue(entry, now) ? 1 : 0), 0)
 }
 
+/**
+ * 今天还要复习几张：每日目标减去今天已复习的，再不超过实际到期数。
+ *
+ * 工具栏角标和弹窗用的都是这个数，不是「一共到期几张」——那个数会随着词库变大
+ * 一直涨，看着只会焦虑。目标完成了就是 0，哪怕还有到期的词。
+ */
+export function remainingToday(due: number, dailyGoal: number, reviewedToday: number): number {
+  return Math.max(0, Math.min(due, dailyGoal - reviewedToday))
+}
+
 export function levelHistogram(entries: VocabularyEntry[]): Record<FamiliarityLevel, number> {
   const histogram: Record<FamiliarityLevel, number> = { 0: 0, 1: 0, 2: 0, 3: 0 }
   for (const entry of entries) histogram[entry.review.level]++

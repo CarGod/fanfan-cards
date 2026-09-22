@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { remainingToday } from './badge.ts'
+import { remainingToday } from './scheduler.ts'
 
 describe('remainingToday', () => {
   it('shows what is left toward the daily goal, not everything due', () => {
