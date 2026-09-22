@@ -71,7 +71,7 @@
 **YouTube 双语字幕** — 在播放器控制栏直接开启原文 + 译文字幕，也可切换为仅译文，
 并调整字号与背景深浅。
 
-![划词卡片：结果、加载与错误三种状态](docs/screenshots/reading-card.png)
+![AI 结合原句解释单词](docs/screenshots/shot-1-context.png)
 ![学习面板](docs/screenshots/dashboard.png)
 ![翻翻模式：在文章里标出已收藏单词](docs/screenshots/fanfan-mode-highlight.png)
 ![YouTube 双语字幕](docs/screenshots/youtube-bilingual-subtitles.png)

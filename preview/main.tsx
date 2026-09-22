@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 import { SegmentedControl } from '@/components/index.tsx'
 import { setLanguage, type ResolvedLanguage } from '@/i18n/index.ts'
 import './chrome-stub.ts'
+import './store-assets.css'
 import { SAMPLE_EXPLANATION } from './chrome-stub.ts'
 import { createRoot } from 'react-dom/client'
 import { BrandMark } from '@/components/icons.tsx'
@@ -32,6 +33,7 @@ import { DAY_MS, dateKey } from '@/shared/utils.ts'
 import type { VocabularyEntry } from '@/types/vocabulary.ts'
 import type { DailyActivity } from '@/types/vocabulary.ts'
 
+const STORE_EN = new URLSearchParams(location.search).get('lang') === 'en'
 const NOW = Date.now()
 
 const SENTENCE = 'Database migration can be dangerous if you skip the dry run.'
@@ -177,12 +179,16 @@ const MULTI_SENSE = [
 ]
 
 const WORDS: VocabularyEntry[] = [
-  entry('w1', 'migration'),
+  entry('w1', 'migration', { examples: [], englishDefinition: '', aiExplanation: '这里指升级数据库结构或搬迁数据，不是人口迁徙；跳过演练可能导致生产数据无法回滚。' }),
   entry(
     'w2',
     'deprecated',
     {
       meaning: '已弃用的；不推荐使用的',
+      sentenceTranslation: '这个生命周期方法已被弃用，并将在下一个大版本中移除。',
+      englishDefinition: 'still available, but no longer recommended for use',
+      examples: [{ sentence: 'The deprecated API will be removed next year.', translation: '这个已弃用的 API 将在明年移除。' }],
+      synonyms: [{ word: 'obsolete', meaning: '过时的，通常已不再使用' }],
       senses: [],
       aiExplanation:
         '这里说的是这个 API 仍然可以调用，但官方不再推荐，且下一个大版本就会删除。不等于"已经删除"。',
@@ -204,6 +210,10 @@ const WORDS: VocabularyEntry[] = [
     'idempotent',
     {
       meaning: '幂等的',
+      sentenceTranslation: '让这个端点具有幂等性，这样重试就是安全的。',
+      englishDefinition: 'producing the same result when repeated',
+      examples: [{ sentence: 'An idempotent request can be retried safely.', translation: '幂等请求可以安全地重试。' }],
+      synonyms: [{ word: 'repeatable', meaning: '可重复的，不一定保证结果相同' }],
       senses: [],
       aiExplanation: '这里指同一个请求重复发送多次，服务端状态和只发送一次完全相同，所以重试是安全的。',
       partOfSpeech: 'adjective',
@@ -224,6 +234,11 @@ const WORDS: VocabularyEntry[] = [
     'bottleneck',
     {
       meaning: '瓶颈',
+      sentenceTranslation: '磁盘 I/O 是这条流水线的瓶颈，而不是 CPU。',
+      englishDefinition: 'the part of a system that limits its overall throughput',
+      examples: [{ sentence: 'We removed the bottleneck by batching writes.', translation: '我们通过批量写入消除了瓶颈。' }],
+      synonyms: [{ word: 'constraint', meaning: '限制条件' }],
+      source: { url: 'https://github.com/postgres/postgres', title: 'Pipeline performance notes', context: 'Disk I/O is the bottleneck in this pipeline, not the CPU.', wideContext: '', capturedAt: NOW - 9 * DAY_MS },
       senses: [],
       aiExplanation: '这里指整个流水线里限制吞吐的那一环，作者测出来是磁盘 I/O 而不是 CPU。',
       phonetic: '/ˈbɑːtlnek/',
@@ -329,7 +344,7 @@ function StoreReaderShowcase() {
   return (
     <main
       style={{
-        height: '100vh',
+        height: '100%',
         overflow: 'hidden',
         background: '#fbfbfc',
         color: '#20232a',
@@ -352,7 +367,7 @@ function StoreReaderShowcase() {
         <span style={{ color: '#777d88', fontSize: 13 }}>DATABASES · RELIABILITY · TOOLING</span>
       </header>
 
-      <article style={{ width: 760, marginLeft: 92, padding: '62px 0 80px' }}>
+      <article style={{ width: 650, marginLeft: 62, padding: '40px 0 40px' }}>
         <div
           style={{
             color: '#6f7580',
@@ -378,20 +393,19 @@ function StoreReaderShowcase() {
           Notes from a production schema change · August 18, 2026
         </p>
         <p style={{ fontSize: 21, lineHeight: 1.78, margin: '0 0 24px', color: '#363a42' }}>
-          A database{' '}
+          Database{' '}
           <span
             style={{
-              background: '#f1eefb',
-              color: '#3f2c90',
-              borderBottom: '2px solid #5b45b0',
+              background: '#e4e8ee',
+              color: '#20232a',
+              borderBottom: '2px solid #9098a5',
               borderRadius: 3,
               padding: '1px 3px',
             }}
           >
             migration
           </span>{' '}
-          can be dangerous when a table is large, writes are continuous, and rollback has never
-          been rehearsed.
+          can be dangerous if you skip the dry run.
         </p>
         <p style={{ fontSize: 21, lineHeight: 1.78, margin: '0 0 24px', color: '#363a42' }}>
           The safest changes are reversible and idempotent. Add the new structure first, move data
@@ -414,10 +428,10 @@ function StoreReaderShowcase() {
       <div
         style={{
           position: 'absolute',
-          right: 68,
-          top: 92,
+          right: 62,
+          top: 32,
           width: 352,
-          transform: 'scale(.86)',
+          transform: 'scale(1)',
           transformOrigin: 'top right',
         }}
       >
@@ -448,8 +462,9 @@ function StoreReaderShowcase() {
  * on the right is the real no-network saved-word card.
  */
 function StoreFanFanModeShowcase() {
+  const revisit = new URLSearchParams(location.search).get('card') !== 'hidden'
   useEffect(() => {
-    setLanguage('zh-CN')
+    setLanguage(STORE_EN ? 'en' : 'zh-CN')
     injectPageStyles()
     const highlighter = new SavedWordHighlighter()
     highlighter.start(WORDS)
@@ -463,9 +478,9 @@ function StoreFanFanModeShowcase() {
       style={{
         position: 'relative',
         width: '100vw',
-        height: '100vh',
+        height: '100%',
         overflow: 'hidden',
-        background: '#f4f1eb',
+        background: '#f5f6f8',
         color: '#20232a',
         fontFamily: "Georgia, 'Times New Roman', serif",
       }}
@@ -489,12 +504,12 @@ function StoreFanFanModeShowcase() {
         </div>
       </header>
 
-      <section style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 390px', gap: 54, padding: '48px 62px 56px' }}>
+      <section style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 390px', gap: 54, padding: '32px 62px 40px' }}>
         <article style={{ maxWidth: 760 }}>
           <div style={{ color: '#787a77', fontFamily: 'var(--font-sans)', fontSize: 12, letterSpacing: '.12em' }}>
             SYSTEMS · 7 MIN READ
           </div>
-          <h1 style={{ margin: '17px 0 22px', fontSize: 52, lineHeight: 1.02, letterSpacing: '-.045em', fontWeight: 620 }}>
+          <h1 style={{ margin: '17px 0 22px', fontSize: 44, lineHeight: 1.02, letterSpacing: '-.045em', fontWeight: 620 }}>
             The quiet systems behind reliable products
           </h1>
           <p style={{ margin: '0 0 36px', color: '#767873', fontFamily: 'var(--font-sans)', fontSize: 14 }}>
@@ -516,9 +531,9 @@ function StoreFanFanModeShowcase() {
 
         <aside style={{ position: 'relative', paddingTop: 34 }}>
           <div style={{ marginBottom: 15, display: 'flex', justifyContent: 'space-between', color: '#767873', fontFamily: 'var(--font-sans)', fontSize: 11, letterSpacing: '.08em' }}>
-            <span>FANFAN MODE</span><strong style={{ color: '#c6431a' }}>4 SAVED WORDS FOUND</strong>
+            <span>FANFAN MODE</span><strong style={{ color: '#565b66' }}>4 SAVED WORDS FOUND</strong>
           </div>
-          <div style={{ transform: 'scale(.9)', transformOrigin: 'top right' }}>
+          {revisit && <div style={{ transform: 'scale(1)', transformOrigin: 'top right' }}>
             <ShadowMount>
               <SavedWordCard
                 entry={saved}
@@ -530,7 +545,7 @@ function StoreFanFanModeShowcase() {
                 onClose={() => {}}
               />
             </ShadowMount>
-          </div>
+          </div>}
         </aside>
       </section>
 
@@ -548,8 +563,8 @@ function StoreFanFanModeShowcase() {
         }}
       >
         <BrandMark size={24} />
-        <strong style={{ color: '#20232a' }}>翻翻模式</strong>
-        <span>收藏过的词留在阅读现场 · 点击即看 · 不再次调用 AI</span>
+        <strong style={{ color: '#20232a' }}>{STORE_EN ? 'FanFan mode' : '翻翻模式'}</strong>
+        <span>{STORE_EN ? 'Saved words, back in context · Click to revisit' : '收藏过的词留在阅读现场 · 点击即看 · 不再次调用 AI'}</span>
       </div>
     </main>
   )
@@ -557,56 +572,26 @@ function StoreFanFanModeShowcase() {
 
 /** Required 440x280 Chrome Web Store small promotional tile. */
 function StorePromoTile() {
-  return (
-    <div
-      style={{
-        width: 440,
-        height: 280,
-        overflow: 'hidden',
-        position: 'relative',
-        display: 'grid',
-        placeItems: 'center',
-        background: 'linear-gradient(145deg, #fff1eb 0%, #ffffff 48%, #f1eefb 100%)',
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          width: 250,
-          height: 166,
-          borderRadius: 28,
-          background: '#5b45b0',
-          opacity: 0.08,
-          transform: 'translate(88px, 42px) rotate(10deg)',
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          width: 250,
-          height: 166,
-          borderRadius: 28,
-          background: '#ff6a3d',
-          opacity: 0.11,
-          transform: 'translate(-92px, -38px) rotate(-10deg)',
-        }}
-      />
-      <div
-        style={{
-          width: 152,
-          height: 152,
-          borderRadius: 34,
-          display: 'grid',
-          placeItems: 'center',
-          background: 'rgba(255,255,255,.9)',
-          border: '1px solid rgba(20,22,26,.08)',
-          boxShadow: '0 24px 60px rgba(28,25,48,.16)',
-        }}
-      >
-        <BrandMark size={104} />
-      </div>
-    </div>
-  )
+  const wide = new URLSearchParams(location.search).get('wide') === '1'
+  return <div className={`promo-tile ${wide ? 'promo-wide' : ''}`}>
+    <div className="promo-brand"><BrandMark size={wide ? 180 : 76} /><span>{STORE_EN ? 'FanFan Cards' : '翻翻词卡'}</span></div>
+    <div className="promo-copy"><h1>{STORE_EN ? <>Words you looked up<br />light up next time</> : <>查过的词，<br />下次自己亮起来</>}</h1><p>{STORE_EN ? 'AI context lookup · Word cards · Chrome' : 'AI 语境划词 · 生词本 · Chrome 插件'}</p></div>
+  </div>
+}
+
+const STORE_COPY = {
+  reader: ['词典义 vs 这里指什么', '「lock a table」里的 lock 不是锁。AI 按这句话解释', 'Dictionary sense vs. what it means here', 'The AI explains the word in this sentence'],
+  highlight: ['查过的词，下次自己亮起来', '打开翻翻模式，收藏过的词在任何网页上标出来', 'Words you looked up light up next time', 'Turn on FanFan mode and saved words are marked on any page'],
+  revisit: ['点一下回看，不再花一分钱', '释义、原句、例句本地保存，不再调用 AI', 'Click to revisit, no extra AI cost', 'Meaning, sentence and examples are stored locally'],
+  app: ['带着原句复习', '四级自评，按记忆曲线安排', 'Review with the original sentence', 'Four-level self-rating on a spaced schedule'],
+  youtube: ['YouTube 双语字幕', '原文一行，译文一行', 'Bilingual subtitles on YouTube', 'Original on one line, translation on the next'],
+}
+function StoreFrame({ scene, children }: { scene: keyof typeof STORE_COPY; children: React.ReactNode }) {
+  const copy = STORE_COPY[scene]
+  return <div className={`store-frame store-${scene}`}>
+    <header className="store-caption"><div><h1>{copy[STORE_EN ? 2 : 0]}</h1><p>{copy[STORE_EN ? 3 : 1]}</p></div><div className="store-signature"><BrandMark size={30} /><span>{STORE_EN ? 'FanFan Cards' : '翻翻词卡'}</span></div></header>
+    <div className="store-scene">{children}</div>
+  </div>
 }
 
 /** Mounts children in a real shadow root with the real content stylesheet. */
@@ -636,7 +621,7 @@ function ShadowMount({ children }: { children: React.ReactNode }) {
 
         const shadow = host.attachShadow({ mode: 'open' })
         const style = document.createElement('style')
-        style.textContent = contentStyles
+        style.textContent = contentStyles + (new URLSearchParams(location.search).has('store') ? '\n:host { --ara-card-max: 600px; }' : '')
         shadow.appendChild(style)
         const mount = document.createElement('div')
         mount.className = 'layer'
@@ -674,7 +659,7 @@ function applyForcedTheme(): void {
 function Harness() {
   const params = new URLSearchParams(location.search)
   const store = params.get('store')
-  if (store === 'reader') return <StoreReaderShowcase />
+  if (store === 'reader') return <StoreFrame scene="reader"><StoreReaderShowcase /></StoreFrame>
   if (store === 'app') {
     // Chrome Web Store screenshots have an exact aspect ratio. The real app
     // reserves a scrollbar gutter to prevent navigation jumps, but the static
@@ -682,11 +667,11 @@ function Harness() {
     document.documentElement.style.scrollbarGutter = 'auto'
     document.documentElement.style.overflow = 'hidden'
     document.body.style.overflow = 'hidden'
-    return <App />
+    return <StoreFrame scene="app"><App /></StoreFrame>
   }
   if (store === 'promo') return <StorePromoTile />
-  if (store === 'youtube') return <YouTubeShowcase />
-  if (store === 'highlight') return <StoreFanFanModeShowcase />
+  if (store === 'youtube') return <StoreFrame scene="youtube"><YouTubeShowcase /></StoreFrame>
+  if (store === 'highlight') return <StoreFrame scene={params.get('card') === 'hidden' ? 'highlight' : 'revisit'}><StoreFanFanModeShowcase /></StoreFrame>
 
   const view = params.get('view') ?? 'card'
   /*
@@ -767,6 +752,7 @@ function Harness() {
 }
 
 applyForcedTheme()
+if (new URLSearchParams(location.search).has('store')) setLanguage(STORE_EN ? 'en' : 'zh-CN')
 
 void seed().then(() => {
   const container = document.getElementById('root')

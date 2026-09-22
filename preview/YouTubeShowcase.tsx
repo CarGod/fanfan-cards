@@ -5,6 +5,7 @@ import { injectVideoStyles } from '@/content/video/styles.ts'
 import { setLanguage } from '@/i18n/index.ts'
 import { BrandMark } from '@/components/icons.tsx'
 
+const EN = new URLSearchParams(location.search).get('lang') === 'en'
 const source = 'Great products make the next step feel obvious.'
 const translation = '好的产品，会让下一步变得自然清晰。'
 
@@ -22,7 +23,7 @@ export function YouTubeShowcase() {
     const controls = controlsRef.current
     if (!player || !controls) return
 
-    setLanguage('zh-CN')
+    setLanguage(new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'zh-CN')
     injectVideoStyles()
 
     const overlay = new SubtitleOverlay({ mode: 'bilingual', fontScale: 1.25, background: 0.7 })
@@ -37,14 +38,14 @@ export function YouTubeShowcase() {
         mode: 'bilingual',
         fontScale: 1.25,
         background: 0.7,
-        trackLabel: 'English（自动生成）',
+        trackLabel: EN ? 'English (auto-generated)' : 'English（自动生成）',
         error: '',
       },
       { onToggle() {}, onMode() {}, onFontScale() {}, onBackground() {} },
     )
     mountControl(controls, control)
     player.append(control.panelElement)
-    control.buttonElement.click()
+    // Keep the controls closed so neither subtitles nor options are clipped.
 
     return () => {
       overlay.destroy()
@@ -56,7 +57,7 @@ export function YouTubeShowcase() {
     <main
       style={{
         width: '100vw',
-        height: '100vh',
+        height: '100%',
         overflow: 'hidden',
         background: '#0f0f0f',
         color: '#fff',
@@ -108,12 +109,12 @@ export function YouTubeShowcase() {
             fontSize: 14,
           }}
         >
-          搜索
+          {EN ? 'Search' : '搜索'}
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 20 }}>
           <span style={{ color: '#d9d9d9', fontSize: 20 }}>⌕</span>
           <span style={{ color: '#d9d9d9', fontSize: 19 }}>＋</span>
-          <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#5b45b0', display: 'grid', placeItems: 'center', fontWeight: 800 }}>L</div>
+          <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#565b66', display: 'grid', placeItems: 'center', fontWeight: 800 }}>L</div>
         </div>
       </header>
 
@@ -124,7 +125,7 @@ export function YouTubeShowcase() {
           style={{
             position: 'relative',
             width: 1136,
-            height: 639,
+            height: 510,
             overflow: 'hidden',
             borderRadius: 4,
             background: '#18202b',
@@ -136,7 +137,7 @@ export function YouTubeShowcase() {
               position: 'absolute',
               inset: 0,
               background:
-                'radial-gradient(circle at 78% 26%, rgba(255,106,61,.28), transparent 24%), radial-gradient(circle at 20% 88%, rgba(91,69,176,.34), transparent 31%), linear-gradient(135deg,#111922 0%,#202c3a 52%,#0f151d 100%)',
+                'radial-gradient(circle at 78% 26%, rgba(255,106,61,.28), transparent 24%), radial-gradient(circle at 20% 88%, rgba(100,116,139,.34), transparent 31%), linear-gradient(135deg,#111922 0%,#202c3a 52%,#0f151d 100%)',
             }}
           />
           <div
@@ -190,7 +191,7 @@ export function YouTubeShowcase() {
                 lineHeight: 1.8,
               }}
             >
-              <span style={{ color: '#9b8bea' }}>const</span> product = {'{'}
+              <span style={{ color: '#cbd5e1' }}>const</span> product = {'{'}
               {'\n'}  purpose: <span style={{ color: '#82cfa9' }}>'clear'</span>,
               {'\n'}  defaults: <span style={{ color: '#82cfa9' }}>'useful'</span>,
               {'\n'}  attention: <span style={{ color: '#f4a582' }}>'respected'</span>,
@@ -230,7 +231,7 @@ export function YouTubeShowcase() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 13px', border: '1px solid #303030', borderRadius: 20, color: '#e8e8e8', fontSize: 13 }}>
             <BrandMark size={24} />
-            翻翻词卡 · 双语字幕已开启
+            {EN ? 'FanFan Cards · Bilingual subtitles on' : '翻翻词卡 · 双语字幕已开启'}
           </div>
         </div>
       </section>

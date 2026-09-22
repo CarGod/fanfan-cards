@@ -1,0 +1,17 @@
+/* Store-only framing. Product components retain their shipped styles. */
+html:has(.store-frame), html:has(.promo-tile) { scrollbar-gutter: auto; }
+body:has(.store-frame), body:has(.promo-tile) { margin: 0; overflow: hidden; }
+.store-frame { width: 1280px; height: 800px; background: #f5f6f8; }
+.store-caption { height: 120px; padding: 23px 48px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; background: #fff; border-bottom: 1px solid #e2e2e9; color: #14161a; }
+.store-caption h1 { font-size: 32px; letter-spacing: -.035em; line-height: 1.25; margin: 0 0 8px; font-weight: 750; }
+.store-caption p { font-size: 17px; line-height: 1.4; color: #565b66; margin: 0; }
+.store-signature { display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 650; white-space: nowrap; padding-left: 20px; }
+.store-scene { position: relative; height: 680px; overflow: hidden; }
+.promo-tile { width: 440px; height: 280px; box-sizing: border-box; display: flex; align-items: center; gap: 22px; padding: 26px; background: #f7f7f9; color: #14161a; border-bottom: 8px solid #ff6a3d; }
+.promo-brand { flex: none; display: flex; align-items: center; flex-direction: column; gap: 12px; font-size: 12px; font-weight: 650; }
+.promo-copy h1 { font-size: 26px; line-height: 1.4; letter-spacing: -.04em; margin: 0 0 14px; font-weight: 750; }
+.promo-copy p { font-size: 11px; line-height: 1.7; margin: 0; color: #565b66; white-space: nowrap; }
+.promo-wide { width: 1400px; height: 560px; padding: 80px 130px; gap: 90px; border-bottom-width: 16px; }
+.promo-wide .promo-brand { font-size: 25px; gap: 24px; }
+.promo-wide h1 { font-size: 64px; margin-bottom: 26px; }
+.promo-wide p { font-size: 24px; }

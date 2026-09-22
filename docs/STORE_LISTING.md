@@ -167,9 +167,23 @@
 
 | 素材 | 要求 | 状态 |
 |---|---|---|
-| 图标 128×128 | PNG | ✅ `public/icons/icon-128.png` |
-| 截图 | 1280×800，1–5 张，尺寸不能混用 | ✅ 5 张；新增 `fanfan-mode-highlight.png` 展示收藏词高亮，`reading-in-context-v1.4.png` 展示新版语境卡片 |
-| 小宣传图 440×280 | 可选，没有它进不了推荐位 | ❌ 未制作 |
+| 图标 | 128×128 PNG | ✅ `public/icons/icon-128.png` |
+| 中文商店截图 | 5 张，全部 1280×800 | ✅ 见下表中文列 |
+| 英文商店截图 | 5 张，全部 1280×800 | ✅ 见下表英文列；英文说明带与界面标签，保留中文学习释义 |
+| 中文小宣传图 | 440×280 PNG | ✅ [promo-440x280.png](screenshots/promo-440x280.png) |
+| 中文大宣传图 | 1400×560 PNG | ✅ [promo-1400x560.png](screenshots/promo-1400x560.png) |
+| 英文小宣传图 | 440×280 PNG | ✅ [promo-440x280-en.png](screenshots/promo-440x280-en.png) |
+| 真实扩展演示 | ≤30 秒，GIF ≤4 MB，另留 MP4 | ✅ 20.92 秒 / GIF 约 731 KiB：[GIF](screenshots/demo-ship.gif) · [MP4](screenshots/demo-ship.mp4) |
+
+| # | 内容 | 中文 | English |
+|---|---|---|---|
+| 1 | 语境划词 | [shot-1-context.png](screenshots/shot-1-context.png) | [shot-1-context-en.png](screenshots/shot-1-context-en.png) |
+| 2 | 收藏词高亮 | [shot-2-fanfan.png](screenshots/shot-2-fanfan.png) | [shot-2-fanfan-en.png](screenshots/shot-2-fanfan-en.png) |
+| 3 | 本地回看 | [shot-3-revisit.png](screenshots/shot-3-revisit.png) | [shot-3-revisit-en.png](screenshots/shot-3-revisit-en.png) |
+| 4 | 原句复习与四级评分 | [shot-4-review.png](screenshots/shot-4-review.png) | [shot-4-review-en.png](screenshots/shot-4-review-en.png) |
+| 5 | YouTube 双语字幕 | [shot-5-youtube.png](screenshots/shot-5-youtube.png) | [shot-5-youtube-en.png](screenshots/shot-5-youtube-en.png) |
+
+静态截图使用真实产品组件与预览示例数据；YouTube 背景为预览场景。视频使用已安装扩展，来源与拍摄参数单独记录。
 
 ---
 
