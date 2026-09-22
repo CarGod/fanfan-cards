@@ -167,6 +167,8 @@ export interface AIProvider {
 export type AIErrorCode =
   | 'no_api_key'
   | 'auth'
+  /** 402：余额不足、额度用完，或者套餐用户填错了地址。 */
+  | 'billing'
   | 'rate_limit'
   | 'network'
   | 'timeout'
@@ -227,6 +229,7 @@ export class AIError extends Error {
 const AI_ERROR_KEYS: Record<AIErrorCode, MessageKey> = {
   no_api_key: 'error.ai.no_api_key',
   auth: 'error.ai.auth',
+  billing: 'error.ai.billing',
   rate_limit: 'error.ai.rate_limit',
   network: 'error.ai.network',
   timeout: 'error.ai.timeout',

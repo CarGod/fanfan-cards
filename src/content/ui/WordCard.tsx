@@ -359,7 +359,7 @@ export function CardError({
             </button>
           </>
         )}
-        {code === 'auth' || code === 'no_api_key' ? (
+        {code === 'auth' || code === 'no_api_key' || code === 'billing' ? (
           <button className="btn btn-ghost" onClick={onOpenSettings}>
             {t('card.action.settings')}
           </button>

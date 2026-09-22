@@ -184,7 +184,7 @@ export const MESSAGES = {
     'zh-CN': '（此服务商必须手动填写）',
     en: '(none — you must fill this in)',
   },
-  'options.model.base_url': { 'zh-CN': 'API 地址（可选）', en: 'API endpoint (optional)' },
+  'options.model.base_url': { 'zh-CN': 'API 地址（可选；兼容网关填这里）', en: 'API endpoint (optional; gateways go here)' },
   'options.model.base_url_hint_active': {
     'zh-CN': '生效值：{value}（覆盖了默认值）',
     en: 'In use: {value} (overrides the default)',
@@ -849,6 +849,10 @@ export const MESSAGES = {
     'zh-CN': 'API Key 无效或已过期，请到设置页检查',
     en: 'That API key is invalid or expired. Check it in Settings.',
   },
+  'error.ai.billing': {
+    'zh-CN': '服务商提示余额不足或额度用完。去该服务商充值；如果买的是套餐（Token Plan），API 地址要填套餐专用地址。',
+    en: 'The provider reports insufficient balance or quota. Top up there — and if you bought a plan, use the plan-specific API endpoint.',
+  },
   'error.ai.rate_limit': {
     'zh-CN': '请求过于频繁，请稍后再试',
     en: 'Too many requests. Try again in a moment.',
@@ -986,7 +990,7 @@ export const MESSAGES = {
   // ── 服务商 ────────────────────────────────────────────────────────────
   'provider.badge.recommended': { 'zh-CN': '推荐', en: 'Recommended' },
   'provider.badge.free': { 'zh-CN': '免费', en: 'Free' },
-  'provider.label.custom': { 'zh-CN': '自定义', en: 'Custom' },
+  'provider.label.custom': { 'zh-CN': 'OpenAI 兼容', en: 'OpenAI-compatible' },
   'provider.label.offline_dict': { 'zh-CN': '离线词典', en: 'Offline dictionary' },
 
   // ── 其它 ────────────────────────────────────────────────────────────────
@@ -1147,20 +1151,20 @@ export const MESSAGES = {
     en: 'Prepaid, pay as you go. At 30 lookups a day, roughly ¥7–12 a month (estimate).',
   },
   'options.model.guide.claude': {
-    'zh-CN': '需要海外网络和信用卡。默认用便宜的 Haiku 4.5，查词足够。',
-    en: 'Needs a card on file. Defaults to Haiku 4.5, which is plenty for lookups.',
+    'zh-CN': '需要海外网络和信用卡。默认用便宜的 Haiku 4.5，查词足够。兼容 Anthropic 协议的网关也能用：展开「高级设置」，把 API 地址换成网关的。',
+    en: 'Needs a card on file. Defaults to Haiku 4.5, which is plenty for lookups. Anthropic-compatible gateways work too: open Advanced and replace the API endpoint.',
   },
   'options.model.guide.openai': {
-    'zh-CN': '需要海外网络和信用卡，预充值。',
-    en: 'Prepaid; needs a card on file.',
+    'zh-CN': '需要海外网络和信用卡，预充值。任何 OpenAI 兼容网关（小米 MiMo、硅基流动、OpenRouter…）也能在这里用：展开「高级设置」，把 API 地址换成网关的，模型名填网关的。',
+    en: 'Prepaid; needs a card on file. Any OpenAI-compatible gateway (Xiaomi MiMo, SiliconFlow, OpenRouter…) works here too: open Advanced, replace the API endpoint with the gateway\'s, and enter its model name.',
   },
   'options.model.guide.gemini': {
     'zh-CN': '有免费额度，但中国大陆不在服务地区；免费层的内容会被 Google 用于改进产品。',
     en: 'Has a free tier, but free-tier content may be used by Google to improve its products.',
   },
   'options.model.guide.custom': {
-    'zh-CN': '填你的网关地址和模型名；本机模型（Ollama、LM Studio）也走这里。',
-    en: 'Enter your gateway URL and model name; local models (Ollama, LM Studio) go here too.',
+    'zh-CN': 'OpenAI 兼容协议：填网关地址和模型名。小米 MiMo、硅基流动、OpenRouter、本机模型（Ollama、LM Studio）都走这里。买了套餐的服务商要填套餐专用地址，否则会报余额不足。',
+    en: 'OpenAI-compatible protocol: enter the gateway URL and model name. Xiaomi MiMo, SiliconFlow, OpenRouter and local models (Ollama, LM Studio) all go here. If you bought a plan, use the plan-specific endpoint or you will get a balance error.',
   },
   'popup.reload.hint': {
     'zh-CN': '这个页面是在安装前打开的，刷新后就能用。',
