@@ -1,4 +1,5 @@
 import { t, type MessageKey } from '@/i18n/index.ts'
+import { SOURCE_LANGUAGES, TARGET_LANGUAGES } from '@/shared/language.ts'
 import type { SubtitleMode } from './subtitleOverlay.ts'
 
 /**
@@ -23,6 +24,8 @@ export interface ControlState {
   /** 眼前的事实，按钮的颜色。 */
   status: ControlStatus
   mode: SubtitleMode
+  sourceLanguage: string
+  targetLanguage: string
   fontScale: number
   /** 字幕底衬的不透明度，0 是完全透明。 */
   background: number
@@ -34,6 +37,8 @@ export interface ControlState {
 
 export interface ControlHandlers {
   onToggle: (enabled: boolean) => void
+  onSourceLanguage: (language: string) => void
+  onTargetLanguage: (language: string) => void
   onMode: (mode: SubtitleMode) => void
   onFontScale: (scale: number) => void
   onBackground: (opacity: number) => void
@@ -191,6 +196,17 @@ export class SubtitleControl {
       ),
     )
 
+    this.panel.append(
+      row(t('video.control.source_language'), languageSelect(
+        t('video.control.source_language'), SOURCE_LANGUAGES.filter((item) => item.code !== 'auto'), this.state.sourceLanguage,
+        (next) => this.handlers.onSourceLanguage(next),
+      )),
+      row(t('video.control.target_language'), languageSelect(
+        t('video.control.target_language'), TARGET_LANGUAGES, this.state.targetLanguage,
+        (next) => this.handlers.onTargetLanguage(next),
+      )),
+    )
+
     if (error) {
       this.panel.append(note(error, true))
     } else if (status === 'loading') {
@@ -259,4 +275,28 @@ function note(text: string, isError: boolean): HTMLElement {
  */
 export function mountControl(controls: Element, control: SubtitleControl): void {
   controls.prepend(control.buttonElement)
+}
+
+function languageSelect(
+  label: string,
+  languages: ReadonlyArray<{ code: string; labelKey: MessageKey }>,
+  current: string,
+  onChange: (next: string) => void,
+): HTMLSelectElement {
+  const select = document.createElement('select')
+  select.className = `${PANEL_CLASS}-language`
+  select.setAttribute('aria-label', label)
+  for (const language of languages) {
+    const option = document.createElement('option')
+    option.value = language.code
+    option.textContent = t(language.labelKey)
+    select.append(option)
+  }
+  if (!languages.some((language) => language.code === current)) {
+    select.append(new Option(current, current))
+  }
+  select.value = current
+  select.addEventListener('change', () => onChange(select.value))
+  select.addEventListener('keydown', (event) => event.stopPropagation())
+  return select
 }

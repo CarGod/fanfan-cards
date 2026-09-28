@@ -1,7 +1,7 @@
 import { t } from '@/i18n/index.ts'
 import { sendMessage } from '@/services/messaging.ts'
 import { noteOrphanError } from '@/shared/extensionContext.ts'
-import { getSettings, saveSettings } from '@/storage/repositories/settingsRepo.ts'
+import { getSettings, saveSettings, watchSettings } from '@/storage/repositories/settingsRepo.ts'
 import type { Settings } from '@/types/settings.ts'
 import {
   REQUEST_EVENT,
@@ -151,6 +151,8 @@ export class YouTubeSubtitles {
 
   private enabled = false
   private mode: SubtitleMode = 'bilingual'
+  private sourceLanguage = 'en'
+  private targetLanguage = 'zh-CN'
   private fontScale = 1
   private background = 0.7
   private auto = false
@@ -179,6 +181,17 @@ export class YouTubeSubtitles {
 
     const settings = await getSettings()
     this.applySettings(settings)
+    this.disposers.push(watchSettings((next) => {
+      const changed = this.sourceLanguage !== next.videoSubtitleSourceLanguage ||
+        this.targetLanguage !== next.videoSubtitleTargetLanguage
+      this.applySettings(next)
+      this.overlay?.setOptions(this.overlayOptions())
+      this.sync()
+      if (changed && this.enabled) {
+        this.teardownRun()
+        void this.load()
+      }
+    }))
 
     /*
      * 两条发现「换视频了」的路子，共用一个 `lastHref`。
@@ -222,6 +235,8 @@ export class YouTubeSubtitles {
   }
 
   private applySettings(settings: Settings): void {
+    this.sourceLanguage = settings.videoSubtitleSourceLanguage
+    this.targetLanguage = settings.videoSubtitleTargetLanguage
     this.mode = settings.videoSubtitleMode
     this.fontScale = settings.videoSubtitleFontScale
     this.background = settings.videoSubtitleBackground
@@ -291,6 +306,8 @@ export class YouTubeSubtitles {
 
     this.control = new SubtitleControl(this.state(), {
       onToggle: (next) => void this.setEnabled(next),
+      onSourceLanguage: (next) => void this.setLanguage('source', next),
+      onTargetLanguage: (next) => void this.setLanguage('target', next),
       onMode: (next) => void this.setMode(next),
       onFontScale: (next) => void this.setFontScale(next),
       onBackground: (next) => void this.setBackground(next),
@@ -308,6 +325,8 @@ export class YouTubeSubtitles {
       enabled: this.enabled,
       status: this.status,
       mode: this.mode,
+      sourceLanguage: this.sourceLanguage,
+      targetLanguage: this.targetLanguage,
       fontScale: this.fontScale,
       background: this.background,
       trackLabel: this.trackName,
@@ -329,6 +348,12 @@ export class YouTubeSubtitles {
 
     if (enabled) await this.load()
     else this.teardownRun()
+  }
+
+  private async setLanguage(kind: 'source' | 'target', language: string): Promise<void> {
+    await saveSettings(kind === 'source'
+      ? { videoSubtitleSourceLanguage: language }
+      : { videoSubtitleTargetLanguage: language })
   }
 
   private async setMode(mode: SubtitleMode): Promise<void> {
@@ -446,13 +471,18 @@ export class YouTubeSubtitles {
       const captions = await this.waitForContent(run)
       if (!captions || run !== this.run) return
 
-      const settings = await getSettings()
+      const sourceLanguage = this.sourceLanguage
+      const targetLanguage = this.targetLanguage
+      if (sourceLanguage.split('-')[0] === targetLanguage.split('-')[0]) {
+        this.fail(t('video.error.same_language'))
+        return
+      }
       const choice = chooseTrack(captions.tracks as CaptionTrack[], {
-        sourceLanguage: settings.sourceLanguage,
-        targetLanguage: settings.targetLanguage,
+        sourceLanguage,
+        targetLanguage,
       })
       if (!choice) {
-        this.fail(t('video.error.no_track'))
+        this.fail(t(sourceLanguage === 'auto' ? 'video.error.no_track' : 'video.error.language_missing'))
         return
       }
 
@@ -474,7 +504,7 @@ export class YouTubeSubtitles {
 
       this.player?.setAttribute('data-fanfan-subtitles', 'on')
       this.startRendering()
-      void this.translateAll(run)
+      void this.translateAll(run, targetLanguage)
     } catch (error) {
       if (run !== this.run) return
       this.fail(error instanceof Error ? error.message : String(error))
@@ -545,7 +575,7 @@ export class YouTubeSubtitles {
    * 从头翻是最好写的，也是最难用的：他在第八分钟按下开关，却要等前八分钟翻完
    * 才看到第一行字。
    */
-  private async translateAll(run: number): Promise<void> {
+  private async translateAll(run: number, targetLanguage: string): Promise<void> {
     const now = this.video ? this.video.currentTime * 1000 : 0
     const order = orderFromPlayhead(this.groups, this.cues, now)
 
@@ -563,6 +593,7 @@ export class YouTubeSubtitles {
           const result = await sendMessage('page/translate', {
             texts: batch.map((index) => this.groups[index]!.text),
             hint: document.title,
+            targetLanguage,
           })
           if (run !== this.run) return
           batch.forEach((groupIndex, offset) => {

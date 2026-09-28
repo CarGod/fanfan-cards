@@ -1,3 +1,4 @@
+import { startConfigurationPolling } from '@/configuration/polling.ts'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Field, SegmentedControl, Select, Toggle } from '@/components/index.tsx'
 import { BrandMark, CloseIcon } from '@/components/icons.tsx'
@@ -99,6 +100,7 @@ const pickQuote = (previous?: TestQuote): TestQuote => {
 export function Options() {
   const { t } = useI18n()
   const { settings, update, loading } = useSettings()
+  useEffect(() => startConfigurationPolling(), [])
   const [toast, showToast] = useToast()
   const [test, setTest] = useState<TestState>({ kind: 'idle' })
   // Re-testing gives you a different sentence, so a second run is a second

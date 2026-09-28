@@ -233,7 +233,7 @@ await check('unconfigured GitHub sync stays off while configuration retry remain
   // have scheduled anything while sync is unconfigured.
   assert.equal(globalThis.chrome.alarms.created.has('ara:sync'), false)
   assert.equal(globalThis.chrome.alarms.created.has('ara:sync-soon'), false)
-  assert.equal(globalThis.chrome.alarms.created.get('fanfan:configuration-retry')?.periodInMinutes, 5)
+  assert.equal(globalThis.chrome.alarms.created.get('fanfan:configuration-retry')?.periodInMinutes, 1)
 })
 
 await check('page translation is remembered per host, not per tab', async () => {

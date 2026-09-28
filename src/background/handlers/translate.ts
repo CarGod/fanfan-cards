@@ -79,7 +79,7 @@ export async function handleTranslatePage(
 ): Promise<MessageResponse<'page/translate'>> {
   const settings = await getSettings()
   const { provider } = resolveProvider(settings)
-  const target = targetLanguage(settings.targetLanguage)
+  const target = targetLanguage(payload.targetLanguage ?? settings.targetLanguage)
 
   const keys = payload.texts.map((text) =>
     translationKey({

@@ -58,3 +58,25 @@ it('corrupt initial file leaves both mode and settings unchanged', async () => {
   expect(writeDirectory).not.toHaveBeenCalled()
   expect((await getSettings()).theme).toBe('dark')
 })
+it('recovers permission and writes pending OpenAI edits without replacing them with the older file', async () => {
+  const remote = { ...emptyDocument(), fields: {
+    'providers.openai.apiKey': { value: 'old-test-key', updatedAt: 100, revision: 'file' },
+  } }
+  vi.mocked(readDirectory).mockResolvedValue(remote)
+  await connectDirectory(handle)
+  const settings = await getSettings()
+  await saveSettings({ providers: { ...settings.providers, openai: {
+    apiKey: 'new-test-key', model: 'test-model', baseUrl: 'https://example.test/v1',
+  } } })
+  vi.mocked(readDirectory).mockRejectedValueOnce(new DOMException('Access revoked', 'NotAllowedError'))
+  expect((await synchronizeConfiguration()).status).toBe('permission')
+  expect(writeDirectory).not.toHaveBeenCalled()
+  expect((await getSettings()).providers.openai.apiKey).toBe('new-test-key')
+  expect((await synchronizeConfiguration()).status).toBe('saved')
+  expect(writeDirectory).toHaveBeenCalledWith(handle, expect.objectContaining({ fields: expect.objectContaining({
+    'providers.openai.apiKey': expect.objectContaining({ value: 'new-test-key' }),
+    'providers.openai.model': expect.objectContaining({ value: 'test-model' }),
+    'providers.openai.baseUrl': expect.objectContaining({ value: 'https://example.test/v1' }),
+  }) }))
+  expect((await getConfigState()).mode).toBe('directory')
+})

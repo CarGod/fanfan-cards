@@ -95,7 +95,7 @@ export class TrackCueSource implements CueSource {
   private originalMode: TextTrackMode = 'disabled'
 
   async load(video: HTMLVideoElement, settings: Settings): Promise<Cue[]> {
-    const track = pickTextTrack(Array.from(video.textTracks), settings.sourceLanguage)
+    const track = pickTextTrack(Array.from(video.textTracks), settings.videoSubtitleSourceLanguage)
     if (!track) throw new CueSourceError('no_track')
     this.track = track
     this.originalMode = track.mode
@@ -293,6 +293,13 @@ class VideoBinding {
     }
   }
 
+  reloadLanguages(): void {
+    if (!this.enabled) return
+    this.disable()
+    this.enabled = true
+    void this.enable()
+  }
+
   private async enable(): Promise<void> {
     const run = (this.run += 1)
     this.status = 'loading'
@@ -301,7 +308,7 @@ class VideoBinding {
 
     const settings = await getSettings()
     if (run !== this.run) return
-    this.sourceCode = settings.sourceLanguage
+    this.sourceCode = settings.videoSubtitleSourceLanguage
     this.mediaKey = this.source.key?.() ?? ''
 
     let cues: Cue[]
@@ -320,7 +327,7 @@ class VideoBinding {
       return
     }
     // 只在字幕是读者设置的源语言时才开：中文字幕的视频叠一层中文，不是帮忙是添乱。
-    if (!isInSourceLanguage(cues.map((cue) => cue.text), settings.sourceLanguage)) {
+    if (!isInSourceLanguage(cues.map((cue) => cue.text), settings.videoSubtitleSourceLanguage)) {
       this.fail('not_source')
       return
     }
@@ -333,7 +340,7 @@ class VideoBinding {
     this.userTriggered = false
     this.renderChip()
     this.ensureLoop()
-    void this.translateAll(run)
+    void this.translateAll(run, settings.videoSubtitleTargetLanguage)
   }
 
   /**
@@ -405,7 +412,7 @@ class VideoBinding {
     this.overlay.setPlayerWidth(rect.width)
   }
 
-  private async translateAll(run: number): Promise<void> {
+  private async translateAll(run: number, targetLanguage: string): Promise<void> {
     const now = this.video.currentTime * 1000
     const order = orderFromPlayhead(this.groups, this.cues, now)
     const batches = planBatches(order, FIRST_BATCHES, GROUPS_PER_REQUEST)
@@ -421,6 +428,7 @@ class VideoBinding {
           const result = await sendMessage('page/translate', {
             texts: batch.map((index) => this.groups[index]!.text),
             hint: document.title,
+            targetLanguage,
           })
           if (run !== this.run) return
           batch.forEach((groupIndex, offset) => {
@@ -500,7 +508,12 @@ export class GenericVideoSubtitles {
     this.bindings.clear()
   }
 
+  private languagePair = ''
   private applySettings(settings: Settings): void {
+    const pair = `${settings.videoSubtitleSourceLanguage}:${settings.videoSubtitleTargetLanguage}`
+    const changed = this.languagePair !== '' && pair !== this.languagePair
+    this.languagePair = pair
+    if (changed) for (const binding of this.bindings.values()) binding.reloadLanguages()
     this.options = {
       mode: settings.videoSubtitleMode,
       fontScale: settings.videoSubtitleFontScale,

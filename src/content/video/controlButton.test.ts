@@ -11,6 +11,8 @@ const base: ControlState = {
   enabled: false,
   status: 'off',
   mode: 'bilingual',
+  sourceLanguage: 'en',
+  targetLanguage: 'zh-CN',
   fontScale: 1,
   background: 0.7,
   trackLabel: 'English',
@@ -19,6 +21,8 @@ const base: ControlState = {
 
 const handlers = {
   onToggle: vi.fn(),
+  onSourceLanguage: vi.fn(),
+  onTargetLanguage: vi.fn(),
   onMode: vi.fn(),
   onFontScale: vi.fn(),
   onBackground: vi.fn(),
@@ -39,6 +43,18 @@ beforeEach(() => {
 const panelRows = () => [...document.querySelectorAll(`.${PANEL_CLASS}-row`)]
 
 describe('控制栏按钮', () => {
+  it('offers persistent language choices starting with English → Chinese', () => {
+    const selects = control.panelElement.querySelectorAll('select')
+    expect(selects[0]?.value).toBe('en')
+    expect(selects[1]?.value).toBe('zh-CN')
+    selects[0]!.value = 'fr'
+    selects[0]!.dispatchEvent(new Event('change', { bubbles: true }))
+    expect(handlers.onSourceLanguage).toHaveBeenCalledWith('fr')
+    selects[1]!.value = 'ja'
+    selects[1]!.dispatchEvent(new Event('change', { bubbles: true }))
+    expect(handlers.onTargetLanguage).toHaveBeenCalledWith('ja')
+  })
+
   it('插在控制栏最左边，不挤掉全屏按钮', () => {
     const controls = document.querySelector('.ytp-right-controls')!
     mountControl(controls, control)

@@ -3,13 +3,25 @@ import { CONFIG_STATE_KEY } from '@/configuration/state.ts'
 import { SYNC_PREFIX, synchronizeConfiguration } from '@/configuration/service.ts'
 
 const ALARM = 'fanfan:configuration-retry'
+const PERIOD_MINUTES = 1
 export function registerConfigurationSync(): void {
   let timer: ReturnType<typeof setTimeout> | undefined
-  const run = () => { void synchronizeConfiguration() }
+  let running = false
+  let lastStarted = -Infinity
+  let pendingEdit = false
+  const run = (rememberEdit = false) => {
+    if (running) { pendingEdit ||= rememberEdit; return }
+    running = true
+    lastStarted = Date.now()
+    void Promise.resolve(synchronizeConfiguration()).finally(() => {
+      running = false
+      if (pendingEdit) { pendingEdit = false; run() }
+    })
+  }
   const schedule = () => {
     clearTimeout(timer)
     // Coalesce keystrokes and rapid switches; the alarm covers worker termination and failures.
-    timer = setTimeout(run, 1500)
+    timer = setTimeout(() => run(true), 1500)
   }
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'sync' && Object.keys(changes).some((key) => key.startsWith(SYNC_PREFIX))) schedule()
@@ -19,12 +31,20 @@ export function registerConfigurationSync(): void {
       (modeChange.newValue as { mode?: string } | undefined)?.mode !== (modeChange.oldValue as { mode?: string } | undefined)?.mode) schedule()
   })
   chrome.alarms?.onAlarm.addListener((alarm) => { if (alarm.name === ALARM) run() })
-  chrome.runtime.onStartup.addListener(run)
-  chrome.runtime.onInstalled.addListener(run)
-  void (async () => {
-    if (chrome.alarms && !await chrome.alarms.get(ALARM)) {
-      await chrome.alarms.create(ALARM, { periodInMinutes: 5 })
+  const ensureAlarm = async () => {
+    if (!chrome.alarms) return
+    const alarm = await chrome.alarms.get(ALARM)
+    // Upgrade existing five-minute alarms too; they survive extension updates.
+    if (alarm?.periodInMinutes !== PERIOD_MINUTES) {
+      await chrome.alarms.create(ALARM, { periodInMinutes: PERIOD_MINUTES })
     }
-  })().catch(() => undefined)
+  }
+  const wake = () => { void ensureAlarm().catch(() => undefined); run() }
+  chrome.runtime.onStartup.addListener(wake)
+  chrome.runtime.onInstalled.addListener(wake)
+  chrome.windows?.onFocusChanged?.addListener((windowId) => {
+    if (windowId >= 0 && Date.now() - lastStarted >= 15000) run()
+  })
+  void ensureAlarm().catch(() => undefined)
   run()
 }

@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+vi.mock('@/services/messaging.ts', () => ({ sendMessage: vi.fn() }))
+
 import { contentIsReady } from './youtube.ts'
 
 /**
@@ -38,4 +40,28 @@ describe('contentIsReady', () => {
   it('但只要广告在播，缺 id 也不算就绪', () => {
     expect(contentIsReady({ wantedVideoId: '', playerVideoId: '', adPlaying: true })).toBe(false)
   })
+})
+
+// Regression for switching languages while a paid translation request is still in flight.
+// A late response must never be painted into the new run's captions.
+it('discards late translations after a language restart', async () => {
+  const { YouTubeSubtitles } = await import('./youtube.ts')
+  const { sendMessage } = await import('@/services/messaging.ts')
+  let resolve!: (value: { translations: string[] }) => void
+  vi.mocked(sendMessage).mockImplementationOnce(() => new Promise((done) => { resolve = done }))
+  const subtitles = new YouTubeSubtitles()
+  subtitles['run'] = 1
+  subtitles['cues'] = [{ startMs: 0, endMs: 1000, text: 'Hello.' }]
+  subtitles['groups'] = [{ startIndex: 0, endIndex: 0, text: 'Hello.' }]
+  subtitles['groupTranslations'] = ['']
+  subtitles['perCue'] = ['']
+  const pending = subtitles['translateAll'](1, 'zh-CN')
+  expect(sendMessage).toHaveBeenCalledWith('page/translate', expect.objectContaining({ targetLanguage: 'zh-CN' }))
+  subtitles['run'] = 2
+  resolve({ translations: ['旧译文'] })
+  await pending
+  expect(subtitles['perCue']).toEqual([''])
+  vi.mocked(sendMessage).mockResolvedValueOnce({ translations: ['Bonjour.'] })
+  await subtitles['translateAll'](2, 'fr')
+  expect(subtitles['perCue']).toEqual(['Bonjour.'])
 })

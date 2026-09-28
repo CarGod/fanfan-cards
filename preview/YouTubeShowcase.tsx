@@ -36,12 +36,14 @@ export function YouTubeShowcase() {
         enabled: true,
         status: 'on',
         mode: 'bilingual',
+        sourceLanguage: 'en',
+        targetLanguage: 'zh-CN',
         fontScale: 1.25,
         background: 0.7,
         trackLabel: EN ? 'English (auto-generated)' : 'English（自动生成）',
         error: '',
       },
-      { onToggle() {}, onMode() {}, onFontScale() {}, onBackground() {} },
+      { onSourceLanguage() {}, onTargetLanguage() {}, onToggle() {}, onMode() {}, onFontScale() {}, onBackground() {} },
     )
     mountControl(controls, control)
     player.append(control.panelElement)

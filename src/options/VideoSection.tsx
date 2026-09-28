@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Field, SegmentedControl, Toggle } from '@/components/index.tsx'
 import { useI18n } from '@/i18n/react.ts'
 import { STORAGE_KEYS } from '@/shared/constants.ts'
-import { sourceLanguage } from '@/shared/language.ts'
+import { sourceLanguage, SOURCE_LANGUAGES, TARGET_LANGUAGES } from '@/shared/language.ts'
 import { storage } from '@/storage/area.ts'
 import type { Settings } from '@/types/settings.ts'
 
@@ -63,7 +63,7 @@ export function VideoSection({
     await storage().set(STORAGE_KEYS.videoSubtitleSelectors, next).catch(() => undefined)
   }
 
-  const source = sourceLanguage(settings.sourceLanguage === 'auto' ? 'en' : settings.sourceLanguage)
+  const source = sourceLanguage(settings.videoSubtitleSourceLanguage)
   const hosts = Object.keys(sites).sort()
 
   return (
@@ -83,6 +83,25 @@ export function VideoSection({
             label={t('options.video.auto')}
           />
         </div>
+
+        <Field label={t('video.control.source_language')}>
+          <select className="input" value={settings.videoSubtitleSourceLanguage}
+            aria-label={t('video.control.source_language')}
+            onChange={(event) => void update({ videoSubtitleSourceLanguage: event.target.value })}>
+            {SOURCE_LANGUAGES.filter((item) => item.code !== 'auto').map((item) => (
+              <option key={item.code} value={item.code}>{t(item.labelKey)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('video.control.target_language')}>
+          <select className="input" value={settings.videoSubtitleTargetLanguage}
+            aria-label={t('video.control.target_language')}
+            onChange={(event) => void update({ videoSubtitleTargetLanguage: event.target.value })}>
+            {TARGET_LANGUAGES.map((item) => (
+              <option key={item.code} value={item.code}>{t(item.labelKey)}</option>
+            ))}
+          </select>
+        </Field>
 
         <Field label={t('options.video.mode')}>
           <SegmentedControl

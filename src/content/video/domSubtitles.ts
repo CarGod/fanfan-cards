@@ -4,7 +4,7 @@ import { noteOrphanError } from '@/shared/extensionContext.ts'
 import { STORAGE_KEYS } from '@/shared/constants.ts'
 import { isInSourceLanguage } from '@/shared/language.ts'
 import { storage } from '@/storage/area.ts'
-import { getSettings, isHostEnabled } from '@/storage/repositories/settingsRepo.ts'
+import { getSettings, watchSettings, isHostEnabled } from '@/storage/repositories/settingsRepo.ts'
 import { injectVideoStyles } from './styles.ts'
 
 /**
@@ -104,12 +104,27 @@ export class DomSubtitleWatcher {
   private inFlight = new Set<string>()
   private disposers: Array<() => void> = []
   private picking: (() => void) | null = null
-  private sourceLanguage = 'auto'
+  private sourceLanguage = 'en'
+  private targetLanguage = 'zh-CN'
+  private languageRun = 0
 
   async start(): Promise<void> {
     const settings = await getSettings()
     if (!settings.enabled || !isHostEnabled(settings, location.hostname)) return
-    this.sourceLanguage = settings.sourceLanguage
+    this.sourceLanguage = settings.videoSubtitleSourceLanguage
+    this.targetLanguage = settings.videoSubtitleTargetLanguage
+    this.disposers.push(watchSettings((next) => {
+      if (this.sourceLanguage === next.videoSubtitleSourceLanguage &&
+          this.targetLanguage === next.videoSubtitleTargetLanguage) return
+      this.sourceLanguage = next.videoSubtitleSourceLanguage
+      this.targetLanguage = next.videoSubtitleTargetLanguage
+      this.languageRun += 1
+      this.cache.clear()
+      this.inFlight.clear()
+      this.lastText = ''
+      this.hideLine()
+      this.check()
+    }))
     injectVideoStyles()
 
     const onPick = (): void => this.startPicking()
@@ -139,6 +154,8 @@ export class DomSubtitleWatcher {
   }
 
   private unwatch(): void {
+    this.languageRun += 1
+    this.inFlight.clear()
     this.selector = null
     this.observer?.disconnect()
     this.observer = null
@@ -186,6 +203,7 @@ export class DomSubtitleWatcher {
   }
 
   private async translate(text: string): Promise<void> {
+    const run = this.languageRun
     const cached = this.cache.get(text)
     if (cached !== undefined) {
       if (cached) this.showLine(text, cached)
@@ -197,7 +215,8 @@ export class DomSubtitleWatcher {
     if (this.inFlight.has(text)) return
     this.inFlight.add(text)
     try {
-      const { translations } = await sendMessage('page/translate', { texts: [text], hint: document.title })
+      const { translations } = await sendMessage('page/translate', { texts: [text], hint: document.title, targetLanguage: this.targetLanguage })
+      if (run !== this.languageRun) return
       const translation = normalizeText(translations[0] ?? '')
       // 字幕本来就是目标语言时译文和原文一样，记成空串，下次直接不画也不再请求。
       const useful = translation && translation !== text ? translation : ''
@@ -207,7 +226,7 @@ export class DomSubtitleWatcher {
     } catch (error) {
       if (noteOrphanError(error)) this.unwatch()
     } finally {
-      this.inFlight.delete(text)
+      if (run === this.languageRun) this.inFlight.delete(text)
     }
   }
 

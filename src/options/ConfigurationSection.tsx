@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '@/i18n/react.ts'
 import { storage } from '@/storage/area.ts'
 import { downloadConfiguration, importConfigurationFile } from '@/configuration/file.ts'
-import { DirectoryIssue, pickDirectory, supportsDirectory } from '@/configuration/directory.ts'
+import { DirectoryIssue, loadDirectory, pickDirectory, requestDirectoryPermission, supportsDirectory, type ConfigDirectory } from '@/configuration/directory.ts'
 import {
   connectDirectory, selectConfigMode, startFreshConfiguration, synchronizeConfiguration,
 } from '@/configuration/service.ts'
@@ -20,6 +20,7 @@ export function ConfigurationSection({ onConfigure }: { onConfigure: () => void 
   const [state, setState] = useState<ConfigState>(initialConfigState)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
+  const [directory, setDirectory] = useState<ConfigDirectory>()
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -28,11 +29,18 @@ export function ConfigurationSection({ onConfigure }: { onConfigure: () => void 
     const unwatch = storage().watch(CONFIG_STATE_KEY, read)
     read()
     void synchronizeConfiguration()
-    // File handles may regain access and iCloud may update while this tab is away.
-    const focus = () => { void synchronizeConfiguration() }
-    window.addEventListener('focus', focus)
-    return () => { alive = false; unwatch(); window.removeEventListener('focus', focus) }
+    return () => { alive = false; unwatch() }
   }, [])
+
+  useEffect(() => {
+    let alive = true
+    if (state.mode === 'directory') {
+      void loadDirectory().then((handle) => { if (alive) setDirectory(handle) }).catch(() => {
+        if (alive) setDirectory(undefined)
+      })
+    } else setDirectory(undefined)
+    return () => { alive = false }
+  }, [state.mode, state.directoryName, state.status])
 
   const action = async (job: () => Promise<unknown>) => {
     setBusy(true)
@@ -56,6 +64,16 @@ export function ConfigurationSection({ onConfigure }: { onConfigure: () => void 
     // Start the native picker synchronously while the click still grants user activation.
     const selection = pickDirectory()
     void action(async () => connectDirectory(await selection))
+  }
+
+  const restoreDirectory = () => {
+    if (!directory) return
+    // No IndexedDB read or async permission query before requesting user activation.
+    void action(async () => {
+      const permission = await requestDirectoryPermission(directory)
+      if (permission !== 'granted') throw new DirectoryIssue('permission')
+      await synchronizeConfiguration()
+    })
   }
 
   const name = browserName(t('config.browser'))
@@ -92,7 +110,7 @@ export function ConfigurationSection({ onConfigure }: { onConfigure: () => void 
             {state.mode === 'auto' ? t(syncEnabled ? 'config.enabled' : 'config.check_again') : t('config.use_automatic')}
           </button>
         </div>
-        <div className="config-choice" data-active={state.mode !== 'auto'}>
+        <div className="config-choice" data-active={state.mode === 'manual'}>
           <h3>{t('config.manual')}</h3>
           <p className="muted">{t('config.file_hint')}</p>
           <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
@@ -111,10 +129,14 @@ export function ConfigurationSection({ onConfigure }: { onConfigure: () => void 
         </div> : null}
       </div>
 
-      <div className="config-directory">
+      <div className="config-directory config-choice" data-active={state.mode === 'directory'}>
         <h3>{t('config.icloud')}</h3>
         <p className="muted">{t('config.directory_hint')}</p>
         {state.mode === 'directory' && state.directoryName ? <p className="muted">{t('config.linked', { name: state.directoryName })}</p> : null}
+        {state.mode === 'directory' && state.status === 'permission' && directory?.requestPermission ?
+          <button className="btn btn-primary" disabled={busy} onClick={restoreDirectory}>{t('config.restore_directory')}</button> : null}
+        {state.mode === 'directory' && state.status !== 'permission' ?
+          <button className="btn btn-ghost" disabled={busy} onClick={() => void action(synchronizeConfiguration)}>{t('config.check_again')}</button> : null}
         {supportsDirectory() ? <button className="btn btn-ghost" disabled={busy} onClick={chooseDirectory}>{t('config.choose_directory')}</button>
           : <p className="faint">{t('config.directory_unsupported')}</p>}
       </div>

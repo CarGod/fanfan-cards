@@ -145,6 +145,9 @@ export const settingsSchema = z.object({
    * 存在设置里而不是只存在面板里，是因为读者在播放器上调完之后换一个视频、换一台
    * 设备，期待的是「我调过了」，而不是每次从头再调一遍。
    */
+  /** Video language preferences are independent from page translation. */
+  videoSubtitleSourceLanguage: z.string().default('en'),
+  videoSubtitleTargetLanguage: z.string().default('zh-CN'),
   videoSubtitleMode: z.enum(['bilingual', 'translationOnly']).default('bilingual'),
   videoSubtitleFontScale: z.number().min(0.6).max(2).default(1),
   /** 字幕底衬的不透明度。0 是完全透明，靠描边压住画面。 */

@@ -3,6 +3,7 @@ import { CONFIG_FILENAME, CONFIG_FOLDER, MAX_FILE_BYTES, parseConfigText, type C
 // The permissions methods are not in TypeScript's standard DOM library yet.
 export interface ConfigDirectory extends FileSystemDirectoryHandle {
   queryPermission(options: { mode: 'readwrite' }): Promise<PermissionState>
+  requestPermission(options: { mode: 'readwrite' }): Promise<PermissionState>
 }
 interface PickerWindow {
   showDirectoryPicker?: (options: { id: string; mode: 'readwrite' }) => Promise<ConfigDirectory>
@@ -52,6 +53,17 @@ export async function loadDirectory(): Promise<ConfigDirectory | undefined> {
 export class DirectoryIssue extends Error {
   constructor(public readonly status: 'permission' | 'invalid' | 'failed') { super(status) }
 }
+// Permission can be revoked between the preflight check and the actual file IO.
+export function isDirectoryPermissionError(error: unknown): boolean {
+  return error instanceof DirectoryIssue && error.status === 'permission' ||
+    error instanceof DOMException && error.name === 'NotAllowedError'
+}
+
+/** Call directly from a click using an already-loaded handle, before any await. */
+export function requestDirectoryPermission(handle: ConfigDirectory): Promise<PermissionState> {
+  return handle.requestPermission({ mode: 'readwrite' })
+}
+
 export async function configFolder(parent: ConfigDirectory, create: boolean): Promise<FileSystemDirectoryHandle> {
   if (await parent.queryPermission({ mode: 'readwrite' }) !== 'granted') throw new DirectoryIssue('permission')
   return parent.name === CONFIG_FOLDER ? parent : parent.getDirectoryHandle(CONFIG_FOLDER, { create })

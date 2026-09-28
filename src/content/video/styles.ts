@@ -353,6 +353,16 @@ html[${HIDE_NATIVE_ATTR}] ${NATIVE_SUBTITLE_SELECTOR} {
   font-weight: 600;
 }
 
+.${PANEL_CLASS}-language {
+  color: #fff;
+  background: #303030;
+  border: 1px solid #777;
+  border-radius: 5px;
+  padding: 4px 8px;
+  max-width: 160px;
+  font: inherit;
+}
+
 .${PANEL_CLASS}-note {
   margin-top: 8px;
   padding-top: 8px;

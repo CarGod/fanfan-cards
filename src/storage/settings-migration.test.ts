@@ -8,6 +8,21 @@ import { getSettings, saveSettings } from './repositories/settingsRepo.ts'
 afterEach(() => setStorageAdapter(null))
 
 describe('settings migrations', () => {
+  it('defaults legacy video settings to en → zh-CN without changing page preferences', async () => {
+    const adapter = createMemoryAdapter()
+    setStorageAdapter(adapter)
+    await adapter.set(STORAGE_KEYS.settings, { sourceLanguage: 'auto', targetLanguage: 'ja' })
+    const settings = await getSettings()
+    expect(settings.videoSubtitleSourceLanguage).toBe('en')
+    expect(settings.videoSubtitleTargetLanguage).toBe('zh-CN')
+    expect(settings.targetLanguage).toBe('ja')
+    await saveSettings({ videoSubtitleSourceLanguage: 'fr', videoSubtitleTargetLanguage: 'en' })
+    const updated = await getSettings()
+    expect(updated.videoSubtitleSourceLanguage).toBe('fr')
+    expect(updated.videoSubtitleTargetLanguage).toBe('en')
+    expect(updated.targetLanguage).toBe('ja')
+  })
+
   it('defaults new and schema-filled settings to English', async () => {
     setStorageAdapter(createMemoryAdapter())
     expect(DEFAULT_SETTINGS.inputTranslationTargetLanguage).toBe('en')

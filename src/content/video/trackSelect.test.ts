@@ -11,6 +11,12 @@ const track = (languageCode: string, patch: Partial<CaptionTrack> = {}): Caption
 })
 
 describe('chooseTrack', () => {
+  it('chooses English ASR over the first Arabic manual track', () => {
+    expect(chooseTrack([track('ar'), track('en', { kind: 'asr' })], {
+      sourceLanguage: 'en', targetLanguage: 'zh-CN',
+    })?.track.languageCode).toBe('en')
+  })
+
   it('同一语言里优先人工轨——自动字幕没有标点，翻出来明显更差', () => {
     const chosen = chooseTrack(
       [track('en', { kind: 'asr' }), track('en')],
@@ -58,9 +64,9 @@ describe('chooseTrack', () => {
     expect(chosen?.track.kind).toBeUndefined()
   })
 
-  it('指定的源语言没有轨时不放弃，退回默认轨', () => {
+  it('指定英语缺失时不静默切换到不认识的语言', () => {
     const chosen = chooseTrack([track('ja')], { sourceLanguage: 'en', targetLanguage: 'zh-CN' })
-    expect(chosen?.track.languageCode).toBe('ja')
+    expect(chosen).toBeNull()
   })
 
   it('忽略没有地址的轨', () => {

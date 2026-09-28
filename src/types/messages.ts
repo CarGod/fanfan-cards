@@ -103,7 +103,7 @@ export interface MessageMap {
   }
   /** Whole-page translation; batched because round trips dominate the cost. */
   'page/translate': {
-    req: { texts: string[]; hint?: string }
+    req: { texts: string[]; hint?: string; targetLanguage?: string }
     res: { translations: string[] }
   }
   /** Replace an editable field after the user presses Space three times. */

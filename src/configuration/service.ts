@@ -8,7 +8,7 @@ import {
 } from './document.ts'
 import { getConfigState, updateConfigState, type ConfigMode, type ConfigState } from './state.ts'
 import {
-  DirectoryIssue, loadDirectory, readDirectory, saveDirectory, writeDirectory, type ConfigDirectory,
+  DirectoryIssue, isDirectoryPermissionError, loadDirectory, readDirectory, saveDirectory, writeDirectory, type ConfigDirectory,
 } from './directory.ts'
 
 export const SYNC_PREFIX = 'fanfan:config:v1:'
@@ -98,7 +98,8 @@ export async function synchronizeConfiguration(): Promise<ConfigState> {
         setupComplete: state.setupComplete || Object.keys(doc.fields).length > 0,
       })
     } catch (error) {
-      const status = error instanceof SyncIssue || error instanceof DirectoryIssue ? error.status : 'failed'
+      const status = isDirectoryPermissionError(error) ? 'permission'
+        : error instanceof SyncIssue || error instanceof DirectoryIssue ? error.status : 'failed'
       return updateConfigState({ status })
     }
   }).catch(() => ({ mode: 'manual', status: 'failed', lastSavedAt: null,
@@ -161,7 +162,7 @@ export async function connectDirectory(handle: ConfigDirectory): Promise<void> {
         setupComplete: Object.keys(doc.fields).length > 0,
       })
     } catch (error) {
-      await updateConfigState({ status: error instanceof DirectoryIssue ? error.status : 'failed' })
+      await updateConfigState({ status: isDirectoryPermissionError(error) ? 'permission' : error instanceof DirectoryIssue ? error.status : 'failed' })
       throw error
     }
   })

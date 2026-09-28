@@ -6,8 +6,15 @@ import { setLanguage } from '@/i18n/index.ts'
 import { createMemoryAdapter, setStorageAdapter } from '@/storage/area.ts'
 import { Options } from './Options.tsx'
 import { downloadText } from '@/services/exportService.ts'
-import { saveSettings } from '@/storage/repositories/settingsRepo.ts'
+import { getSettings, watchSettings, saveSettings } from '@/storage/repositories/settingsRepo.ts'
 import { storage } from '@/storage/area.ts'
+import { updateConfigState } from '@/configuration/state.ts'
+import { emptyDocument, type ConfigDocument } from '@/configuration/document.ts'
+import { loadDirectory, readDirectory, writeDirectory, type ConfigDirectory } from '@/configuration/directory.ts'
+vi.mock('@/configuration/directory.ts', async (original) => ({
+  ...await original<typeof import('@/configuration/directory.ts')>(),
+  loadDirectory: vi.fn(), readDirectory: vi.fn(), writeDirectory: vi.fn(),
+}))
 import { STORAGE_KEYS } from '@/shared/constants.ts'
 vi.mock('@/services/exportService.ts', async (original) => ({
   ...await original<typeof import('@/services/exportService.ts')>(),
@@ -20,6 +27,8 @@ let container: HTMLDivElement
 let root: Root
 
 beforeEach(async () => {
+  vi.useFakeTimers()
+  vi.clearAllMocks()
   setLanguage('zh-CN')
   setStorageAdapter(createMemoryAdapter())
   vi.stubGlobal('chrome', {
@@ -42,6 +51,8 @@ afterEach(() => {
   container.remove()
   setStorageAdapter(null)
   vi.unstubAllGlobals()
+  vi.useRealTimers()
+  vi.restoreAllMocks()
   setLanguage('zh-CN')
 })
 
@@ -100,4 +111,50 @@ it('我的数据导出仅包含配置和密钥，不包含词卡、复习记录�
   expect(container.querySelector('a[href="https://github.com/demo/words"]')).not.toBeNull()
   expect(container.textContent).not.toContain('删除仓库')
   expect(container.querySelector('a[href*="danger-zone"]')).toBeNull()
+})
+
+it('receives another device’s configuration while staying on AI settings and keeps pending local edits', async () => {
+  let remote: ConfigDocument = emptyDocument()
+  vi.mocked(loadDirectory).mockResolvedValue({ name: 'test-folder' } as ConfigDirectory)
+  vi.mocked(readDirectory).mockImplementation(async () => structuredClone(remote))
+  vi.mocked(writeDirectory).mockImplementation(async (_handle, doc) => { remote = structuredClone(doc) })
+  await act(async () => {
+    await updateConfigState({ mode: 'directory', status: 'saved' })
+    await saveSettings({ theme: 'dark' })
+  })
+  const changed = vi.fn()
+  const unwatch = watchSettings(changed)
+  // Simulates iCloud delivering A's changed file to B, without any local storage event.
+  remote = { ...emptyDocument(), fields: {
+    provider: { value: 'openai', updatedAt: 200, revision: 'device-a' },
+    'providers.openai.model': { value: 'remote-test-model', updatedAt: 200, revision: 'device-a' },
+    theme: { value: 'light', updatedAt: 100, revision: 'old' },
+  } }
+  await act(async () => { await vi.advanceTimersByTimeAsync(15000) })
+  expect(location.hash).toBe('#model')
+  expect(container.querySelector<HTMLInputElement>('input[list="models-openai"]')?.value).toBe('remote-test-model')
+  expect(changed).toHaveBeenCalledWith(expect.objectContaining({ provider: 'openai', theme: 'dark' }))
+  expect((await getSettings()).theme).toBe('dark')
+  expect(remote.fields.theme?.value).toBe('dark')
+  expect(remote.fields['providers.openai.model']?.value).toBe('remote-test-model')
+  unwatch()
+})
+it('pauses file polling when hidden and reads immediately when the AI tab becomes visible', async () => {
+  let visible = false
+  vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visible ? 'visible' : 'hidden')
+  vi.mocked(loadDirectory).mockResolvedValue({ name: 'test-folder' } as ConfigDirectory)
+  vi.mocked(readDirectory).mockResolvedValue({ ...emptyDocument(), fields: {
+    provider: { value: 'openai', updatedAt: 200, revision: 'device-a' },
+    'providers.openai.model': { value: 'visible-test-model', updatedAt: 200, revision: 'device-a' },
+  } })
+  await act(async () => { await updateConfigState({ mode: 'directory', status: 'saved' }) })
+  await act(async () => { await vi.advanceTimersByTimeAsync(30000) })
+  expect(readDirectory).not.toHaveBeenCalled()
+  await act(async () => {
+    visible = true
+    document.dispatchEvent(new Event('visibilitychange'))
+    window.dispatchEvent(new Event('focus'))
+  })
+  expect(readDirectory).toHaveBeenCalledTimes(1)
+  expect(container.querySelector<HTMLInputElement>('input[list="models-openai"]')?.value).toBe('visible-test-model')
 })

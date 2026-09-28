@@ -54,6 +54,19 @@ async function useDeepSeek() {
 }
 
 describe('page translation cache', () => {
+  it('isolates explicit video targets from the global page target and caches each target', async () => {
+    const sent = stubProvider()
+    await useDeepSeek()
+    const texts = ['Hello world']
+    await handleTranslatePage({ texts })
+    await handleTranslatePage({ texts, targetLanguage: 'ja' })
+    await handleTranslatePage({ texts, targetLanguage: 'ja' })
+    await handleTranslatePage({ texts })
+    expect(sent).toHaveLength(2)
+    // The provider/cache contract is exercised by two distinct requests and two cache hits.
+    expect(await translationCacheSize()).toBe(2)
+  })
+
   it('translates every segment the first time', async () => {
     const sent = stubProvider()
     await useDeepSeek()

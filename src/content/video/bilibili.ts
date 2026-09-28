@@ -193,7 +193,7 @@ export class BilibiliCueSource implements CueSource {
     const items = await waitForLanguageItems()
     // 没有语言项就是这支视频没字幕（AI 字幕要登录 B 站才有）。
     if (items.length === 0) throw new CueSourceError('no_track')
-    const chosen = pickBilibiliSubtitle(items, settings.sourceLanguage)!
+    const chosen = pickBilibiliSubtitle(items, settings.videoSubtitleSourceLanguage)!
 
     const known = new Set(requestLog)
     if (!chosen.element.classList.contains(ACTIVE_CLASS)) chosen.element.click()

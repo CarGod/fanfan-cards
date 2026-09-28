@@ -5,6 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLanguage } from '@/i18n/index.ts'
 import { createMemoryAdapter, setStorageAdapter } from '@/storage/area.ts'
 import { getConfigState, updateConfigState } from '@/configuration/state.ts'
+import { loadDirectory } from '@/configuration/directory.ts'
+import { synchronizeConfiguration } from '@/configuration/service.ts'
+vi.mock('@/configuration/directory.ts', async (original) => ({
+  ...await original<typeof import('@/configuration/directory.ts')>(), loadDirectory: vi.fn(),
+}))
+vi.mock('@/configuration/service.ts', async (original) => ({
+  ...await original<typeof import('@/configuration/service.ts')>(), synchronizeConfiguration: vi.fn(),
+}))
 import { ConfigurationSection } from './ConfigurationSection.tsx'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -12,7 +20,10 @@ let container: HTMLDivElement
 let root: Root
 const configure = vi.fn()
 beforeEach(async () => {
-  configure.mockReset()
+  vi.clearAllMocks()
+  vi.mocked(synchronizeConfiguration).mockImplementation(async () => {
+    return updateConfigState({ status: 'unavailable' })
+  })
   setLanguage('zh-CN')
   setStorageAdapter(createMemoryAdapter())
   vi.stubGlobal('chrome', { storage: {} })
@@ -54,4 +65,33 @@ describe('configuration restore UI', () => {
     expect(container.textContent).toContain('浏览器不提供云端上传确认')
     expect(container.textContent).not.toContain('已自动同步到 Chrome个人云端')
   })
+})
+
+it('restores the saved handle on the click gesture and highlights only directory mode', async () => {
+  const requestPermission = vi.fn().mockResolvedValue('granted')
+  vi.mocked(loadDirectory).mockResolvedValue({ name: 'fanfan-cards', requestPermission } as unknown as Awaited<ReturnType<typeof loadDirectory>>)
+  await act(async () => { await updateConfigState({ mode: 'directory', status: 'permission', directoryName: 'fanfan-cards' }) })
+  expect(container.querySelectorAll('[data-active="true"]')).toHaveLength(1)
+  expect(container.querySelector('[data-active="true"]')?.classList.contains('config-directory')).toBe(true)
+  expect(container.textContent).toContain('本机修改已保留')
+  vi.mocked(synchronizeConfiguration).mockClear()
+  const button = [...container.querySelectorAll('button')].find((item) => item.textContent === '恢复目录授权')!
+  await act(async () => {
+    button.click()
+    // A delayed call after IndexedDB/permission-query awaits would lose activation.
+    expect(requestPermission).toHaveBeenCalledWith({ mode: 'readwrite' })
+    expect(synchronizeConfiguration).not.toHaveBeenCalled()
+  })
+  expect(synchronizeConfiguration).toHaveBeenCalledTimes(1)
+  expect((await getConfigState()).mode).toBe('directory')
+})
+it('denied reauthorization does not sync or switch away from directory mode', async () => {
+  const requestPermission = vi.fn().mockResolvedValue('denied')
+  vi.mocked(loadDirectory).mockResolvedValue({ name: 'fanfan-cards', requestPermission } as unknown as Awaited<ReturnType<typeof loadDirectory>>)
+  await act(async () => { await updateConfigState({ mode: 'directory', status: 'permission', directoryName: 'fanfan-cards' }) })
+  vi.mocked(synchronizeConfiguration).mockClear()
+  const button = [...container.querySelectorAll('button')].find((item) => item.textContent === '恢复目录授权')!
+  await act(async () => { button.click() })
+  expect(synchronizeConfiguration).not.toHaveBeenCalled()
+  expect((await getConfigState()).mode).toBe('directory')
 })
