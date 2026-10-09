@@ -38,8 +38,9 @@ function isOurs(node: Node): boolean {
   return Boolean(element?.closest?.(`.${TRANSLATION_CLASS}`))
 }
 
-/** Whitespace-insensitive, so a reflow is not mistaken for new content. */
-export const normalise = (text: string) => text.replace(/\s+/g, ' ').trim()
+/** Ignore horizontal spacing, but a visible line/paragraph break is content. */
+export const normalise = (text: string) => text.split('\n')
+  .map((line) => line.replace(/\s+/g, ' ').trim()).join('\n').trim()
 
 export class ChangeWatcher {
   private observer: MutationObserver | null = null

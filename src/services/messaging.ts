@@ -8,7 +8,7 @@ import type {
 } from '@/types/messages.ts'
 import { SyncError, type SyncErrorCode } from '@/types/sync.ts'
 import { AIError, type AIErrorCode } from '@/types/ai.ts'
-import { isContextInvalidated } from '@/shared/extensionContext.ts'
+import { isContextInvalidated, isMessageChannelClosed } from '@/shared/extensionContext.ts'
 import { t } from '@/i18n/index.ts'
 
 /**
@@ -25,19 +25,28 @@ export async function sendMessage<T extends MessageType>(
   const envelope: Envelope<T> = { type, payload }
 
   let reply: Reply<T> | undefined
-  try {
-    reply = (await chrome.runtime.sendMessage(envelope)) as Reply<T> | undefined
-  } catch (error) {
-    // Two different failures land here and they need different advice: a worker
-    // that was asleep is retryable, an orphaned script never will be.
-    if (isContextInvalidated(error)) {
-      throw new AIError('stale_context', 'Extension context invalidated', 'mock')
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      reply = (await chrome.runtime.sendMessage(envelope)) as Reply<T> | undefined
+      break
+    } catch (error) {
+      // Check liveness again after rejection: reloads can invalidate a script
+      // while its request is in flight. Such a script must never retry.
+      if (isContextInvalidated(error)) {
+        throw new AIError('stale_context', 'Extension context invalidated', 'mock')
+      }
+      const disconnected = isMessageChannelClosed(error)
+      // Only replay page translation, once. Never replay saves, deletes, sync,
+      // or other side effects whose first response may merely have been lost.
+      if (disconnected && type === 'page/translate' && attempt === 0) continue
+      throw new AIError(
+        'network',
+        disconnected
+          ? t('error.messaging.no_response')
+          : error instanceof Error ? error.message : t('error.messaging.no_response'),
+        'mock',
+      )
     }
-    throw new AIError(
-      'network',
-      error instanceof Error ? error.message : t('error.messaging.no_response'),
-      'mock',
-    )
   }
 
   if (!reply) throw new AIError('unknown', t('error.messaging.empty_reply'), 'mock')

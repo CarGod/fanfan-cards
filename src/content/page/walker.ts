@@ -1,3 +1,4 @@
+import { isXIdentity } from './xIdentity.ts'
 import { CONTENT_HOST_ID } from '@/shared/constants.ts'
 import { shouldTranslateText } from '@/shared/language.ts'
 
@@ -15,7 +16,7 @@ import { shouldTranslateText } from '@/shared/language.ts'
  *   text must be descended into, or viewport-gated lazy translation collapses
  *   into "translate everything at once" (their #1881).
  *
- * What we skip: site-specific rule sets, attribute protection, in-place text
+ * What we skip: broad site-specific rule sets, attribute protection, in-place text
  * swapping, ruby/MathML handling, drop-cap patches. Those exist to *replace*
  * page text; we only ever append a translation next to it, so none of them
  * apply.
@@ -224,7 +225,7 @@ interface SkipContext {
 
 /** Ordered cheapest-first; the style read is last because it forces layout. */
 function isSkippable(element: Element, context: SkipContext): boolean {
-  if (SKIP_TAGS.has(element.tagName) || isOptedOut(element)) return true
+  if (SKIP_TAGS.has(element.tagName) || isOptedOut(element) || isXIdentity(element)) return true
   if (!context.allowTranslated && element.hasAttribute(TRANSLATED_MARK)) return true
   if (hasHiddenClass(element)) return true
 
@@ -247,11 +248,35 @@ function isSkippable(element: Element, context: SkipContext): boolean {
  * source text and translated as if the reader could see it.
  */
 function textFromNodes(nodes: Iterable<Node>): string {
+  const whitespace = new Map<Element, string>()
+  const whiteSpaceOf = (element: Element | null): string => {
+    if (!element) return 'normal'
+    const cached = whitespace.get(element)
+    if (cached) return cached
+    const value = element.ownerDocument.defaultView?.getComputedStyle(element).whiteSpace ||
+      whiteSpaceOf(element.parentElement)
+    whitespace.set(element, value)
+    return value
+  }
+  const inlineText = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const value = (node.textContent ?? '').replace(/\r\n?/g, '\n')
+      const mode = whiteSpaceOf(node.parentElement)
+      if (['pre', 'pre-wrap', 'break-spaces'].includes(mode)) return value
+      if (mode === 'pre-line') return value.replace(/[^\S\n]+/g, ' ')
+      return value.replace(/\s+/g, ' ')
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return ''
+    const element = node as Element
+    if (SKIP_TAGS.has(element.tagName) || isOptedOut(element) || hasHiddenClass(element) ||
+      element.getAttribute('aria-hidden') === 'true' || isXIdentity(element)) return ''
+    if (element.tagName === 'BR') return '\n'
+    return [...element.childNodes].map(inlineText).join('')
+  }
   let text = ''
   for (const node of nodes) {
     if (node.nodeType === Node.TEXT_NODE) {
-      // Newlines in the source are just whitespace in HTML; only <br> is a line.
-      text += (node.textContent ?? '').replace(/\s+/g, ' ')
+      text += inlineText(node)
       continue
     }
     if (node.nodeType !== Node.ELEMENT_NODE) continue
@@ -266,14 +291,13 @@ function textFromNodes(nodes: Iterable<Node>): string {
     if (!INLINE_TAGS.has(child.tagName)) continue
     if (SKIP_TAGS.has(child.tagName) || isOptedOut(child) || hasHiddenClass(child)) continue
     if (child.getAttribute('aria-hidden') === 'true') continue
-    text += (child.textContent ?? '').replace(/\s+/g, ' ')
+    text += inlineText(child)
   }
 
   return text
     .split('\n')
     .map((line) => line.trim())
     .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
 

@@ -1,5 +1,6 @@
 import { conformLineShape, isRedundantTranslation, repairOmissions } from '@/shared/language.ts'
 import {
+  directText,
   SEGMENT_SOURCE_CLASS,
   TRANSLATED_MARK,
   TRANSLATION_CLASS,
@@ -39,6 +40,13 @@ export function createSlot(source: Element): HTMLElement {
   const slot = document.createElement(inline || segmented ? 'span' : 'div')
   slot.className = `${TRANSLATION_CLASS} ${PENDING_CLASS} notranslate`
   slot.setAttribute('translate', 'no')
+  // A sibling inherits from the parent, which may have different typography
+  // from the source (notably X's larger post text).
+  const style = getComputedStyle(source)
+  for (const property of ['font-size', 'line-height', 'font-family', 'font-weight', 'font-style', 'letter-spacing']) {
+    const value = style.getPropertyValue(property)
+    if (value) slot.style.setProperty(property, value)
+  }
   /*
    * An explicit id rather than "the next sibling".
    *
@@ -160,9 +168,73 @@ export function fillSlot(element: Element, source: string, translation: string):
   const conformed = conformLineShape(source, translation)
 
   slot.classList.remove(PENDING_CLASS)
-  slot.textContent = repairOmissions(source, conformed ?? translation)
+  renderTranslation(slot, element, repairOmissions(source, conformed ?? translation))
   element.setAttribute(TRANSLATED_MARK, 'done')
   return conformed === null ? 'line-shape-lost' : 'filled'
+}
+
+/** Restore only links already present in the source; model output stays text. */
+function renderTranslation(slot: HTMLElement, source: Element, text: string): void {
+  const links: Array<{ token: string; source: HTMLAnchorElement; label: string; href: string }> = []
+  const anchors = [
+    ...(source.matches('a[href]') ? [source as HTMLAnchorElement] : []),
+    ...source.querySelectorAll<HTMLAnchorElement>('a[href]'),
+  ]
+  for (const anchor of anchors) {
+    if (anchor.closest(`.${TRANSLATION_CLASS}`)) continue
+    const label = directText(anchor)
+    if (!label) continue
+    let url: URL
+    try { url = new URL(anchor.getAttribute('href')!, anchor.ownerDocument.baseURI) }
+    catch { continue }
+    if (!['http:', 'https:'].includes(url.protocol)) continue
+    // A model may expand a domain label into its full URL. Include the hidden
+    // protocol X puts inside the source anchor, without displaying that span.
+    const tokens = new Set([label, anchor.textContent?.trim() ?? '', url.href])
+    if (/^(?:[\w-]+\.)+[a-z]{2,}(?:\/\S*)?$/i.test(label)) {
+      tokens.add(`https://${label}`)
+      tokens.add(`http://${label}`)
+    }
+    for (const token of tokens) if (token) links.push({ token, source: anchor, label, href: url.href })
+  }
+  links.sort((a, b) => b.token.length - a.token.length)
+  slot.replaceChildren()
+  let cursor = 0
+  while (cursor < text.length) {
+    let match: typeof links[number] | undefined
+    let position = text.length
+    for (const link of links) {
+      const index = tokenPosition(text, link.token, cursor)
+      if (index >= 0 && index < position) { position = index; match = link }
+    }
+    slot.append(document.createTextNode(text.slice(cursor, position)))
+    if (!match) break
+    const anchor = document.createElement('a')
+    anchor.href = match.href
+    anchor.textContent = match.label
+    if (match.source.target === '_blank') anchor.target = '_blank'
+    anchor.rel = 'noopener noreferrer'
+    const style = getComputedStyle(match.source)
+    anchor.style.color = style.color
+    anchor.style.textDecoration = style.textDecoration
+    slot.append(anchor)
+    cursor = position + match.token.length
+  }
+}
+
+/** Don't turn the `example.com` part of a different URL into our source link. */
+function tokenPosition(text: string, token: string, from: number): number {
+  let index = text.indexOf(token, from)
+  while (index >= 0) {
+    const before = text[index - 1] ?? ''
+    const after = text.slice(index + token.length)
+    const startsWord = /^[a-z0-9_@]/i.test(token)
+    const endsWord = /[a-z0-9_/]$/i.test(token)
+    if (!(startsWord && /[a-z0-9_@./:-]/i.test(before)) &&
+      !(endsWord && /^(?:[a-z0-9_/@?#%&=-]|\.[a-z0-9])/i.test(after))) return index
+    index = text.indexOf(token, index + token.length)
+  }
+  return -1
 }
 
 /** Links and buttons must not get a block translation shoved under them. */

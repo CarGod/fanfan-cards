@@ -24,9 +24,13 @@ export function isExtensionAlive(): boolean {
 export function isContextInvalidated(error: unknown): boolean {
   if (!isExtensionAlive()) return true
   const message = error instanceof Error ? error.message : String(error)
-  return /Extension context invalidated|message port closed|receiving end does not exist/i.test(
-    message,
-  )
+  return /Extension context invalidated/i.test(message)
+}
+
+/** A closed request channel does not prove that the content script is orphaned. */
+export function isMessageChannelClosed(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /message (?:port|channel) closed|receiving end does not exist/i.test(message)
 }
 
 /*

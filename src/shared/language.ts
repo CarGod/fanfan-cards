@@ -185,7 +185,12 @@ export function isInSourceLanguage(texts: readonly string[], sourceCode: string)
 export function isRedundantTranslation(source: string, translation: string): boolean {
   const normalise = (value: string) => value.replace(/[\s\p{P}\p{S}]/gu, '').toLowerCase()
   const a = normalise(source)
-  const b = normalise(translation)
+  // Providers sometimes echo a batch item number: "[1] Tibo". Only ignore
+  // that prefix for duplicate detection; keep genuine numbered source content.
+  const candidate = /^\s*\[\d+\]/.test(source)
+    ? translation
+    : translation.replace(/^\s*\[\d+\]\s*/, '')
+  const b = normalise(candidate)
   return b.length === 0 || a === b
 }
 
