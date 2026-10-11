@@ -5,10 +5,8 @@ import type { Cue } from './timedtext.ts'
  *
  * 自动字幕是按呼吸切的，不是按句子切的：「Quinn 3.827B.」「This is the」——
  * 逐条翻译等于把半截话交给模型，译文必然是碎的。所以先按句子边界并成组，
- * 一组翻一次，再把这一组的译文摊回它覆盖的每一条上。
- *
- * 代价是译文在一组之内不随原文逐条变化。这是有意的：中文那行稳住、英文那行走，
- * 比两行一起跳更好读，也正是成熟的双语字幕的做法。
+ * 一组翻一次；显示时英文也使用这一组的完整文本，与译文成对。
+ * 原 cue 的时间窗仍然保留，因此静音间隙不会显示上一句。
  */
 
 export interface CueGroup {
@@ -142,6 +140,27 @@ export function groupCues(cues: Cue[], options: GroupOptions = DEFAULT_GROUP_OPT
   flush()
 
   return groups
+}
+
+/**
+ * Keep the original caption windows, but display exactly the source text sent
+ * for each group translation. Both languages now represent the same fragment.
+ * ASR windows can overlap: a newer cue owns the boundary, so an older group's
+ * long end time cannot cover the next group. Genuine gaps remain gaps.
+ * This changes display timing only; it never removes repeated spoken words.
+ */
+export function alignedDisplayCues(cues: Cue[], groups: CueGroup[]): Cue[] {
+  const sources = new Array<string>(cues.length).fill('')
+  for (const group of groups) {
+    for (let index = group.startIndex; index <= group.endIndex && index < cues.length; index += 1) {
+      sources[index] = group.text
+    }
+  }
+  return cues.map((cue, index) => ({
+    startMs: cue.startMs,
+    endMs: Math.min(cue.endMs, cues[index + 1]?.startMs ?? cue.endMs),
+    text: sources[index] || cue.text,
+  }))
 }
 
 /**

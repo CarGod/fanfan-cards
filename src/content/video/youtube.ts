@@ -18,6 +18,7 @@ import {
 } from './controlButton.ts'
 import { SubtitleOverlay, type OverlayOptions, type SubtitleMode } from './subtitleOverlay.ts'
 import {
+  alignedDisplayCues,
   groupCues,
   orderFromPlayhead,
   planBatches,
@@ -145,6 +146,7 @@ export class YouTubeSubtitles {
   private video: HTMLVideoElement | null = null
 
   private cues: Cue[] = []
+  private displayCues: Cue[] = []
   private groups: CueGroup[] = []
   private groupTranslations: string[] = []
   private perCue: string[] = []
@@ -395,6 +397,7 @@ export class YouTubeSubtitles {
     if (this.frame) cancelAnimationFrame(this.frame)
     this.frame = 0
     this.cues = []
+    this.displayCues = []
     this.groups = []
     this.groupTranslations = []
     this.perCue = []
@@ -495,6 +498,7 @@ export class YouTubeSubtitles {
 
       this.cues = cues
       this.groups = groupCues(cues)
+      this.displayCues = alignedDisplayCues(cues, this.groups)
       this.groupTranslations = new Array<string>(this.groups.length).fill('')
       this.perCue = new Array<string>(cues.length).fill('')
       this.trackName = trackLabel(choice.track)
@@ -562,7 +566,7 @@ export class YouTubeSubtitles {
         this.frame = requestAnimationFrame(tick)
         return
       }
-      this.overlay.render(this.cues, this.perCue, this.video.currentTime * 1000)
+      this.overlay.render(this.displayCues, this.perCue, this.video.currentTime * 1000)
       this.frame = requestAnimationFrame(tick)
     }
     if (this.frame) cancelAnimationFrame(this.frame)

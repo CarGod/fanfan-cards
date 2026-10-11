@@ -31,6 +31,7 @@ beforeEach(async () => {
   vi.clearAllMocks()
   setLanguage('zh-CN')
   setStorageAdapter(createMemoryAdapter())
+  await updateConfigState({ mode: 'manual', setupComplete: true })
   vi.stubGlobal('chrome', {
     commands: { getAll: async () => [] },
     i18n: { getUILanguage: () => 'zh-CN' },
@@ -85,15 +86,10 @@ it('我的数据导出仅包含配置和密钥，不包含词卡、复习记录�
     await storage().set(STORAGE_KEYS.explainCache, { marker: 'cache-must-not-export' })
   })
   await act(async () => [...container.querySelectorAll<HTMLButtonElement>('.settings-tab')].find((tab) => tab.textContent === '配置同步')!.click())
-  const configTabs = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
-  expect(configTabs.map((tab) => tab.textContent)).toEqual(['GitHub 配置', '插件配置'])
-  const githubPanel = container.querySelector<HTMLElement>('[role="tabpanel"][aria-label="GitHub 配置"]')!
-  const pluginPanel = container.querySelector<HTMLElement>('[role="tabpanel"][aria-label="插件配置"]')!
-  expect(githubPanel.hidden).toBe(false)
-  expect(pluginPanel.hidden).toBe(true)
-  await act(async () => configTabs[1]!.click())
-  expect(githubPanel.hidden).toBe(true)
-  expect(pluginPanel.hidden).toBe(false)
+  expect(container.querySelector('.configuration-section')).not.toBeNull()
+  const githubDetails = [...container.querySelectorAll('details')].find((item) => item.querySelector('summary')?.textContent === 'GitHub 配置')!
+  expect(githubDetails.open).toBe(false)
+  githubDetails.open = true
   expect(container.textContent).not.toContain('导出全部数据')
   await act(async () => {
     [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === '下载配置到本地')!.click()

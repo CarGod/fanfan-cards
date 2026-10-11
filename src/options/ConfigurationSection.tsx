@@ -4,9 +4,9 @@ import { storage } from '@/storage/area.ts'
 import { downloadConfiguration, importConfigurationFile } from '@/configuration/file.ts'
 import { DirectoryIssue, loadDirectory, pickDirectory, requestDirectoryPermission, supportsDirectory, type ConfigDirectory } from '@/configuration/directory.ts'
 import {
-  connectDirectory, selectConfigMode, startFreshConfiguration, synchronizeConfiguration,
+  connectDirectory, selectConfigMode, synchronizeConfiguration,
 } from '@/configuration/service.ts'
-import { CONFIG_STATE_KEY, getConfigState, initialConfigState, type ConfigState } from '@/configuration/state.ts'
+import { CONFIG_STATE_KEY, getConfigState, initialConfigState, updateConfigState, type ConfigState } from '@/configuration/state.ts'
 
 function browserName(fallback: string): string {
   const nav = navigator as Navigator & { userAgentData?: { brands: { brand: string }[] } }
@@ -15,7 +15,11 @@ function browserName(fallback: string): string {
   return fallback
 }
 
-export function ConfigurationSection({ onConfigure }: { onConfigure: () => void }) {
+export function ConfigurationSection({ onConfigure, onConnected, onboarding = false }: {
+  onConfigure: () => void
+  onConnected?: (result: 'restored' | 'created') => void
+  onboarding?: boolean
+}) {
   const { t } = useI18n()
   const [state, setState] = useState<ConfigState>(initialConfigState)
   const [busy, setBusy] = useState(false)
@@ -28,7 +32,6 @@ export function ConfigurationSection({ onConfigure }: { onConfigure: () => void 
     const read = () => { void getConfigState().then((value) => { if (alive) setState(value) }) }
     const unwatch = storage().watch(CONFIG_STATE_KEY, read)
     read()
-    void synchronizeConfiguration()
     return () => { alive = false; unwatch() }
   }, [])
 
@@ -55,6 +58,7 @@ export function ConfigurationSection({ onConfigure }: { onConfigure: () => void 
   const importFile = (file: File) => action(async () => {
     await importConfigurationFile(file)
     setNotice(t('config.imported'))
+    if (onboarding) onConnected?.('restored')
   })
   const download = () => action(async () => {
     await downloadConfiguration()
@@ -63,7 +67,12 @@ export function ConfigurationSection({ onConfigure }: { onConfigure: () => void 
   const chooseDirectory = () => {
     // Start the native picker synchronously while the click still grants user activation.
     const selection = pickDirectory()
-    void action(async () => connectDirectory(await selection))
+    void action(async () => {
+      const result = await connectDirectory(await selection)
+      setNotice(t(result === 'restored' ? 'config.restored_ready' : 'config.created_ready'))
+      if (onConnected) onConnected(result)
+      else if (result === 'created') onConfigure()
+    })
   }
 
   const restoreDirectory = () => {
@@ -92,21 +101,45 @@ export function ConfigurationSection({ onConfigure }: { onConfigure: () => void 
 
   return (
     <section className="card section-card configuration-section">
-      <div className="section-title">{t('config.plugin_tab')}</div>
+      <div className="section-title">{t(onboarding ? 'config.start_title' : 'config.directory_title')}</div>
       <div className="section-desc">{t('config.description')}</div>
-      <div className="config-status" role="status" aria-live="polite">
+      {!onboarding ? <div className="config-status" role="status" aria-live="polite">
         <strong>{syncEnabled ? t('config.enabled') : statusText()}</strong>
         {syncEnabled ? <div className="muted">{statusText()}</div> : null}
         {state.lastSavedAt ? <div className="muted">{t('config.last_saved', { time: formatTime(state.lastSavedAt) })}</div> : null}
         {state.lastRestoredAt ? <div className="muted">{t('config.last_restored', { time: formatTime(state.lastRestoredAt) })}</div> : null}
         <div className="faint">{state.mode === 'auto' ? t('config.cloud_limit') : state.mode === 'directory' ? t('config.icloud_limit') : t('config.manual_hint')}</div>
-      </div>
+      </div> : null}
 
+      <div className="config-directory config-choice" data-active={state.mode === 'directory'}>
+        <h3>{t('config.directory_location')}</h3>
+        <p className="muted">{t('config.directory_hint')}</p>
+        {state.mode === 'directory' && state.directoryName ? <p className="muted">{t('config.linked', { name: state.directoryName })}</p> : null}
+        {state.mode === 'directory' && state.status === 'permission' && directory?.requestPermission ?
+          <button className="btn btn-primary" disabled={busy} onClick={restoreDirectory}>{t('config.restore_directory')}</button> : null}
+        {state.mode === 'directory' && state.status !== 'permission' ?
+          <button className="btn btn-ghost" disabled={busy} onClick={() => void action(synchronizeConfiguration)}>{t('config.check_again')}</button> : null}
+        {supportsDirectory() ? <button className="btn btn-primary" disabled={busy} onClick={chooseDirectory}>{t(state.mode === 'directory' ? 'config.change_directory' : 'config.choose_directory')}</button>
+          : <p className="faint">{t('config.directory_unsupported')}</p>}
+      </div>
+      <details className="advanced" open={!supportsDirectory() ? true : undefined}>
+        <summary>{t('config.other_methods')}</summary>
+        <div className="advanced-body">
       <div className="config-choices">
         <div className="config-choice" data-active={state.mode === 'auto'}>
           <h3>{t('config.automatic')}</h3>
           <p className="muted">{t('config.automatic_hint')}</p>
-          <button className="btn btn-primary" disabled={busy} onClick={() => void action(() => selectConfigMode('auto'))}>
+          <button className="btn btn-primary" disabled={busy} onClick={() => void action(async () => {
+            await selectConfigMode('auto')
+            const current = await getConfigState()
+            if (['saved', 'restored', 'empty'].includes(current.status)) {
+              await updateConfigState({ setupComplete: true })
+              if (onboarding) {
+                if (current.status === 'empty') onConfigure()
+                else onConnected?.('restored')
+              }
+            }
+          })}>
             {state.mode === 'auto' ? t(syncEnabled ? 'config.enabled' : 'config.check_again') : t('config.use_automatic')}
           </button>
         </div>
@@ -120,31 +153,25 @@ export function ConfigurationSection({ onConfigure }: { onConfigure: () => void 
           <input ref={fileRef} type="file" accept=".json,application/json" hidden aria-label={t('config.choose_file')}
             onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void importFile(file) }} />
         </div>
-        {!state.setupComplete ? <div className="config-choice">
+        {!state.setupComplete && state.mode !== 'directory' ? <div className="config-choice">
           <h3>{t('config.fresh_title')}</h3>
           <p className="muted">{t('config.fresh_hint')}</p>
           <button className="btn btn-ghost" disabled={busy} onClick={() => void action(async () => {
-            await startFreshConfiguration(); onConfigure()
+            await selectConfigMode('manual')
+            await updateConfigState({ setupComplete: true })
+            onConfigure()
           })}>{t('config.fresh')}</button>
         </div> : null}
       </div>
 
-      <div className="config-directory config-choice" data-active={state.mode === 'directory'}>
-        <h3>{t('config.icloud')}</h3>
-        <p className="muted">{t('config.directory_hint')}</p>
-        {state.mode === 'directory' && state.directoryName ? <p className="muted">{t('config.linked', { name: state.directoryName })}</p> : null}
-        {state.mode === 'directory' && state.status === 'permission' && directory?.requestPermission ?
-          <button className="btn btn-primary" disabled={busy} onClick={restoreDirectory}>{t('config.restore_directory')}</button> : null}
-        {state.mode === 'directory' && state.status !== 'permission' ?
-          <button className="btn btn-ghost" disabled={busy} onClick={() => void action(synchronizeConfiguration)}>{t('config.check_again')}</button> : null}
-        {supportsDirectory() ? <button className="btn btn-ghost" disabled={busy} onClick={chooseDirectory}>{t('config.choose_directory')}</button>
-          : <p className="faint">{t('config.directory_unsupported')}</p>}
-      </div>
+
 
       <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
-        <button className="btn btn-ghost" disabled={busy} onClick={onConfigure}>{t('config.edit_model')}</button>
         {state.mode !== 'manual' ? <button className="btn btn-ghost" disabled={busy} onClick={() => void action(() => selectConfigMode('manual'))}>{t('config.local_only')}</button> : null}
       </div>
+        </div>
+      </details>
+      {!onboarding ? <button className="btn btn-ghost" disabled={busy} onClick={onConfigure}>{t('config.edit_model')}</button> : null}
       <p className="faint">{t('config.credentials_hint')}</p>
       <p className="faint">{t('config.host_hint')}</p>
       {notice ? <p role="status">{notice}</p> : null}

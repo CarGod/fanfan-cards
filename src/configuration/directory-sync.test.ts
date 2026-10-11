@@ -53,7 +53,7 @@ it('corrupt initial file leaves both mode and settings unchanged', async () => {
   await saveSettings({ theme: 'dark' })
   vi.mocked(readDirectory).mockRejectedValue(new DirectoryIssue('invalid'))
   await expect(connectDirectory(handle)).rejects.toMatchObject({ status: 'invalid' })
-  expect((await getConfigState()).mode).toBe('auto')
+  expect((await getConfigState()).mode).toBe('manual')
   expect(saveDirectory).not.toHaveBeenCalled()
   expect(writeDirectory).not.toHaveBeenCalled()
   expect((await getSettings()).theme).toBe('dark')
@@ -79,4 +79,27 @@ it('recovers permission and writes pending OpenAI edits without replacing them w
     'providers.openai.baseUrl': expect.objectContaining({ value: 'https://example.test/v1' }),
   }) }))
   expect((await getConfigState()).mode).toBe('directory')
+})
+
+ it('links an empty folder and keeps automatic sync enabled during first-time setup', async () => {
+  vi.mocked(readDirectory).mockResolvedValue(null)
+  expect(await connectDirectory(handle)).toBe('created')
+  expect(await getConfigState()).toMatchObject({ mode: 'directory', setupComplete: true, status: 'saved' })
+  expect(writeDirectory).toHaveBeenCalledWith(handle, emptyDocument())
+  vi.mocked(readDirectory).mockResolvedValue(emptyDocument())
+  await saveSettings({ provider: 'google' })
+  await saveSettings({ theme: 'dark' })
+  await synchronizeConfiguration()
+  expect(writeDirectory).toHaveBeenLastCalledWith(handle, expect.objectContaining({ fields: expect.objectContaining({ theme: expect.objectContaining({ value: 'dark' }) }) }))
+})
+it('treats a valid empty config as first-time setup without rewriting it', async () => {
+  vi.mocked(readDirectory).mockResolvedValue(emptyDocument())
+  expect(await connectDirectory(handle)).toBe('created')
+  expect(writeDirectory).not.toHaveBeenCalled()
+})
+it('restores free translation configuration without requiring an API key', async () => {
+  vi.mocked(readDirectory).mockResolvedValue({ ...emptyDocument(), fields: { provider: { value: 'google', updatedAt: 100, revision: 'file' } } })
+  expect(await connectDirectory(handle)).toBe('restored')
+  expect((await getSettings()).provider).toBe('google')
+  expect(writeDirectory).not.toHaveBeenCalled()
 })

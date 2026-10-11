@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest'
 import { SubtitleOverlay } from './subtitleOverlay.ts'
+import { alignedDisplayCues, groupCues, spreadTranslations } from './segment.ts'
 import type { Cue } from './timedtext.ts'
 
 const cues: Cue[] = [
@@ -152,4 +153,88 @@ describe('藏起来之后再显示', () => {
     overlay.render(cues, ['这是最好的本地模型', '你今天就能跑'], 1500)
     expect(overlay.element.style.visibility).toBe('visible')
   })
+})
+
+
+describe('group-aligned bilingual captions', () => {
+  const fragments: Cue[] = [
+    { startMs: 0, endMs: 3500, text: "When it does dumb things on the back end, it's" },
+    { startMs: 1000, endMs: 4500, text: 'really frustrating.' },
+    { startMs: 2000, endMs: 3000, text: 'It is not better in many ways.' },
+    { startMs: 7000, endMs: 8000, text: 'Now another topic.' },
+  ]
+  const groups = groupCues(fragments)
+  const display = alignedDisplayCues(fragments, groups)
+  const translated = spreadTranslations(fragments, groups, ['做蠢事真的很让人沮丧。', '很多地方没有更好。', '现在换个话题。'])
+
+  it('shows the exact complete source sent for translation throughout a group', () => {
+    for (const time of [0, 999, 1000, 1999]) {
+      overlay.render(display, translated, time)
+      expect(source().textContent).toBe(groups[0]!.text)
+      expect(source().textContent).toContain('really frustrating.')
+      expect(translation().textContent).toBe('做蠢事真的很让人沮丧。')
+    }
+  })
+
+  it('advances both languages at the next group boundary despite overlapping ASR windows', () => {
+    overlay.render(display, translated, 1999)
+    overlay.render(display, translated, 2000)
+    expect(source().textContent).toBe('It is not better in many ways.')
+    expect(translation().textContent).toBe('很多地方没有更好。')
+    expect(display[1]!.endMs).toBe(2000)
+  })
+
+  it('hides at exact end and in silence; seeking backwards restores the matching pair', () => {
+    for (const time of [3000, 4500, 6999, 8000, 10000, -1]) {
+      overlay.render(display, translated, time)
+      expect(overlay.element.style.visibility).toBe('hidden')
+    }
+    overlay.render(display, translated, 7500)
+    expect(source().textContent).toBe('Now another topic.')
+    overlay.render(display, translated, 500)
+    expect(source().textContent).toBe(groups[0]!.text)
+    expect(translation().textContent).toBe('做蠢事真的很让人沮丧。')
+  })
+
+  it('preserves a short silence within one group and waits for its matching translation', () => {
+    const raw = [
+      { startMs: 0, endMs: 500, text: 'I really' },
+      { startMs: 800, endMs: 1200, text: 'really mean it.' },
+    ]
+    const grouped = groupCues(raw)
+    const paired = alignedDisplayCues(raw, grouped)
+    overlay.render(paired, [], 100)
+    expect(source().textContent).toBe('I really really mean it.')
+    expect(translation().textContent).toBe('…')
+    overlay.render(paired, [], 500)
+    expect(overlay.element.style.visibility).toBe('hidden')
+    overlay.render(paired, [], 800)
+    overlay.refresh()
+    overlay.render(paired, spreadTranslations(raw, grouped, ['我真的真的当真。']), 800)
+    expect(source().textContent).toBe('I really really mean it.')
+    expect(translation().textContent).toBe('我真的真的当真。')
+  })
+})
+
+
+it('aligns the reported video’s real overlapping ASR windows without dropping source words', () => {
+  // Verified json3 excerpt from cjhYw_mCEZ8. The translation is a test marker,
+  // not a claimed transcript of the model output or a complete video sentence.
+  const raw = [
+    { startMs: 208120, endMs: 212680, text: 'summarizes it for me and does absolutely' },
+    { startMs: 210320, endMs: 214600, text: "dumb things on the back end, it's" },
+    { startMs: 212680, endMs: 216680, text: "extremely frustrating. There's a lot of" },
+  ]
+  const groups = groupCues(raw)
+  const display = alignedDisplayCues(raw, groups)
+  const translations = spreadTranslations(raw, groups, ['对应整组的测试译文'])
+  expect(groups).toHaveLength(1)
+  expect(display.map((cue) => cue.endMs)).toEqual([210320, 212680, 216680])
+  for (const time of [208120, 210319, 210320, 212679, 212680, 216679]) {
+    overlay.render(display, translations, time)
+    expect(source().textContent).toBe(raw.map((cue) => cue.text).join(' '))
+    expect(translation().textContent).toBe('对应整组的测试译文')
+  }
+  overlay.render(display, translations, 216680)
+  expect(overlay.element.style.visibility).toBe('hidden')
 })

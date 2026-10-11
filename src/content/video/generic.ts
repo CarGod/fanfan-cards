@@ -8,7 +8,7 @@ import type { Settings } from '@/types/settings.ts'
 import { BilibiliCueSource, isBilibiliPlayer } from './bilibili.ts'
 import { CueSourceError, type CueSource, type CueSourceFailure } from './cueSource.ts'
 import { SubtitleOverlay, type OverlayOptions } from './subtitleOverlay.ts'
-import { groupCues, orderFromPlayhead, planBatches, spreadTranslations, type CueGroup } from './segment.ts'
+import { alignedDisplayCues, groupCues, orderFromPlayhead, planBatches, spreadTranslations, type CueGroup } from './segment.ts'
 import type { Cue } from './timedtext.ts'
 import { injectVideoStyles } from './styles.ts'
 
@@ -150,6 +150,7 @@ class VideoBinding {
   private readonly overlay: SubtitleOverlay
 
   private cues: Cue[] = []
+  private displayCues: Cue[] = []
   private groups: CueGroup[] = []
   private groupTranslations: string[] = []
   private perCue: string[] = []
@@ -334,6 +335,7 @@ class VideoBinding {
 
     this.cues = cues
     this.groups = groupCues(cues)
+    this.displayCues = alignedDisplayCues(cues, this.groups)
     this.groupTranslations = new Array<string>(this.groups.length).fill('')
     this.perCue = new Array<string>(cues.length).fill('')
     this.status = 'on'
@@ -364,6 +366,7 @@ class VideoBinding {
     this.enabled = false
     this.status = 'off'
     this.cues = []
+    this.displayCues = []
     this.groups = []
     this.groupTranslations = []
     this.perCue = []
@@ -387,7 +390,7 @@ class VideoBinding {
       this.frame = 0
       this.position()
       if (this.enabled && this.status === 'on') {
-        this.overlay.render(this.cues, this.perCue, this.video.currentTime * 1000)
+        this.overlay.render(this.displayCues, this.perCue, this.video.currentTime * 1000)
       }
       if (this.hovering || this.enabled || this.status === 'loading') {
         this.frame = requestAnimationFrame(tick)

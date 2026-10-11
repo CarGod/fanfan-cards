@@ -1,3 +1,4 @@
+import { getConfigState } from '@/configuration/state.ts'
 import { useEffect, useMemo, useState } from 'react'
 import { Select, Toggle } from '@/components/index.tsx'
 import { BrandMark, ExternalIcon, SettingsIcon } from '@/components/icons.tsx'
@@ -64,6 +65,14 @@ export function Popup() {
   const { entries, loading } = useEntries()
   const activity = useActivity()
   const { settings, update } = useSettings()
+  const [needsDirectory, setNeedsDirectory] = useState(false)
+  useEffect(() => {
+    let alive = true
+    void getConfigState().then((state) => {
+      if (alive) setNeedsDirectory(!state.setupComplete && state.mode !== 'directory')
+    })
+    return () => { alive = false }
+  }, [])
   const [host, setHost] = useState('')
   const [tabId, setTabId] = useState<number | null>(null)
   const [translating, setTranslating] = useState(false)
@@ -202,6 +211,13 @@ export function Popup() {
         </div>
       </div>
 
+      {needsDirectory ? <div className="banner">
+        <p>{t('config.start_title')}</p>
+        <button className="btn btn-primary" onClick={() => {
+          void chrome.runtime.openOptionsPage()
+          window.close()
+        }}>{t('config.choose_directory')}</button>
+      </div> : null}
       {needsReload ? (
         <div className="banner" style={{ marginBottom: 10, display: 'flex', gap: 10, alignItems: 'center' }}>
           <span style={{ flex: 1 }}>{t('popup.reload.hint')}</span>

@@ -1,3 +1,5 @@
+import { CONFIG_STATE_KEY, getConfigState, type ConfigState } from '@/configuration/state.ts'
+import { synchronizeConfiguration } from '@/configuration/service.ts'
 import { startConfigurationPolling } from '@/configuration/polling.ts'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Field, SegmentedControl, Select, Toggle } from '@/components/index.tsx'
@@ -31,7 +33,7 @@ const WELCOME_SEEN_KEY = 'ara:welcomeSeen'
 
 // 存键而不是存文案：这个常量在模块加载时就求值了，那时用户的语言偏好还没读出来。
 // 真正的取词推迟到渲染里的 `t(item.labelKey)`，切换语言才跟得上。
-// 「配置同步」排最后：它是换设备时才用的进阶项。首装第一眼该看到的是选服务商、粘 Key。
+// 首次打开由目录引导接管，日常设置仍按使用频率排列。
 const CATEGORIES: ReadonlyArray<{ id: Category; labelKey: MessageKey }> = [
   { id: 'model', labelKey: 'options.nav.model' },
   { id: 'reading', labelKey: 'options.nav.reading' },
@@ -100,13 +102,32 @@ const pickQuote = (previous?: TestQuote): TestQuote => {
 export function Options() {
   const { t } = useI18n()
   const { settings, update, loading } = useSettings()
-  useEffect(() => startConfigurationPolling(), [])
+  const [startupReady, setStartupReady] = useState(false)
+  const [needsDirectory, setNeedsDirectory] = useState(false)
+  const [setupNotice, setSetupNotice] = useState<MessageKey>()
+  const [configState, setConfigState] = useState<ConfigState>()
+  useEffect(() => {
+    let alive = true
+    let stopPolling = () => {}
+    const unwatch = storage().watch(CONFIG_STATE_KEY, () => {
+      void getConfigState().then((state) => { if (alive) setConfigState(state) })
+    })
+    void (async () => {
+      // Restore the linked source before showing editable settings.
+      const state = await synchronizeConfiguration()
+      if (!alive) return
+      setConfigState(state)
+      setNeedsDirectory(!state.setupComplete && state.mode !== 'directory')
+      setStartupReady(true)
+      stopPolling = startConfigurationPolling()
+    })()
+    return () => { alive = false; unwatch(); stopPolling() }
+  }, [])
   const [toast, showToast] = useToast()
   const [test, setTest] = useState<TestState>({ kind: 'idle' })
   // Re-testing gives you a different sentence, so a second run is a second
   // data point rather than a cached-looking repeat of the first.
   const [quote, setQuote] = useState<TestQuote>(() => pickQuote())
-  const [configurationTab, setConfigurationTab] = useState<'github' | 'plugin'>('github')
   const [shortcuts, setShortcuts] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -195,7 +216,7 @@ export function Options() {
     }
   }
 
-  if (loading) return <div className="options muted">{t('common.loading')}</div>
+  if (loading || !startupReady) return <div className="options muted">{t('common.loading')}</div>
 
   const select = (next: Category) => {
     setCategory(next)
@@ -223,8 +244,8 @@ export function Options() {
         </label>
       </div>
 
-      <div className="options-body">
-      <nav className="settings-nav">
+      <div className="options-body" data-onboarding={needsDirectory}>
+      {!needsDirectory ? <nav className="settings-nav">
         {CATEGORIES.map((item) => (
           <button
             key={item.id}
@@ -235,9 +256,22 @@ export function Options() {
             {t(item.labelKey)}
           </button>
         ))}
-      </nav>
+      </nav> : null}
 
       <div>
+      {needsDirectory ? <ConfigurationSection onboarding onConfigure={() => {
+        setNeedsDirectory(false)
+        select('model')
+      }} onConnected={(result) => {
+        setNeedsDirectory(false)
+        dismissWelcome()
+        setSetupNotice(result === 'created' ? 'config.created_ready' : 'config.restored_ready')
+        select(result === 'created' ? 'model' : 'configuration')
+      }} /> : <>
+      {setupNotice ? <div className="banner banner-success" role="status">{t(setupNotice)}</div> : null}
+      {configState?.mode === 'directory' && configState.status === 'permission' && category !== 'configuration' ? (
+        <div className="banner"><p>{t('config.permission')}</p><button className="btn btn-primary" onClick={() => select('configuration')}>{t('config.restore_directory')}</button></div>
+      ) : null}
       {welcome ? (
         <div className="banner welcome-banner">
           <button
@@ -260,20 +294,11 @@ export function Options() {
 
       {category === 'configuration' ? (
         <div style={{ display: 'grid', gap: 16 }}>
-          <SegmentedControl
-            value={configurationTab}
-            options={[
-              { value: 'github', label: t('config.github_tab') },
-              { value: 'plugin', label: t('config.plugin_tab') },
-            ]}
-            onChange={setConfigurationTab}
-          />
-          <div role="tabpanel" aria-label={t('config.github_tab')} hidden={configurationTab !== 'github'}>
-            <SyncSection onToast={showToast} />
-          </div>
-          <div role="tabpanel" aria-label={t('config.plugin_tab')} hidden={configurationTab !== 'plugin'}>
-            <ConfigurationSection onConfigure={() => select('model')} />
-          </div>
+          <ConfigurationSection onConfigure={() => select('model')} />
+          <details className="advanced">
+            <summary>{t('config.github_tab')}</summary>
+            <div className="advanced-body"><SyncSection onToast={showToast} /></div>
+          </details>
         </div>
       ) : null}
 
@@ -692,6 +717,7 @@ export function Options() {
 
       {category === 'shortcut' ? <ShortcutSection shortcuts={shortcuts} /> : null}
 
+      </>}
       <div className="faint" style={{ textAlign: 'center' }}>
         {t('options.footer', { name: t('app.name') })}
       </div>

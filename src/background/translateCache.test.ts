@@ -67,6 +67,31 @@ describe('page translation cache', () => {
     expect(await translationCacheSize()).toBe(2)
   })
 
+  it('repairs a source-plus-translation provider response and stores only the translation', async () => {
+    await useDeepSeek()
+    const text = 'these LLMs, the way they’re designed, I much rather have a four like a Opus 4.5 quality model run'
+    const translation = '这些大语言模型，我宁愿让一个类似 Opus 4.5 质量的模型运行在'
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: {
+      content: JSON.stringify({ translations: [`${text} ${translation}`] }),
+    } }] }), { status: 200 }))
+    vi.stubGlobal('fetch', fetch)
+    expect((await handleTranslatePage({ texts: [text] })).translations).toEqual([translation])
+    expect((await handleTranslatePage({ texts: [text] })).translations).toEqual([translation])
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('repairs an existing contaminated cache hit without another provider call', async () => {
+    const sent = stubProvider()
+    await useDeepSeek()
+    const text = 'these language models should preserve Opus 4.5 quality while running faster'
+    const translation = '这些语言模型应该在更快运行的同时保持 Opus 4.5 的质量'
+    const key = translationKey({ providerId: 'deepseek', model: 'test-model', promptVersion: PROMPT_VERSION, target: 'zh-CN', text })
+    await writeTranslations([[key, `${translation}\n${text}`]])
+    expect((await handleTranslatePage({ texts: [text] })).translations).toEqual([translation])
+    expect(await readTranslations([key])).toEqual([translation])
+    expect(sent).toEqual([])
+  })
+
   it('translates every segment the first time', async () => {
     const sent = stubProvider()
     await useDeepSeek()
