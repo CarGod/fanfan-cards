@@ -95,7 +95,7 @@ type Phase =
  * a component's, and it must survive every re-render of the card.
  */
 const pageTranslator = new PageTranslator({
-  onError: (message) => console.warn('[fanfan] page translation stopped:', message),
+  onError: (message) => window.dispatchEvent(new CustomEvent('fanfan:translation-notice', { detail: message })),
 })
 
 /**
@@ -119,7 +119,7 @@ const FANFAN_PROMPT_KEY = 'ara:fanfanPromptSeen'
  * changes rather than rebuilt — rebuilding would drop the listeners mid-hover.
  */
 const paragraphTranslator = new ParagraphTranslator({
-  onError: (message) => console.warn('[fanfan] paragraph translation failed:', message),
+  onError: (message) => window.dispatchEvent(new CustomEvent('fanfan:translation-notice', { detail: message })),
 })
 
 export function App({ host }: { host: HTMLElement }) {
@@ -162,6 +162,15 @@ export function App({ host }: { host: HTMLElement }) {
    */
   useEffect(() => onOrphaned(() => setOrphaned(true)), [])
   const notice = orphaned ? t('card.notice.updated') : toast
+  useEffect(() => {
+    const report = (event: Event) => {
+      const message = (event as CustomEvent<unknown>).detail
+      if (typeof message === 'string') setToast(`${t('app.name')}：${message}`)
+    }
+    window.addEventListener('fanfan:translation-notice', report)
+    return () => window.removeEventListener('fanfan:translation-notice', report)
+  }, [t])
+
 
   useEffect(() => {
     // Disabled on this site means disabled for every gesture, not just the card.
@@ -828,6 +837,21 @@ export function App({ host }: { host: HTMLElement }) {
     dismiss,
     t,
   ])
+
+  useEffect(() => {
+    const retryWithProvider = async () => {
+      if (!enabled) return
+      if (phase.kind === 'error') void explain(phase.snapshot, { refresh: true })
+      try {
+        const { translating } = await sendMessage('page/shouldTranslate', {})
+        if (!translating) return
+        pageTranslator.stop()
+        pageTranslator.start({ range: settings.pageTranslationRange, targetLanguage: settings.targetLanguage, concurrency: settings.pageTranslationConcurrency })
+      } catch (error) { noteOrphanError(error) }
+    }
+    window.addEventListener('fanfan:provider-changed', retryWithProvider)
+    return () => window.removeEventListener('fanfan:provider-changed', retryWithProvider)
+  }, [enabled, phase, explain, settings.pageTranslationRange, settings.targetLanguage, settings.pageTranslationConcurrency])
 
   useEffect(() => {
     if (!toast) return

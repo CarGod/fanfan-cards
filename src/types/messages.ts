@@ -6,6 +6,8 @@
  * `chrome.storage` through the repositories directly.
  */
 
+import type { ProviderHealth } from '@/shared/providerHealth.ts'
+import type { ProviderId } from './ai.ts'
 import type { ExplainWordInput, WordExplanation, AIErrorCode } from './ai.ts'
 import type { VocabularyEntry } from './vocabulary.ts'
 import type { Settings } from './settings.ts'
@@ -29,6 +31,15 @@ export interface SaveWordPayload {
 
 /** request -> response map; keys double as the runtime discriminator. */
 export interface MessageMap {
+  'provider/status': { req: Record<string, never>; res: { health: ProviderHealth | null } }
+  'provider/use': { req: { id: string; provider: ProviderId }; res: { ok: true } }
+  'provider/restore': { req: { id: string }; res: { ok: true } }
+  'provider/test': { req: ExplainWordInput; res: { explanation: WordExplanation } }
+  'audio/start': { req: { session: string; revision: number }; res: { ready: true } }
+  'audio/update': { req: { session: string; revision: number; stop?: boolean }; res: { ok: true } }
+  'audio/chunk': { req: { session: string; revision: number; audio: string; title: string }; res: { original: string; translation: string } }
+  'audio/recognize': { req: { session: string; revision: number; audio: string; title: string }; res: { text: string } }
+  'audio/refine': { req: { session: string; revision: number; text: string; title: string }; res: { original: string; translation: string } }
   ping: { req: Record<string, never>; res: { ok: true; version: string } }
   'ai/explain': {
     /**

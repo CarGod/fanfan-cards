@@ -60,3 +60,28 @@ describe('translation message recovery', () => {
     expect(transport).toHaveBeenCalledTimes(1)
   })
 })
+
+it('stops waiting when an extension reload leaves the message unresolved', async () => {
+  vi.useFakeTimers()
+  try {
+    transport.mockImplementation(() => new Promise(() => {}))
+    const result = sendMessage('page/translate', { texts: ['Hello'] })
+    const assertion = expect(result).rejects.toMatchObject({ code: 'stale_context' })
+    vi.stubGlobal('chrome', { runtime: undefined })
+    await vi.advanceTimersByTimeAsync(500)
+    await assertion
+    expect(vi.getTimerCount()).toBe(0)
+  } finally { vi.useRealTimers() }
+})
+it('bounds a silent background request without replaying it', async () => {
+  vi.useFakeTimers()
+  try {
+    transport.mockImplementation(() => new Promise(() => {}))
+    const result = sendMessage('page/translate', { texts: ['Hello'] })
+    const assertion = expect(result).rejects.toMatchObject({ code: 'timeout' })
+    await vi.advanceTimersByTimeAsync(45_000)
+    await assertion
+    expect(transport).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally { vi.useRealTimers() }
+})

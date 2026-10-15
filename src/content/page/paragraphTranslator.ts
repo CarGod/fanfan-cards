@@ -1,3 +1,4 @@
+import { AIError, aiErrorMessage } from '@/types/ai.ts'
 import { sendMessage } from '@/services/messaging.ts'
 import {
   TRANSLATED_MARK,
@@ -260,7 +261,7 @@ export class ParagraphTranslator {
         return
       }
 
-      this.options.onError?.(error instanceof Error ? error.message : String(error))
+      this.options.onError?.(error instanceof AIError ? aiErrorMessage(error.code) : error instanceof Error ? error.message : String(error))
     } finally {
       this.inFlight.delete(element)
     }

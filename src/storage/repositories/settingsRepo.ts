@@ -1,3 +1,4 @@
+import { PROVIDER_HEALTH_KEY } from '@/shared/providerHealth.ts'
 import { STORAGE_KEYS } from '@/shared/constants.ts'
 import { DEFAULT_SETTINGS, settingsSchema, type Settings } from '@/types/settings.ts'
 import { storage } from '../area.ts'
@@ -18,6 +19,8 @@ export async function saveSettings(patch: Partial<Settings>): Promise<Settings> 
   return withLock(STORAGE_KEYS.settings, async () => {
     const current = await getSettings()
     const next = settingsSchema.parse({ ...current, ...patch })
+    // Explicit provider selection ends temporary fallback, including selecting the same tile.
+    if (patch.provider !== undefined) await storage().remove(PROVIDER_HEALTH_KEY)
     if (same(current, next)) return next
     const document = await documentForEdit(current, next)
     await storage().setMany({ [STORAGE_KEYS.settings]: next, [DOCUMENT_KEY]: document })

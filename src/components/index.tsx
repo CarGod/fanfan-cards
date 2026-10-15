@@ -323,7 +323,7 @@ export function Field({
   children,
 }: {
   label: string
-  hint?: string | undefined
+  hint?: ReactNode
   children: ReactNode
 }) {
   return (

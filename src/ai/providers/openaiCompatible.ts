@@ -1,3 +1,4 @@
+import { TRANSCRIPT_SYSTEM, TRANSCRIPT_SCHEMA, transcriptSchema, transcriptPrompt, type TranscriptInput, type TranscriptResult } from '../transcript.ts'
 import {
   AIError,
   type AIProvider,
@@ -58,11 +59,12 @@ import {
  *
  * - `deepseek`：`reasoning_effort`（low/high/max，**默认 high**）加
  *   `thinking: {type}` 开关。
+ * - `mimo`：官方 MiMo 的 `thinking: {type}` 开关。
  * - `openai`：`reasoning_effort`，没有独立的开关字段。
  * - `none`：什么都不发。自建网关和不确定的端点走这条——多发一个不认识的字段，
  *   代价是整个配置 400，而收益只是快一点。
  */
-export type ReasoningDialect = 'deepseek' | 'openai' | 'none'
+export type ReasoningDialect = 'deepseek' | 'mimo' | 'openai' | 'none'
 
 export const EXPLAIN_MAX_TOKENS = 4000
 
@@ -96,6 +98,7 @@ export interface OpenAICompatibleOptions {
    * LM Studio、各种自建网关都自称兼容，而它们对不认识的字段的反应是
    * 直接 400——那会让一个本来能用的配置彻底不能用，只为了一个可有可无的加速。
    */
+  thinkingLevel?: ThinkingLevel
   reasoning?: ReasoningDialect
   /** Extra headers, e.g. OpenRouter attribution. */
   headers?: Record<string, string>
@@ -130,6 +133,7 @@ export class OpenAICompatibleProvider implements AIProvider {
   private readonly apiKey: string
   private readonly baseUrl: string
   private readonly structuredOutput: StructuredOutputMode
+  private readonly thinkingLevel: ThinkingLevel | undefined
   private readonly reasoning: ReasoningDialect
   private readonly extraHeaders: Record<string, string>
 
@@ -140,11 +144,20 @@ export class OpenAICompatibleProvider implements AIProvider {
     this.apiKey = options.apiKey
     this.baseUrl = normalizeBaseUrl(options.baseUrl)
     this.structuredOutput = options.structuredOutput
+    this.thinkingLevel = options.thinkingLevel
     this.reasoning = options.reasoning ?? 'none'
     this.extraHeaders = options.headers ?? {}
 
     if (!this.baseUrl) throw new AIError('unknown', 'Base URL is not configured', this.id)
     if (!this.model) throw new AIError('unknown', 'Model is not configured', this.id)
+  }
+
+  async refineTranscript(input: TranscriptInput, signal?: AbortSignal): Promise<TranscriptResult> {
+    const result = await this.chatJson({
+      system: TRANSCRIPT_SYSTEM, user: transcriptPrompt(input), schema: TRANSCRIPT_SCHEMA,
+      maxTokens: 2200, schemaName: 'transcript', signal,
+    })
+    return transcriptSchema.parse(result)
   }
 
   async explainWord(input: ExplainWordInput, signal?: AbortSignal): Promise<WordExplanation> {
@@ -236,7 +249,7 @@ export class OpenAICompatibleProvider implements AIProvider {
       ],
     }
 
-    applyReasoning(body, this.reasoning, args.thinkingLevel)
+    applyReasoning(body, this.reasoning, this.thinkingLevel ?? args.thinkingLevel)
 
     if (this.structuredOutput === 'json_schema') {
       body['response_format'] = {
@@ -250,7 +263,13 @@ export class OpenAICompatibleProvider implements AIProvider {
     const headers: Record<string, string> = { ...this.extraHeaders }
     if (this.apiKey) headers['authorization'] = `Bearer ${this.apiKey}`
 
+    // Official DeepSeek returns overload errors promptly for streaming requests.
+    // Non-streaming can send HTTP 200 keepalives while generation is queued.
+    const stream = (this.id === 'deepseek' && /^https:\/\/api\.deepseek\.com(\/|$)/i.test(this.baseUrl))
+      || (this.reasoning === 'mimo' && /^https:\/\/api\.xiaomimimo\.com(\/|$)/i.test(this.baseUrl))
+    if (stream) body['stream'] = true
     const response = await postJson<ChatCompletionResponse>({
+      ...(stream ? { responseMode: 'openai-stream' as const } : {}),
       url: `${this.baseUrl}/chat/completions`,
       headers,
       body,
@@ -312,6 +331,11 @@ export function applyReasoning(
   level: ThinkingLevel | undefined,
 ): void {
   if (dialect === 'none' || !level) return
+
+  if (dialect === 'mimo') {
+    body['thinking'] = { type: level === 'off' ? 'disabled' : 'enabled' }
+    return
+  }
 
   if (dialect === 'openai') {
     // OpenAI 没有独立的开关，最低档就是 `low`。

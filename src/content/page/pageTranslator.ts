@@ -1,5 +1,5 @@
 import { sendMessage } from '@/services/messaging.ts'
-import { AIError } from '@/types/ai.ts'
+import { AIError, aiErrorMessage } from '@/types/ai.ts'
 import {
   TRANSLATED_MARK,
   batchUnits,
@@ -357,7 +357,7 @@ export class PageTranslator {
         return
       }
 
-      this.options.onError?.(error instanceof Error ? error.message : String(error))
+      this.options.onError?.(error instanceof AIError ? aiErrorMessage(error.code) : error instanceof Error ? error.message : String(error))
 
       /*
        * A failed batch loses that batch, not the whole run.
@@ -403,7 +403,7 @@ export class PageTranslator {
         return
       }
 
-      const fatal = error instanceof AIError && (error.code === 'auth' || error.code === 'no_api_key')
+      const fatal = error instanceof AIError && (error.code === 'auth' || error.code === 'no_api_key' || error.code === 'service_unavailable')
       this.failures += 1
       if (fatal || this.failures >= MAX_FAILURES) this.stop()
     }

@@ -132,7 +132,7 @@ it('receives another device’s configuration while staying on AI settings and k
   } }
   await act(async () => { await vi.advanceTimersByTimeAsync(15000) })
   expect(location.hash).toBe('#model')
-  expect(container.querySelector<HTMLInputElement>('input[list="models-openai"]')?.value).toBe('remote-test-model')
+  expect(container.querySelector<HTMLInputElement>('input[aria-label="自定义模型名称"]')?.value).toBe('remote-test-model')
   expect(changed).toHaveBeenCalledWith(expect.objectContaining({ provider: 'openai', theme: 'dark' }))
   expect((await getSettings()).theme).toBe('dark')
   expect(remote.fields.theme?.value).toBe('dark')
@@ -156,5 +156,28 @@ it('pauses file polling when hidden and reads immediately when the AI tab become
     window.dispatchEvent(new Event('focus'))
   })
   expect(readDirectory).toHaveBeenCalledTimes(1)
-  expect(container.querySelector<HTMLInputElement>('input[list="models-openai"]')?.value).toBe('visible-test-model')
+  expect(container.querySelector<HTMLInputElement>('input[aria-label="自定义模型名称"]')?.value).toBe('visible-test-model')
+})
+
+it('confirms an explicit provider selection only after it is saved', async () => {
+  const button = [...container.querySelectorAll('button')].find(item => item.textContent === '小米 MiMo')!
+  await act(async () => button.click())
+  expect((await getSettings()).provider).toBe('mimo')
+  expect(container.querySelector('.toast-fixed')?.textContent).toContain('已切换至 小米 MiMo')
+})
+
+it('labels outages and temporary providers and can make the fallback permanent', async () => {
+  await act(async () => {
+    await saveSettings({ provider: 'deepseek' })
+    await storage().set('ara:providerHealth', { id: 'test-outage', original: 'deepseek', fallback: 'mimo', model: 'deepseek-flash', recovered: false })
+  })
+  expect(container.textContent).toContain('故障中')
+  expect(container.textContent).toContain('正在临时使用 小米 MiMo')
+  const button = [...container.querySelectorAll('button')].find(item => item.textContent === '设为默认')!
+  await act(async () => button.click())
+  expect((await getSettings()).provider).toBe('mimo')
+  expect(await storage().get('ara:providerHealth')).toBeUndefined()
+  expect(container.textContent).not.toContain('正在临时使用')
+  expect(container.textContent).not.toContain('故障中')
+  expect(container.querySelector('.toast-fixed')?.textContent).toContain('已切换至 小米 MiMo')
 })

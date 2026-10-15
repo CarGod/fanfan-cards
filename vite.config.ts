@@ -24,6 +24,7 @@ export default defineConfig({
     'process.env': '{}',
     'globalThis.process': '{"env":{}}',
   },
+  worker: { format: 'es' },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
@@ -37,6 +38,7 @@ export default defineConfig({
         popup: r('./src/popup/index.html'),
         options: r('./src/options/index.html'),
         app: r('./src/app/index.html'),
+        audio: r('./src/audio/index.html'),
       },
       output: {
         // Stable, manifest-referenceable paths (no content hash on entries).

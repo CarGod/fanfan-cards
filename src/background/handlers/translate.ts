@@ -1,4 +1,4 @@
-import { resolveProvider } from '@/ai/index.ts'
+import { resolveForTranslation } from '../providerHealth.ts'
 import { PROMPT_VERSION } from '@/ai/prompts.ts'
 import { AIError } from '@/types/ai.ts'
 import { getSettings } from '@/storage/repositories/settingsRepo.ts'
@@ -28,7 +28,7 @@ export async function handleTranslateInput(
       ? settings.targetLanguage
       : settings.inputTranslationTargetLanguage
   const target = targetLanguage(targetCode)
-  const { provider, downgradeReason } = resolveProvider(settings)
+  const { provider, downgradeReason } = await resolveForTranslation(settings)
 
   // The offline dictionary can explain a known word, but it cannot honestly
   // translate an arbitrary draft. Never replace the user's text with its
@@ -78,7 +78,7 @@ export async function handleTranslatePage(
   payload: MessageRequest<'page/translate'>,
 ): Promise<MessageResponse<'page/translate'>> {
   const settings = await getSettings()
-  const { provider } = resolveProvider(settings)
+  const { provider } = await resolveForTranslation(settings)
   const target = targetLanguage(payload.targetLanguage ?? settings.targetLanguage)
 
   const keys = payload.texts.map((text) =>

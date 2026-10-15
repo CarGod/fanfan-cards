@@ -8,7 +8,7 @@ import type {
 } from '@/types/messages.ts'
 import { SyncError, type SyncErrorCode } from '@/types/sync.ts'
 import { AIError, type AIErrorCode } from '@/types/ai.ts'
-import { isContextInvalidated, isMessageChannelClosed } from '@/shared/extensionContext.ts'
+import { isContextInvalidated, isMessageChannelClosed, isExtensionAlive } from '@/shared/extensionContext.ts'
 import { t } from '@/i18n/index.ts'
 
 /**
@@ -27,7 +27,9 @@ export async function sendMessage<T extends MessageType>(
   let reply: Reply<T> | undefined
   for (let attempt = 0; ; attempt += 1) {
     try {
-      reply = (await chrome.runtime.sendMessage(envelope)) as Reply<T> | undefined
+      reply = (await (type === 'page/translate'
+        ? boundedTranslationMessage(() => chrome.runtime.sendMessage(envelope))
+        : chrome.runtime.sendMessage(envelope))) as Reply<T> | undefined
       break
     } catch (error) {
       // Check liveness again after rejection: reloads can invalidate a script
@@ -35,6 +37,7 @@ export async function sendMessage<T extends MessageType>(
       if (isContextInvalidated(error)) {
         throw new AIError('stale_context', 'Extension context invalidated', 'mock')
       }
+      if (error instanceof AIError) throw error
       const disconnected = isMessageChannelClosed(error)
       // Only replay page translation, once. Never replay saves, deletes, sync,
       // or other side effects whose first response may merely have been lost.
@@ -52,6 +55,31 @@ export async function sendMessage<T extends MessageType>(
   if (!reply) throw new AIError('unknown', t('error.messaging.empty_reply'), 'mock')
   if (!reply.ok) throw rebuild(reply.error)
   return reply.data
+}
+
+/** A reloaded extension may leave a pending message promise unresolved. */
+async function boundedTranslationMessage(send: () => Promise<unknown>): Promise<unknown> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let liveness: ReturnType<typeof setInterval> | undefined
+  let slow: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      Promise.resolve().then(send),
+      new Promise<never>((_, reject) => {
+        slow = setTimeout(() => {
+          if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('fanfan:translation-notice', { detail: t('feedback.translation_slow') }))
+        }, 8_000)
+        timer = setTimeout(() => reject(new AIError('timeout', t('error.messaging.no_response'), 'mock')), 45_000)
+        liveness = setInterval(() => {
+          if (!isExtensionAlive()) reject(new AIError('stale_context', 'Extension context invalidated', 'mock'))
+        }, 500)
+      }),
+    ])
+  } finally {
+    clearTimeout(slow)
+    clearTimeout(timer)
+    clearInterval(liveness)
+  }
 }
 
 export type Handler<T extends MessageType> = (

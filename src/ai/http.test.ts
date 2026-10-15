@@ -88,3 +88,41 @@ describe('postJson retry', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('response body failures after HTTP 200', () => {
+  it('reports a body timeout immediately without another long wait', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => ({
+      ok: true, status: 200,
+      text: () => Promise.reject(new DOMException('timed out', 'TimeoutError')),
+    }))
+    await expect(settle(call(fetchMock as unknown as typeof fetch))).rejects.toMatchObject({ code: 'timeout' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not retry when the caller cancels while reading the body', async () => {
+    const controller = new AbortController()
+    const fetchMock = vi.fn().mockImplementation(async () => ({
+      ok: true, status: 200,
+      text: async () => {
+        controller.abort()
+        throw new DOMException('cancelled', 'AbortError')
+      },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(postJson({ url: 'https://example.test', headers: {}, body: {}, providerId: 'deepseek', signal: controller.signal }))
+      .rejects.toMatchObject({ code: 'aborted' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+it('does not silently retry explicit provider overload', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response('{"error":{"message":"Service is too busy"}}', { status: 503 }))
+  await expect(settle(call(fetchMock as unknown as typeof fetch))).rejects.toMatchObject({ code: 'service_unavailable', status: 503 })
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+})
+
+it('reports a timeout immediately instead of silently waiting through a second attempt', async () => {
+  const fetchMock = vi.fn().mockRejectedValue(new DOMException('Timed out', 'TimeoutError'))
+  await expect(call(fetchMock as unknown as typeof fetch)).rejects.toMatchObject({ code: 'timeout' })
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+})

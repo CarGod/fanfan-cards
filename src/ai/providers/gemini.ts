@@ -1,4 +1,5 @@
-import { AIError, type AIProvider } from '@/types/ai.ts'
+import { TRANSCRIPT_SYSTEM, TRANSCRIPT_SCHEMA, transcriptSchema, transcriptPrompt, type TranscriptInput, type TranscriptResult } from '../transcript.ts'
+import { AIError, type AIProvider, type ThinkingLevel } from '@/types/ai.ts'
 import type {
   ExplainWordInput,
   GenerateExampleInput,
@@ -38,6 +39,7 @@ import {
 } from '../schema.ts'
 
 export interface GeminiOptions {
+  thinkingLevel?: ThinkingLevel
   apiKey: string
   model: string
   baseUrl: string
@@ -92,14 +94,24 @@ export class GeminiProvider implements AIProvider {
   readonly offline = false
   readonly contextual = true
 
+  private readonly thinkingLevel: ThinkingLevel | undefined
   private readonly apiKey: string
   private readonly baseUrl: string
 
   constructor(options: GeminiOptions) {
     this.model = options.model
+    this.thinkingLevel = options.thinkingLevel
     this.apiKey = options.apiKey
     this.baseUrl = options.baseUrl.replace(/\/+$/, '')
     if (!this.apiKey) throw new AIError('no_api_key', 'Gemini API key is missing', this.id)
+  }
+
+  async refineTranscript(input: TranscriptInput, signal?: AbortSignal): Promise<TranscriptResult> {
+    const result = await this.generate({
+      system: TRANSCRIPT_SYSTEM, user: transcriptPrompt(input), schema: TRANSCRIPT_SCHEMA,
+      maxTokens: 2200,  signal,
+    })
+    return transcriptSchema.parse(result)
   }
 
   async explainWord(input: ExplainWordInput, signal?: AbortSignal): Promise<WordExplanation> {
@@ -178,6 +190,7 @@ export class GeminiProvider implements AIProvider {
         systemInstruction: { parts: [{ text: args.system }] },
         contents: [{ role: 'user', parts: [{ text: args.user }] }],
         generationConfig: {
+          ...geminiThinking(this.model, this.thinkingLevel),
           temperature: 0.2,
           maxOutputTokens: args.maxTokens,
           responseMimeType: 'application/json',
@@ -199,4 +212,13 @@ export class GeminiProvider implements AIProvider {
     if (!text) throw new AIError('bad_response', 'Gemini returned no content', this.id)
     return extractJson(text, this.id)
   }
+}
+
+
+/** Only send controls supported by the model family; older models have no thinking mode. */
+export function geminiThinking(model: string, level?: ThinkingLevel): Record<string, unknown> {
+  if (!level) return {}
+  if (/^gemini-[34]/.test(model)) return { thinkingConfig: { thinkingLevel: level === 'off' ? (/^gemini-3.*flash/.test(model) ? 'minimal' : 'low') : level } }
+  if (/^gemini-2\.5/.test(model)) return { thinkingConfig: { thinkingBudget: level === 'off' ? (/pro/.test(model) ? 128 : 0) : level === 'low' ? 512 : -1 } }
+  return {}
 }

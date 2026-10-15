@@ -1,4 +1,5 @@
-import { fallbackProvider, resolveProvider } from '@/ai/index.ts'
+import { fallbackProvider } from '@/ai/index.ts'
+import { currentHealth, resolveForTranslation, useTemporaryProvider } from '../providerHealth.ts'
 import { PROMPT_VERSION } from '@/ai/prompts.ts'
 import { dateKey } from '@/shared/utils.ts'
 import { bumpActivity } from '@/storage/repositories/activityRepo.ts'
@@ -19,9 +20,14 @@ export async function handleExplain(
   payload: MessageRequest<'ai/explain'>,
 ): Promise<MessageResponse<'ai/explain'>> {
   const settings = await getSettings()
-  const resolved = payload.forceOffline
+  let temporary = false
+  if (payload.forceOffline) {
+    const state = await currentHealth(settings)
+    if (state) { await useTemporaryProvider(state.id, 'google'); temporary = true }
+  }
+  const resolved = payload.forceOffline && !temporary
     ? { provider: fallbackProvider(), downgradeReason: undefined }
-    : resolveProvider(settings)
+    : await resolveForTranslation(settings)
   const provider = resolved.provider
 
   const text = payload.text.slice(0, settings.maxSelectionLength)

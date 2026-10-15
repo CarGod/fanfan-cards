@@ -41,9 +41,9 @@ export function resolveProvider(settings: Settings): ResolvedProvider {
   try {
     switch (settings.provider) {
       case 'claude':
-        return { provider: new ClaudeProvider({ apiKey, model, ...(baseUrl ? { baseUrl } : {}) }) }
+        return { provider: new ClaudeProvider({ thinkingLevel: settings.thinkingLevel, apiKey, model, ...(baseUrl ? { baseUrl } : {}) }) }
       case 'gemini':
-        return { provider: new GeminiProvider({ apiKey, model, baseUrl }) }
+        return { provider: new GeminiProvider({ thinkingLevel: settings.thinkingLevel, apiKey, model, baseUrl }) }
       case 'openai': {
         /*
          * 「OpenAI（兼容）」：地址是官方的就用全套（json_schema、reasoning_effort）；
@@ -51,22 +51,34 @@ export function resolveProvider(settings: Settings): ResolvedProvider {
          * 「OpenAI 兼容」是个很宽的说法，不认识的字段常常直接 400。
          */
         const official = !baseUrl || /^https:\/\/api\.openai\.com(\/|$)/i.test(baseUrl)
+        const mimo = /^https:\/\/api\.xiaomimimo\.com(\/|$)/i.test(baseUrl)
         return {
           provider: new OpenAICompatibleProvider({
+            thinkingLevel: settings.thinkingLevel,
             id: 'openai',
             label: meta.label,
             apiKey,
             model,
             baseUrl,
             structuredOutput: official ? 'json_schema' : 'json_object',
-            // o 系列 / gpt-5 认 reasoning_effort；网关不发。
-            reasoning: official ? 'openai' : 'none',
+            // Only known official endpoints receive vendor-specific controls.
+            reasoning: official ? 'openai' : mimo ? 'mimo' : 'none',
           }),
         }
       }
+      case 'mimo':
+        return {
+          provider: new OpenAICompatibleProvider({
+            thinkingLevel: settings.thinkingLevel,
+            id: 'mimo', label: meta.label, apiKey, model, baseUrl,
+            structuredOutput: 'json_object',
+            reasoning: /^https:\/\/api\.xiaomimimo\.com(\/|$)/i.test(baseUrl) ? 'mimo' : 'none',
+          }),
+        }
       case 'deepseek':
         return {
           provider: new OpenAICompatibleProvider({
+            thinkingLevel: settings.thinkingLevel,
             id: 'deepseek',
             label: meta.label,
             apiKey,
@@ -85,6 +97,7 @@ export function resolveProvider(settings: Settings): ResolvedProvider {
       case 'custom':
         return {
           provider: new OpenAICompatibleProvider({
+            thinkingLevel: settings.thinkingLevel,
             id: 'custom',
             label: meta.label,
             apiKey,

@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS } from '@/types/settings.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryAdapter, setStorageAdapter } from '@/storage/area.ts'
 import { PROMPT_VERSION } from '@/ai/prompts.ts'
@@ -44,6 +45,7 @@ async function useDeepSeek() {
   await saveSettings({
     provider: 'deepseek',
     providers: {
+      ...DEFAULT_SETTINGS.providers,
       openai: { apiKey: '', model: '', baseUrl: '' },
       claude: { apiKey: '', model: '', baseUrl: '' },
       deepseek: { apiKey: 'k', model: 'test-model', baseUrl: 'https://api.example.com/v1' },

@@ -6,12 +6,18 @@
  * vague error, usually after you have already lost ten minutes. This turns that
  * into a build failure with the exact path.
  */
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync, copyFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const distDir = join(root, 'dist')
+// Bundle ONNX executable assets locally; never load runtime code from a CDN.
+mkdirSync(join(distDir, 'wasm'), { recursive: true })
+for (const name of ['ort-wasm-simd-threaded.jsep.mjs', 'ort-wasm-simd-threaded.jsep.wasm']) {
+  copyFileSync(join(root, 'node_modules/onnxruntime-web/dist', name), join(distDir, 'wasm', name))
+}
+
 const manifestPath = join(distDir, 'manifest.json')
 const sourceManifestPath = join(root, 'public', 'manifest.json')
 

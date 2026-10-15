@@ -1,3 +1,4 @@
+import { ProviderNotice } from '@/components/ProviderNotice.tsx'
 import { createRoot, type Root } from 'react-dom/client'
 import { CONTENT_HOST_ID } from '@/shared/constants.ts'
 import { initI18n } from '@/i18n/bootstrap.ts'
@@ -7,6 +8,7 @@ import { App } from './ui/App.tsx'
 import { YouTubeSubtitles } from './video/youtube.ts'
 import { GenericVideoSubtitles } from './video/generic.ts'
 import { DomSubtitleWatcher } from './video/domSubtitles.ts'
+import { AudioPrototype } from './video/audioPrototype.ts'
 
 /**
  * Content-script bootstrap.
@@ -51,7 +53,7 @@ function mount(): Root | null {
   shadow.appendChild(container)
 
   const root = createRoot(container)
-  root.render(<App host={host} />)
+  root.render(<><App host={host} /><ProviderNotice /></>)
   return root
 }
 
@@ -84,6 +86,8 @@ if (root) {
   // 其余网站：标准 <video> 带字幕轨的走通用层；自己画字幕的播放器由读者点一下告诉我们位置。
   const generic = subtitles ? null : new GenericVideoSubtitles()
   const domSubtitles = subtitles ? null : new DomSubtitleWatcher()
+  const audioPrototype = new AudioPrototype()
+  void audioPrototype.start()
   void generic?.start()
   void domSubtitles?.start()
   // Chrome fires this when the extension is reloaded or updated; without the
@@ -94,6 +98,7 @@ if (root) {
       subtitles?.destroy()
       generic?.destroy()
       domSubtitles?.destroy()
+      audioPrototype.destroy()
       root.unmount()
     },
     { once: true },

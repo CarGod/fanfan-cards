@@ -9,7 +9,7 @@ import {
 
 /** Zod is the single source of truth for settings: parse on read, migrate on miss. */
 
-export const providerIdSchema = z.enum(['mock', 'google', 'openai', 'claude', 'deepseek', 'gemini', 'custom'])
+export const providerIdSchema = z.enum(['mock', 'google', 'openai', 'claude', 'mimo', 'deepseek', 'gemini', 'custom'])
 
 /** How the word card is summoned after a selection. */
 export const triggerModeSchema = z.enum(['button', 'auto', 'hotkey'])
@@ -58,6 +58,7 @@ export const settingsSchema = z.object({
       openai: providerConfigSchema,
       claude: providerConfigSchema,
       deepseek: providerConfigSchema,
+      mimo: providerConfigSchema,
       gemini: providerConfigSchema,
       custom: providerConfigSchema,
     })
@@ -65,6 +66,7 @@ export const settingsSchema = z.object({
       openai: { apiKey: '', model: '', baseUrl: '' },
       claude: { apiKey: '', model: '', baseUrl: '' },
       deepseek: { apiKey: '', model: '', baseUrl: '' },
+      mimo: { apiKey: '', model: '', baseUrl: '' },
       gemini: { apiKey: '', model: '', baseUrl: '' },
       custom: { apiKey: '', model: '', baseUrl: '' },
     }),
@@ -267,6 +269,8 @@ export interface ProviderMeta {
   modelSuggestions: string[]
   requiresKey: boolean
   keyUrl: string
+  billingUrl?: string
+  docsUrl?: string
 }
 
 export const PROVIDER_CATALOGUE: readonly ProviderMeta[] = [
@@ -291,6 +295,20 @@ export const PROVIDER_CATALOGUE: readonly ProviderMeta[] = [
     modelSuggestions: ['deepseek-flash', 'deepseek-v4-pro'],
     requiresKey: true,
     keyUrl: 'https://platform.deepseek.com/api_keys',
+    billingUrl: 'https://platform.deepseek.com',
+    docsUrl: 'https://api-docs.deepseek.com/zh-cn/',
+  },
+  {
+    id: 'mimo',
+    label: '小米 MiMo',
+    labelKey: 'provider.label.mimo',
+    defaultModel: 'mimo-v2.6-flash',
+    defaultBaseUrl: 'https://api.xiaomimimo.com/v1',
+    modelSuggestions: ['mimo-v2.6-flash', 'mimo-v2.6-pro'],
+    requiresKey: true,
+    keyUrl: 'https://platform.xiaomimimo.com',
+    billingUrl: 'https://platform.xiaomimimo.com',
+    docsUrl: 'https://mimo.mi.com/docs/zh-CN/quick-start/summary/first-api-call',
   },
   {
     id: 'claude',
@@ -364,4 +382,14 @@ export function providerApiKey(settings: Settings): string | null {
 /** 界面上显示的服务商名。专有名词直接返回，描述性的名字按当前界面语言取。 */
 export function providerLabel(meta: ProviderMeta): string {
   return meta.labelKey ? t(meta.labelKey) : meta.label
+}
+
+
+/** Reuse an existing official MiMo gateway config only on an explicit selection. */
+export function providerSelectionPatch(settings: Settings, provider: Settings['provider']): Partial<Settings> {
+  const existing = settings.providers.openai
+  if (provider === 'mimo' && !settings.providers.mimo.apiKey && !settings.providers.mimo.model && !settings.providers.mimo.baseUrl && existing.apiKey.trim() && /^https:\/\/api\.xiaomimimo\.com(?:\/|$)/i.test(existing.baseUrl.trim())) {
+    return { provider, providers: { ...settings.providers, mimo: { ...existing } } }
+  }
+  return { provider }
 }

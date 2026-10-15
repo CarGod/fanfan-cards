@@ -1800,34 +1800,11 @@ textarea:focus {
   border-top: 1px solid var(--border);
   padding-top: 12px;
 }
-.advanced > summary {
-  cursor: pointer;
-  font-weight: 600;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.advanced-title {
+  margin: 0;
   padding: 4px 0;
-  user-select: none;
-}
-.advanced > summary::-webkit-details-marker {
-  display: none;
-}
-/* 箭头用边框画，比字符 ▸ 清楚，也跟着文字色走。收起时朝右，展开后朝下。 */
-.advanced > summary::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  margin: 0 2px 2px 1px;
-  border-right: 2px solid var(--text-soft);
-  border-bottom: 2px solid var(--text-soft);
-  transform: rotate(-45deg);
-  transition: transform 0.15s;
-  flex: none;
-}
-.advanced[open] > summary::before {
-  transform: rotate(45deg);
-  margin-bottom: 5px;
+  font-size: inherit;
+  font-weight: 600;
 }
 .advanced-body {
   margin-top: 14px;
@@ -1843,3 +1820,23 @@ textarea:focus {
   top: 8px;
   right: 8px;
 }
+
+/* Provider help links share one treatment, including visited and keyboard states. */
+.provider-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.options a.provider-link,
+.options a.provider-link:visited {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--text-soft); text-decoration: none;
+  font-size: 12px; font-weight: 550; line-height: 1.4;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.options a.provider-link-primary,
+.options a.provider-link-primary:visited { background: var(--primary-soft); border-color: var(--border); color: var(--primary-ink); }
+.options a.provider-link:hover { background: var(--surface); border-color: var(--border); color: var(--text); text-decoration: none; }
+.options a.provider-link-primary:hover { background: var(--primary-soft); border-color: var(--primary-line); color: var(--primary-ink); }
+.options a.provider-link:focus-visible { outline: 2px solid var(--primary-line); outline-offset: 3px; }
+.provider-link svg { flex-shrink: 0; opacity: .75; }
+.provider-link-domain { font-weight: 400; opacity: .78; overflow-wrap: anywhere; }
+
+.provider-key-action { padding-top: 10px; padding-bottom: 4px; }

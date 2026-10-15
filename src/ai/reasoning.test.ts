@@ -84,3 +84,13 @@ describe('不动请求体里已有的东西', () => {
     expect(b['max_tokens']).toBe(4000)
   })
 })
+
+describe('MiMo official endpoint', () => {
+  it('uses its documented toggle without sending DeepSeek effort values', () => {
+    for (const level of ['off', 'low', 'high'] as const) {
+      const b = body()
+      applyReasoning(b, 'mimo', level)
+      expect(b).toEqual({ thinking: { type: level === 'off' ? 'disabled' : 'enabled' } })
+    }
+  })
+})

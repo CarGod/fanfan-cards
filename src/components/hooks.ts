@@ -97,13 +97,12 @@ export function useHashRoute(fallback: string): [string, (next: string) => void]
 
 /** Ephemeral status line, auto-clearing. */
 export function useToast(): [string | null, (message: string) => void] {
-  const [toast, setToast] = useState<string | null>(null)
-
+  const [notice, setNotice] = useState<{ message: string } | null>(null)
+  const show = useCallback((message: string) => setNotice({ message }), [])
   useEffect(() => {
-    if (!toast) return
-    const timer = setTimeout(() => setToast(null), 2400)
+    if (!notice) return
+    const timer = setTimeout(() => setNotice(null), 3200)
     return () => clearTimeout(timer)
-  }, [toast])
-
-  return [toast, setToast]
+  }, [notice])
+  return [notice?.message ?? null, show]
 }

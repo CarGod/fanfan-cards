@@ -1,3 +1,6 @@
+import { openModelSettings } from './openOptions.ts'
+import { currentHealth, resolveForTranslation, restoreProvider, useTemporaryProvider } from './providerHealth.ts'
+import { startListening, updateListening, transcribeListening, recognizeListening, refineListening, registerListeningCleanup } from './handlers/listening.ts'
 import { registerConfigurationSync } from './configuration.ts'
 import { APP_PAGE, OPTIONS_PAGE } from '@/shared/constants.ts'
 import { registerHandlers } from '@/services/messaging.ts'
@@ -29,6 +32,7 @@ import { CONTEXT_MENU_ID, refreshContextMenu } from './contextMenu.ts'
 
 // Registered in the first synchronous turn, before any await: a listener added
 // later would miss the very event that woke this worker up.
+registerListeningCleanup()
 registerConfigurationSync()
 registerSyncScheduler()
 registerReminder()
@@ -47,6 +51,19 @@ void initI18n()
 onLanguageChange(() => void refreshContextMenu())
 
 registerHandlers({
+  'provider/status': async () => ({ health: await currentHealth() }),
+  'provider/use': async ({ id, provider }) => useTemporaryProvider(id, provider),
+  'provider/restore': async ({ id }) => restoreProvider(id),
+  'provider/test': async (input) => {
+    const settings = await getSettings()
+    const { provider } = await resolveForTranslation(settings, true)
+    return { explanation: await provider.explainWord({ ...input, thinkingLevel: settings.thinkingLevel }) }
+  },
+  'audio/start': startListening,
+  'audio/update': updateListening,
+  'audio/chunk': transcribeListening,
+  'audio/recognize': recognizeListening,
+  'audio/refine': refineListening,
   ping: async () => ({ ok: true, version: chrome.runtime.getManifest().version }),
   'ai/explain': handleExplain,
   'vocab/save': handleSaveWord,
@@ -63,11 +80,7 @@ registerHandlers({
     await openAppPage(payload.route)
     return { opened: true }
   },
-  'options/open': async () => {
-    // Content scripts cannot call `openOptionsPage` themselves.
-    await chrome.runtime.openOptionsPage()
-    return { opened: true }
-  },
+  'options/open': openModelSettings,
 })
 
 chrome.runtime.onInstalled.addListener((details) => {

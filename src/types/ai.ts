@@ -1,3 +1,4 @@
+import type { TranscriptInput, TranscriptResult } from '@/ai/transcript.ts'
 /** Contracts between the app and any LLM behind it. */
 
 import { t, type MessageKey } from '@/i18n/index.ts'
@@ -11,7 +12,7 @@ import type {
 
 export type { Synonym, CefrLevel, ExampleSentence, WordSense }
 
-export type ProviderId = 'mock' | 'google' | 'openai' | 'claude' | 'deepseek' | 'gemini' | 'custom'
+export type ProviderId = 'mock' | 'google' | 'openai' | 'claude' | 'mimo' | 'deepseek' | 'gemini' | 'custom'
 
 /** The structured explanation every provider must return. */
 export interface WordExplanation {
@@ -149,6 +150,7 @@ export interface AIProvider {
    */
   readonly contextual: boolean
 
+  refineTranscript?(input: TranscriptInput, signal?: AbortSignal): Promise<TranscriptResult>
   explainWord(input: ExplainWordInput, signal?: AbortSignal): Promise<WordExplanation>
   translate(input: TranslateInput, signal?: AbortSignal): Promise<TranslateResult>
   /**
@@ -169,6 +171,7 @@ export type AIErrorCode =
   | 'auth'
   /** 402：余额不足、额度用完，或者套餐用户填错了地址。 */
   | 'billing'
+  | 'service_unavailable'
   | 'rate_limit'
   | 'network'
   | 'timeout'
@@ -230,6 +233,7 @@ const AI_ERROR_KEYS: Record<AIErrorCode, MessageKey> = {
   no_api_key: 'error.ai.no_api_key',
   auth: 'error.ai.auth',
   billing: 'error.ai.billing',
+  service_unavailable: 'error.ai.service_unavailable',
   rate_limit: 'error.ai.rate_limit',
   network: 'error.ai.network',
   timeout: 'error.ai.timeout',

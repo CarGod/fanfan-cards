@@ -1,3 +1,4 @@
+import { parseOpenAIStream } from './stream.ts'
 import { truncate } from '@/shared/utils.ts'
 import { t } from '@/i18n/index.ts'
 import { AIError, type AIErrorCode, type ProviderId } from '@/types/ai.ts'
@@ -27,12 +28,13 @@ export async function postJson<T>(options: {
   body: unknown
   providerId: ProviderId
   signal?: AbortSignal | undefined
+  responseMode?: 'openai-stream'
   timeoutMs?: number
 }): Promise<T> {
   try {
     return await postJsonOnce<T>(options)
   } catch (error) {
-    if (!(error instanceof AIError) || !error.retryable) throw error
+    if (!(error instanceof AIError) || !error.retryable || error.code === 'timeout') throw error
     // An abort is the user's decision, never something to undo by retrying.
     if (options.signal?.aborted) throw error
     await delay(retryDelayFor(error), options.signal)
@@ -67,6 +69,7 @@ async function postJsonOnce<T>(options: {
   body: unknown
   providerId: ProviderId
   signal?: AbortSignal | undefined
+  responseMode?: 'openai-stream'
   timeoutMs?: number
 }): Promise<T> {
   const { url, headers, body, providerId } = options
@@ -109,7 +112,14 @@ async function postJsonOnce<T>(options: {
    * wrong base URL pointing at a web page); anything else is the provider
    * returning something genuinely unexpected. The snippet tells them apart.
    */
-  const raw = await safeText(response)
+  let raw: string
+  try {
+    raw = await response.text()
+  } catch (error) {
+    // Headers may arrive before generation completes. Preserve body timeouts
+    // and caller cancellation instead of misreporting an empty HTTP 200.
+    throw toNetworkError(error, providerId, options.signal)
+  }
   if (!raw.trim()) {
     throw new AIError(
       'bad_response',
@@ -119,6 +129,7 @@ async function postJsonOnce<T>(options: {
       { retryable: true },
     )
   }
+  if (options.responseMode === 'openai-stream') return parseOpenAIStream(raw, providerId) as T
   try {
     return JSON.parse(raw) as T
   } catch {
@@ -139,6 +150,7 @@ async function postJsonOnce<T>(options: {
 export function statusToCode(status: number): AIErrorCode {
   if (status === 401 || status === 403) return 'auth'
   if (status === 402) return 'billing'
+  if (status === 503) return 'service_unavailable'
   if (status === 429) return 'rate_limit'
   if (status === 408 || status === 504) return 'timeout'
   if (status >= 500) return 'network'

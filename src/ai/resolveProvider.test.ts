@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveProvider } from './index.ts'
 import { t } from '@/i18n/index.ts'
 import { DEFAULT_SETTINGS, providerMeta, type Settings } from '@/types/settings.ts'
@@ -20,7 +20,7 @@ describe('resolveProvider', () => {
   // "I left the model and API address blank, is that broken?" — no, and this
   // test is what guarantees it stays that way.
   it('falls back to the catalogue defaults when model and base URL are blank', () => {
-    for (const id of ['deepseek', 'openai', 'gemini'] as const) {
+    for (const id of ['deepseek', 'mimo', 'openai', 'gemini'] as const) {
       const { provider, downgradeReason } = resolveProvider(settingsFor(id))
       expect(downgradeReason, `${id} should not downgrade`).toBeUndefined()
       expect(provider.id).toBe(id)
@@ -67,4 +67,49 @@ describe('resolveProvider', () => {
     expect(provider.id).toBe('google')
     expect(downgradeReason).toBeTruthy()
   })
+})
+
+
+afterEach(() => vi.unstubAllGlobals())
+
+it('honors configured thinking for translation only on recognized endpoints', async () => {
+  for (const [id, baseUrl, disabled] of [
+    ['deepseek', '', true],
+    ['mimo', '', true],
+    ['openai', 'https://api.xiaomimimo.com/v1', true],
+    ['openai', 'https://api.xiaomimimo.com.example.test/v1', false],
+    ['openai', 'https://other.example/v1', false],
+  ] as const) {
+    const requests: Record<string, unknown>[] = []
+    vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
+      requests.push(JSON.parse(String(init.body)))
+      const content = '{"translation":"你好","translations":["你好"]}'
+      if (JSON.parse(String(init.body)).stream) return new Response(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`)
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }))
+    })
+    const { provider } = resolveProvider({ ...settingsFor(id, { baseUrl }), thinkingLevel: 'off' })
+    await provider.translate({ text: 'hello', targetLanguage: 'zh-CN' })
+    await provider.translateBatch!({ texts: ['hello'], targetLanguage: 'zh-CN' })
+    for (const request of requests) {
+      expect(request['thinking']).toEqual(disabled ? { type: 'disabled' } : undefined)
+      expect(request['reasoning_effort']).toBeUndefined()
+      expect(request['stream']).toBe(disabled ? true : undefined)
+    }
+  }
+})
+
+
+it.each(['off', 'low', 'high'] as const)('uses saved %s thinking for every MiMo operation', async thinkingLevel => {
+  const requests: Record<string, unknown>[] = []
+  vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
+    requests.push(JSON.parse(String(init.body)))
+    const content = JSON.stringify(requests.length === 3 ? { original: 'Hello', translation: '你好' } : requests.length === 2 ? { translations: ['你好'] } : { translation: '你好' })
+    return new Response(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`)
+  })
+  const { provider } = resolveProvider({ ...settingsFor('mimo'), thinkingLevel })
+  await provider.translate({ text: 'hello', targetLanguage: 'zh-CN' })
+  await provider.translateBatch({ texts: ['hello'], targetLanguage: 'zh-CN' })
+  await provider.refineTranscript!({ text: 'Hello', targetLanguage: 'zh-CN', context: '', title: '' })
+  expect(requests).toHaveLength(3)
+  for (const request of requests) expect(request.thinking).toEqual({ type: thinkingLevel === 'off' ? 'disabled' : 'enabled' })
 })

@@ -1,3 +1,8 @@
+import { PROVIDER_HEALTH_KEY, type ProviderHealth } from '@/shared/providerHealth.ts'
+import { OPTIONS_NAVIGATION_KEY } from '@/shared/optionsNavigation.ts'
+import { ModelPicker } from './ModelPicker.tsx'
+import { sendMessage } from '@/services/messaging.ts'
+import { ProviderNotice } from '@/components/ProviderNotice.tsx'
 import { startConfigurationPolling } from '@/configuration/polling.ts'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Field, SegmentedControl, Select, Toggle } from '@/components/index.tsx'
@@ -9,9 +14,11 @@ import { requestOptionalApiAccess } from '@/ai/hostPermission.ts'
 import { AIError, aiErrorMessage } from '@/types/ai.ts'
 import {
   PROVIDER_CATALOGUE,
+  providerSelectionPatch,
   providerLabel,
   providerMeta,
   type ProviderConfig,
+  type Settings,
 } from '@/types/settings.ts'
 import { useI18n } from '@/i18n/react.ts'
 import { UI_LANGUAGES, type MessageKey, type UiLanguage } from '@/i18n/index.ts'
@@ -23,6 +30,12 @@ import { FanfanSection } from './FanfanSection.tsx'
 import { VideoSection } from './VideoSection.tsx'
 import { ConfigurationSection } from './ConfigurationSection.tsx'
 import { truncate } from '@/shared/utils.ts'
+
+function ExternalAction({ href, children, primary = false }: { href: string; children: ReactNode; primary?: boolean }) {
+  return <a className={`provider-link${primary ? ' provider-link-primary' : ''}`} href={href} target="_blank" rel="noopener noreferrer">
+    {children}<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3.5H3.5v9h9V10M9 3.5h3.5V7M7 9l5.5-5.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+  </a>
+}
 
 type Category = 'configuration' | 'model' | 'reading' | 'video' | 'fanfan' | 'review' | 'shortcut'
 
@@ -99,9 +112,26 @@ const pickQuote = (previous?: TestQuote): TestQuote => {
  */
 export function Options() {
   const { t } = useI18n()
-  const { settings, update, loading } = useSettings()
+  const { settings, update: save, loading } = useSettings()
   useEffect(() => startConfigurationPolling(), [])
   const [toast, showToast] = useToast()
+  const [providerHealth, setProviderHealth] = useState<ProviderHealth | null>(null)
+  useEffect(() => {
+    let active = true
+    const receive = (value: unknown) => { if (active) setProviderHealth((value as ProviderHealth | undefined) ?? null) }
+    const unwatch = storage().watch(PROVIDER_HEALTH_KEY, receive)
+    void storage().get<ProviderHealth>(PROVIDER_HEALTH_KEY).then(receive).catch(() => undefined)
+    return () => { active = false; unwatch() }
+  }, [])
+  const health = providerHealth?.original === settings.provider ? providerHealth : null
+
+  const update = async (patch: Partial<Settings>, success?: string) => {
+    try {
+      await save(patch)
+      showToast(success ?? t('feedback.saved'))
+    } catch { showToast(t('feedback.failed')) }
+  }
+
   const [test, setTest] = useState<TestState>({ kind: 'idle' })
   // Re-testing gives you a different sentence, so a second run is a second
   // data point rather than a cached-looking repeat of the first.
@@ -123,6 +153,20 @@ export function Options() {
   const [category, setCategory] = useState<Category>(
     () => (['#sync', '#data'].includes(location.hash) ? 'configuration' : CATEGORIES.find((item) => `#${item.id}` === location.hash)?.id ?? 'model'),
   )
+
+  useEffect(() => {
+    const area = storage()
+    let active = true
+    const navigate = (value: unknown) => {
+      if (!active || !value || typeof value !== 'object' || !('section' in value) || value.section !== 'model') return
+      setCategory('model')
+      history.replaceState(null, '', '#model')
+      void area.remove(OPTIONS_NAVIGATION_KEY).catch(() => undefined)
+    }
+    const unwatch = area.watch(OPTIONS_NAVIGATION_KEY, navigate)
+    void area.get(OPTIONS_NAVIGATION_KEY).then(navigate).catch(() => undefined)
+    return () => { active = false; unwatch() }
+  }, [])
 
   const [welcome, setWelcome] = useState(false)
   useEffect(() => {
@@ -152,7 +196,7 @@ export function Options() {
     if (!activeKey) return
     void update({
       providers: { ...settings.providers, [activeKey]: { ...config, ...patch } },
-    })
+    }, patch.model !== undefined ? t('feedback.model', { name: patch.model.trim() || meta.defaultModel }) : undefined)
   }
 
   const runTest = async () => {
@@ -170,9 +214,10 @@ export function Options() {
         setTest({ kind: 'fail', message: downgradeReason })
         return
       }
-      const result = await provider.explainWord({
+      const { explanation: result } = await sendMessage('provider/test', {
         text: current.word,
         context: current.text,
+        thinkingLevel: settings.thinkingLevel,
         pageTitle: 'authorKey' in current ? t(current.authorKey) : current.author,
       })
       setTest({
@@ -204,6 +249,7 @@ export function Options() {
 
   return (
     <div className="options">
+      <ProviderNotice inline />
       <div className="options-head">
         <BrandMark size={26} />
         <h1 style={{ fontSize: 20 }}>{t('options.title', { name: t('app.name') })}</h1>
@@ -289,12 +335,16 @@ export function Options() {
               className="provider-option"
               data-active={item.id === settings.provider}
               onClick={() => {
-                void update({ provider: item.id })
+                void update(providerSelectionPatch(settings, item.id), t('feedback.switched', { name: providerLabel(item) }))
                 setTest({ kind: 'idle' })
               }}
             >
               {providerLabel(item)}
-              {item.badge ? (
+              {health && ((health.original === item.id && !health.recovered) || (health.fallback === item.id && health.fallbackError)) ? (
+                <span className="provider-badge" style={{ background: '#fff0ef', color: '#b42318' }}>{t('provider.config.failed')}</span>
+              ) : health?.fallback === item.id ? (
+                <span className="provider-badge" style={{ background: '#eaf5ff', color: '#1769aa' }}>{t('provider.config.temporary')}</span>
+              ) : item.badge ? (
                 <span className="provider-badge" data-tone={item.badge.tone}>
                   {t(item.badge.key)}
                 </span>
@@ -303,9 +353,22 @@ export function Options() {
           ))}
         </div>
 
+        {health?.fallback && <div role="status" style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10, background: '#f1f7fc', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontSize: 13 }}>
+          <div>
+            <strong>{t('provider.config.using', { name: providerLabel(providerMeta(health.fallback)) })}</strong>
+            <div className="faint" style={{ marginTop: 3 }}>{health.fallback === 'google' || health.fallback === 'mock' ? t('provider.notice.google_hint') : settings.providers[health.fallback].model.trim() || providerMeta(health.fallback).defaultModel}</div>
+            <div className="faint" style={{ marginTop: 3 }}>{t('provider.config.permanent_hint')}</div>
+          </div>
+          <button className="btn" onClick={() => void update(providerSelectionPatch(settings, health.fallback!), t('feedback.switched', { name: providerLabel(providerMeta(health.fallback!)) }))}>{t('provider.config.make_default')}</button>
+        </div>}
+
         {settings.provider !== 'mock' ? (
           <div className="section-desc" style={{ marginTop: 12 }}>
             {t(`options.model.guide.${settings.provider}` as MessageKey)}
+            {meta.billingUrl && <div className="provider-links">
+              <ExternalAction href={meta.billingUrl} primary>{t('options.model.billing')}<span className="provider-link-domain">{new URL(meta.billingUrl).hostname}</span></ExternalAction>
+              {meta.docsUrl && <ExternalAction href={meta.docsUrl}>{t('options.model.docs')}</ExternalAction>}
+            </div>}
           </div>
         ) : null}
 
@@ -319,7 +382,7 @@ export function Options() {
               label={t('options.model.api_key')}
               hint={
                 meta.keyUrl
-                  ? t('options.model.api_key_hint', { url: meta.keyUrl })
+                  ? <div className="provider-key-action"><ExternalAction href={meta.keyUrl}>{t('options.model.get_key')}</ExternalAction></div>
                   : t('options.model.api_key_hint_optional')
               }
             >
@@ -346,18 +409,7 @@ export function Options() {
                     })
               }
             >
-              <input
-                type="text"
-                value={config.model}
-                placeholder={meta.defaultModel}
-                list={`models-${meta.id}`}
-                onChange={(event) => patchProvider({ model: event.target.value })}
-              />
-              <datalist id={`models-${meta.id}`}>
-                {meta.modelSuggestions.map((model) => (
-                  <option key={model} value={model} />
-                ))}
-              </datalist>
+              <ModelPicker key={meta.id} value={config.model} defaultModel={meta.defaultModel} suggestions={meta.modelSuggestions} onChange={(model) => patchProvider({ model })} />
             </Field>
 
             <Advanced>
@@ -697,23 +749,18 @@ export function Options() {
       </div>
       </div>
       </div>
-      {toast ? <div className="toast-fixed">{toast}</div> : null}
+      {toast ? <div className="toast-fixed" role="status" aria-live="polite">{toast}</div> : null}
     </div>
   )
 }
 
-/**
- * 折进「高级」里的设置。
- *
- * 新用户真正必须做的只有「选服务商 + 粘 Key」，其余几十项平时不用动——全摊开放着，
- * 首装那一眼看到的就是一堵墙。折起来不删，要用的人点一下就在。
- */
+/** Advanced settings are always visible. */
 function Advanced({ children }: { children: ReactNode }) {
   const { t } = useI18n()
   return (
-    <details className="advanced">
-      <summary>{t('options.advanced')}</summary>
+    <section className="advanced">
+      <h3 className="advanced-title">{t('options.advanced')}</h3>
       <div className="advanced-body">{children}</div>
-    </details>
+    </section>
   )
 }
