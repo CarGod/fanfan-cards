@@ -13,7 +13,7 @@ export interface ConfigState {
   setupComplete: boolean
 }
 export const initialConfigState: ConfigState = {
-  mode: 'auto', status: 'idle', lastSavedAt: null, lastRestoredAt: null,
+  mode: 'manual', status: 'idle', lastSavedAt: null, lastRestoredAt: null,
   directoryName: null, setupComplete: false,
 }
 export async function getConfigState(): Promise<ConfigState> {

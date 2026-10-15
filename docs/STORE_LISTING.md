@@ -51,8 +51,8 @@
 > 只是没有「这句里指什么」。要语境解释，填一个 DeepSeek、Claude、OpenAI、Gemini 或任何 OpenAI 兼容接口的 Key；
 > 按每天查 30 个词算，用 DeepSeek 一个月大约 7–12 元（估算）。
 >
-> **数据是你的。** 词卡只存在你自己的浏览器里；设置和 API Key 默认随你的 Chrome 账号同步，
-> 可以在设置里改成仅本机。开发者没有服务器，收不到你的任何数据。想备份和跨设备，
+> **数据是你的。** 词卡只存在你自己的浏览器里；设置和 API Key 可保存在你选择的配置目录，
+> 也可主动启用浏览器账号同步或仅保存在本机。开发者没有服务器，收不到你的任何数据。想备份和跨设备，
 > 可以把词卡同步到**你自己的 GitHub 私有仓库**，存成人能读的 Markdown。
 >
 > 开源：https://github.com/CarGod/fanfan-cards
@@ -82,8 +82,8 @@
 > just no "what it means here". For that, add a key from DeepSeek, Claude, OpenAI, Gemini,
 > or any OpenAI-compatible endpoint.
 >
-> **Your data stays yours.** Cards live only in your own browser; settings and API keys sync
-> with your Chrome account by default and can be kept local-only. There is no server behind
+> **Your data stays yours.** Cards live only in your own browser; settings and API keys can be saved
+> to a folder you choose, synced with your browser account when enabled, or kept local-only. There is no server behind
 > this extension; the developer receives nothing. For backup and multi-device use, sync to
 > **your own private GitHub repository**, stored as Markdown a human can read.
 >

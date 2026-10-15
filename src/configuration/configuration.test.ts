@@ -7,13 +7,14 @@ import {
   CONFIG_FORMAT, DOCUMENT_KEY, emptyDocument, getDocument, mergeDocuments, parseConfigText,
   settingsFromDocument, type ConfigDocument,
 } from './document.ts'
-import { getConfigState } from './state.ts'
+import { getConfigState, updateConfigState } from './state.ts'
 import { importConfiguration, selectConfigMode, startFreshConfiguration, synchronizeConfiguration, SYNC_PREFIX } from './service.ts'
 
 let remote: Record<string, unknown>
 let set: ReturnType<typeof vi.fn>
-beforeEach(() => {
+beforeEach(async () => {
   setStorageAdapter(createMemoryAdapter())
+  await updateConfigState({ mode: 'auto' })
   remote = {}
   set = vi.fn(async (patch: Record<string, unknown>) => { Object.assign(remote, structuredClone(patch)) })
   vi.stubGlobal('chrome', { storage: { sync: {

@@ -40,16 +40,15 @@ afterEach(() => {
 })
 describe('configuration restore UI', () => {
   it('offers file fallback and fresh setup when neither cloud sync nor directory access exists', () => {
-    expect(container.textContent).toContain('当前浏览器无法自动同步')
     expect(container.textContent).toContain('此浏览器不支持目录自动读写')
     const buttons = [...container.querySelectorAll('button')].map((button) => button.textContent)
     expect(buttons).toContain('选择配置文件')
     expect(buttons).toContain('下载配置到本地')
-    expect(buttons).toContain('全新安装，从头配置')
+    expect(buttons).toContain('暂不选择，使用本机配置')
     expect(container.querySelector('input[type=password]')).toBeNull()
   })
   it('fresh setup navigates to AI configuration in local mode', async () => {
-    const button = [...container.querySelectorAll('button')].find((item) => item.textContent === '全新安装，从头配置')!
+    const button = [...container.querySelectorAll('button')].find((item) => item.textContent === '暂不选择，使用本机配置')!
     await act(async () => { button.click() })
     expect((await getConfigState()).mode).toBe('manual')
     expect(configure).toHaveBeenCalledTimes(1)

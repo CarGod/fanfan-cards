@@ -1390,6 +1390,10 @@ textarea:focus {
   align-items: start;
 }
 
+.options-body[data-onboarding="true"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .settings-nav {
   display: flex;
   flex-direction: column;

@@ -1,4 +1,5 @@
 import { resolveForTranslation } from '../providerHealth.ts'
+import { removeSourceEcho } from '../translationOutput.ts'
 import { PROMPT_VERSION } from '@/ai/prompts.ts'
 import { AIError } from '@/types/ai.ts'
 import { getSettings } from '@/storage/repositories/settingsRepo.ts'
@@ -53,11 +54,13 @@ export async function handleTranslateInput(
   })
   const [cached] = await readTranslations([key])
   if (cached !== null && cached !== undefined) {
-    return { translation: cached, targetLanguage: target.code }
+    const translation = removeSourceEcho(text, cached, target.code)
+    if (translation !== cached) await writeTranslations([[key, translation]])
+    return { translation, targetLanguage: target.code }
   }
 
   const result = await provider.translate({ text, targetLanguage: target.name })
-  const translation = repairOmissions(text, result.translation).trim()
+  const translation = repairOmissions(text, removeSourceEcho(text, result.translation, target.code)).trim()
   if (!translation) {
     throw new AIError('bad_response', 'The model returned an empty translation', provider.id)
   }
@@ -98,8 +101,14 @@ export async function handleTranslatePage(
    * hit makes the hole survive every toggle until the cache expires.
    */
   const translations: Array<string | null> = cached.map((value, index) =>
-    usableTranslation(payload.texts[index] ?? '', value),
+    usableTranslation(payload.texts[index] ?? '', value, target.code),
   )
+  // Repair older contaminated cache hits too, without billing a second request.
+  const repairedHits: Array<[string, string]> = []
+  translations.forEach((value, index) => {
+    if (value !== null && value !== cached[index] && keys[index]) repairedHits.push([keys[index]!, value])
+  })
+  await writeTranslations(repairedHits)
   const misses = payload.texts
     .map((text, index) => ({ text, index }))
     .filter((item) => translations[item.index] === null)
@@ -117,7 +126,7 @@ export async function handleTranslatePage(
   const toCache: Array<[string, string]> = []
   const unresolved: Array<{ text: string; index: number }> = []
   misses.forEach((item, position) => {
-    const value = usableTranslation(item.text, fresh[position] ?? null)
+    const value = usableTranslation(item.text, fresh[position] ?? null, target.code)
     translations[item.index] = value
     const key = keys[item.index]
     if (key && value) toCache.push([key, value])
@@ -137,7 +146,7 @@ export async function handleTranslatePage(
         targetLanguage: target.name,
         ...(payload.hint ? { hint: payload.hint } : {}),
       })
-      const value = usableTranslation(item.text, raw ?? null)
+      const value = usableTranslation(item.text, raw ?? null, target.code)
       translations[item.index] = value
       const key = keys[item.index]
       if (key && value) toCache.push([key, value])
@@ -153,9 +162,9 @@ export async function handleTranslatePage(
   return { translations: translations.map((value) => value ?? '') }
 }
 
-function usableTranslation(source: string, value: string | null): string | null {
+function usableTranslation(source: string, value: string | null, targetCode: string): string | null {
   if (value === null) return null
-  const repaired = repairOmissions(source, value).trim()
+  const repaired = repairOmissions(source, removeSourceEcho(source, value, targetCode)).trim()
   if (!repaired || isRedundantTranslation(source, repaired)) return null
   return repaired
 }

@@ -172,7 +172,7 @@ export function buildExplainPrompt(input: ExplainWordInput): string {
 }
 
 export function translateSystemPrompt(targetName = '简体中文'): string {
-  return `You are a professional translator. Translate faithfully and idiomatically into ${targetName}. Keep proper nouns and code identifiers in their original form. No explanations, no markdown. Output JSON only.`
+  return `You are a professional translator. Translate faithfully and idiomatically into ${targetName}. Keep proper nouns and code identifiers in their original form. The translation field must contain only the translation, never the original followed or preceded by its translation. No explanations, no markdown. Output JSON only.`
 }
 
 export function buildTranslatePrompt(input: TranslateInput): string {
@@ -194,7 +194,7 @@ export function batchTranslateSystemPrompt(targetName = '简体中文'): string 
    **绝不补全、绝不猜测**后面的内容。
 5. 保留原文的换行结构：输入里有几行，译文就有几行。
 6. 输入里的段落可能是标题、按钮文字或残缺的句子片段——照样翻，不要补全或解释。
-7. 不要输出任何解释、编号或 markdown，只输出约定的 JSON。`
+7. 每条译文字段只放译文，不要在译文前后再附上一遍原文；专有名词和代码标识符可保留原样。不要输出任何解释、编号或 markdown，只输出约定的 JSON。`
 }
 
 export function buildBatchTranslatePrompt(texts: string[], hint?: string): string {

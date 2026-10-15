@@ -1,5 +1,23 @@
 # Release notes
 
+## 2.3.3
+
+### 简体中文
+
+- 首次设置先选择配置目录：已有配置自动恢复，空目录进入初次配置；后续修改自动保存。浏览器账号同步、文件导入和仅本机配置仍可在「其他方式」中选择，已有安装保留原配置方式。
+- 双语字幕按同一组完整原文与译文配对显示，保留原字幕时间窗和静音间隙，并修正重叠字幕边界。
+- 防止 AI 译文重复附带整段原文，并修复已有翻译缓存中的此类重复，无需再次请求模型。
+
+### English
+
+- First-time setup starts with choosing a configuration folder: restore existing settings or configure a new empty folder, then save changes automatically. Browser account sync, file import, and local-only setup remain available under Other methods. Existing installations retain their selected mode.
+- Bilingual captions now pair each translated group with the same complete source text, preserving caption windows and silent gaps while correcting overlapping boundaries.
+- Prevent complete source passages from being repeated beside AI translations and repair affected cached translations without another model request.
+
+### Permissions and privacy
+
+No new extension permissions, host permissions, data categories, or data recipients. First-time setup now asks users to choose a configuration destination instead of enabling browser account sync by default. The privacy documentation and store copy reflect this behavior; existing sync choices are preserved.
+
 ## 2.3.2
 
 ### 简体中文

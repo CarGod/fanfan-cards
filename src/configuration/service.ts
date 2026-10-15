@@ -143,8 +143,8 @@ export async function startFreshConfiguration(): Promise<void> {
 }
 
 /** Selection itself is the authorization. Existing config is always read before creating anything. */
-export async function connectDirectory(handle: ConfigDirectory): Promise<void> {
-  await withLock(SYNC_LOCK, async () => {
+export async function connectDirectory(handle: ConfigDirectory): Promise<'restored' | 'created'> {
+  return withLock(SYNC_LOCK, async () => {
     const remote = await readDirectory(handle, true)
     // Remember the selected destination before applying its settings. A disk failure
     // must not accidentally send the imported file to the previously selected cloud.
@@ -159,8 +159,10 @@ export async function connectDirectory(handle: ConfigDirectory): Promise<void> {
       await updateConfigState({
         status: restored ? 'restored' : 'saved',
         lastSavedAt: changed ? Date.now() : null,
-        setupComplete: Object.keys(doc.fields).length > 0,
+        // A successfully linked empty folder is ready for first-time settings, too.
+        setupComplete: true,
       })
+      return remote && Object.keys(remote.fields).length > 0 ? 'restored' : 'created'
     } catch (error) {
       await updateConfigState({ status: isDirectoryPermissionError(error) ? 'permission' : error instanceof DirectoryIssue ? error.status : 'failed' })
       throw error
