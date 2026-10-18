@@ -2,10 +2,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AudioPrototype, hasTextSubtitles, mediaIdentity } from './audioPrototype.ts'
 
+const settingsState = vi.hoisted(() => ({ enabled: true, listeners: [] as Array<(s: { videoListeningEnabled: boolean; enabled: boolean; blockedHosts: string[] }) => void> }))
 vi.mock('@/storage/repositories/settingsRepo.ts', () => ({
-  getSettings: async () => ({ enabled: true, blockedHosts: [] }),
+  getSettings: async () => ({ videoListeningEnabled: settingsState.enabled, enabled: true, blockedHosts: [] }),
   isHostEnabled: () => true,
-  watchSettings: () => () => undefined,
+  watchSettings: (fn: typeof settingsState.listeners[number]) => { settingsState.listeners.push(fn); return () => undefined },
 }))
 
 describe('audio prototype media detection', () => {
@@ -28,10 +29,28 @@ describe('audio prototype media detection', () => {
 
 describe('audio prototype lifecycle', () => {
   let prototype: AudioPrototype | undefined
-  afterEach(() => { prototype?.destroy(); prototype = undefined; document.body.innerHTML = ''; vi.useRealTimers() })
+  afterEach(() => { prototype?.destroy(); vi.unstubAllGlobals(); prototype = undefined; settingsState.enabled = true; settingsState.listeners = []; document.body.innerHTML = ''; vi.useRealTimers() })
+
+  it('keeps the feature off by default and removes its controls on a synced disable', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn(), removeListener: vi.fn() } } })
+    settingsState.enabled = false
+    const video = document.createElement('video'); document.body.append(video)
+    Object.defineProperty(video, 'readyState', { value: 4 })
+    video.getBoundingClientRect = () => ({ left: 0, top: 0, bottom: 450, width: 800, height: 450 }) as DOMRect
+    prototype = new AudioPrototype(); await prototype.start()
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(document.querySelector('.fanfan-audio-prototype')).toBeNull()
+    settingsState.listeners[0]!({ videoListeningEnabled: true, enabled: true, blockedHosts: [] })
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(document.querySelector('.fanfan-audio-prototype')).not.toBeNull()
+    settingsState.listeners[0]!({ videoListeningEnabled: false, enabled: true, blockedHosts: [] })
+    expect(document.querySelector('.fanfan-audio-prototype')).toBeNull()
+  })
 
   it('hides immediately during loadstart and waits for the new video before showing again', async () => {
     vi.useFakeTimers()
+    vi.stubGlobal('chrome', { runtime: { onMessage: { addListener: vi.fn(), removeListener: vi.fn() } } })
     const video = document.createElement('video')
     document.body.append(video)
     Object.defineProperty(video, 'readyState', { value: 4, configurable: true })

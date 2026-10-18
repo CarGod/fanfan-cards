@@ -112,7 +112,7 @@ class AudioBinding {
     this.label.textContent = t('video.audio.start')
     this.startButton.append(icon, this.label)
     this.startButton.setAttribute('aria-pressed', 'false')
-    this.startButton.title = '音频在浏览器本地识别，文字交给已配置的 AI 纠错翻译。首次使用需下载语音模型，以后使用缓存。'
+    this.startButton.title = t('video.audio.model_hint')
     this.listening = new LocalListening(() => {
       if (this.listening.error && this.capture.running) this.capture.stop()
       this.render(this.capture.snapshot)
@@ -135,7 +135,7 @@ class AudioBinding {
     this.subtitles.append(this.original, this.translation)
     card.append(this.startButton)
     shadow.append(style, card, this.subtitles)
-    this.capture = new PlayerAudioCapture(video, () => mediaIdentity(video), (snapshot) => { this.listening.observe(snapshot, this.capture?.sample ?? null); this.render(snapshot) }, () => this.available && !this.adPlaying(), 2000)
+    this.capture = new PlayerAudioCapture(video, () => mediaIdentity(video), (snapshot) => { this.listening.observe(snapshot, this.capture?.sample ?? null); this.render(snapshot) }, () => this.available && !this.adPlaying(), 3000)
     video.addEventListener('loadstart', this.onMediaChange)
     video.addEventListener('emptied', this.onMediaChange)
     video.addEventListener('seeking', this.onFinishedSeek)
@@ -223,9 +223,11 @@ class AudioBinding {
       : this.listening.active ? (this.capture.running ? 'AI 听译 · 开' : this.listening.state === '正在加载本地模型' ? 'AI 听译 · 加载' : 'AI 听译 · 收尾') : t(compactKey)
     this.startButton.setAttribute('aria-pressed', String(running || this.listening.active))
     this.startButton.setAttribute('aria-label', `${t(STATUS_KEYS[snapshot.status])} · ${t(running || this.listening.active ? 'video.audio.stop' : 'video.audio.start')}`)
-    this.startButton.title = this.listening.error || (this.listening.active ? '点击停止听译。字幕为延迟显示；音频不上传，文字由已配置的 AI 纠错翻译。' : '音频在浏览器本地识别；首次下载模型，之后使用缓存。文字交给已配置的 AI 纠错翻译。')
+    this.startButton.title = this.listening.error || `${this.listening.fallback ? t('video.audio.fallback') + '。' : ''}${t('video.audio.model_hint')}`
+    if (this.listening.active && this.listening.fallback) this.label.textContent += ' · Tiny'
   }
 
+  fail(): void { this.capture.stop(); this.listening.fail(new Error(t('video.audio.gpu_lost'))) }
   stop(reason: 'user' | 'changed' = 'user'): void { this.listening.stop(); this.capture.stop(reason) }
   destroy(): void {
     this.video.removeEventListener('loadstart', this.onMediaChange)
@@ -245,6 +247,9 @@ export class AudioPrototype {
   private unwatch: (() => void) | null = null
   private active = false
   private destroyed = false
+  private readonly onRuntimeMessage = (message: { target?: string }): void => {
+    if (message?.target === 'fanfan-listening-stopped') for (const binding of this.bindings.values()) binding.fail()
+  }
   private readonly onNavigate = (): void => {
     for (const binding of this.bindings.values()) { binding.setAvailable(false); binding.stop('changed'); binding.settledAt = performance.now() }
   }
@@ -252,14 +257,16 @@ export class AudioPrototype {
   async start(): Promise<void> {
     const settings = await getSettings()
     if (this.destroyed) return
-    this.active = isHostEnabled(settings, location.hostname)
+    this.active = settings.videoListeningEnabled && isHostEnabled(settings, location.hostname)
     this.unwatch = watchSettings((next) => {
-      this.active = isHostEnabled(next, location.hostname)
+      this.active = next.videoListeningEnabled && isHostEnabled(next, location.hostname)
       if (!this.active) this.clear()
+      else this.scan()
     })
     for (const event of ['popstate', 'yt-navigate-start']) window.addEventListener(event, this.onNavigate)
     this.timer = window.setInterval(() => this.scan(), 1000)
     this.positionTimer = window.setInterval(() => { for (const binding of this.bindings.values()) binding.position() }, 250)
+    chrome.runtime.onMessage.addListener(this.onRuntimeMessage)
     this.scan()
   }
 
@@ -309,6 +316,7 @@ export class AudioPrototype {
     this.destroyed = true
     this.active = false
     this.unwatch?.()
+    chrome.runtime.onMessage.removeListener(this.onRuntimeMessage)
     clearInterval(this.timer)
     clearInterval(this.positionTimer)
     for (const event of ['popstate', 'yt-navigate-start']) window.removeEventListener(event, this.onNavigate)

@@ -1,7 +1,7 @@
 {
   "name": "fanfan-cards",
   "private": true,
-  "version": "2.4.0",
+  "version": "2.4.1",
   "type": "module",
   "description": "Lingua — turn real-world English reading into a personal, AI-explained vocabulary asset.",
   "scripts": {
@@ -42,5 +42,8 @@
     "typescript": "^5.9.3",
     "vite": "^7.1.9",
     "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "onnxruntime-web": "1.30.0"
   }
 }

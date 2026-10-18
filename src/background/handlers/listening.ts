@@ -1,15 +1,23 @@
 import { z } from 'zod'
 import { resolveForTranslation } from '../providerHealth.ts'
 import { AIError } from '@/types/ai.ts'
-import { getSettings, isHostEnabled } from '@/storage/repositories/settingsRepo.ts'
-import { targetLanguage } from '@/shared/language.ts'
+import { getSettings, isHostEnabled, watchSettings } from '@/storage/repositories/settingsRepo.ts'
+import { isVideoInTargetLanguage } from '@/shared/videoLanguage.ts'
+import { targetLanguage, isRedundantTranslation } from '@/shared/language.ts'
 import type { MessageRequest, MessageResponse } from '@/types/messages.ts'
 
 const sessionSchema = z.object({ session: z.string().uuid(), revision: z.number().int().nonnegative() })
 const chunkSchema = sessionSchema.extend({ audio: z.string().min(1).max(3_000_000), title: z.string().max(300) })
-type Session = { id: string; owner: string; revision: number; context: string[]; abort: AbortController; busy: boolean; language: string }
+type Session = { id: string; owner: string; revision: number; context: string[]; abort: AbortController; busy: boolean }
 let active: Session | null = null
 let creating: Promise<void> | null = null
+let watching = false
+let settingsEpoch = 0
+function watchListeningSettings(): void {
+  if (watching) return
+  watching = true
+  watchSettings(settings => { settingsEpoch++; if (!settings.videoListeningEnabled || !settings.enabled) clear() })
+}
 const path = 'src/audio/index.html'
 function owner(sender: chrome.runtime.MessageSender): string {
   if (sender.tab?.id === undefined || sender.id !== chrome.runtime.id) throw new Error('Invalid listening sender')
@@ -20,10 +28,10 @@ async function ensureDocument(): Promise<void> {
   creating ??= chrome.offscreen.createDocument({ url: path, reasons: [chrome.offscreen.Reason.WORKERS], justification: 'Run local speech recognition and decode player audio without uploading audio.' }).finally(() => { creating = null })
   await creating
 }
-async function local(op: string, audio?: string, language?: string, continuity?: string): Promise<{ text: string }> {
-  const response = await chrome.runtime.sendMessage({ target: 'fanfan-local-asr', op, audio, language, continuity }) as { text?: string; error?: string } | undefined
+async function local(op: string, audio?: string, language?: string, continuity?: string): Promise<{ text: string; fallback?: boolean; runtime?: { model: string; device: string; dtype: string; threads: number } }> {
+  const response = await chrome.runtime.sendMessage({ target: 'fanfan-local-asr', op, audio, language, continuity }) as { text?: string; error?: string; fallback?: boolean; runtime?: { model: string; device: string; dtype: string; threads: number } } | undefined
   if (!response || response.error) throw new Error(response?.error ?? '本地识别未响应')
-  return { text: response.text ?? '' }
+  return { text: response.text ?? '', ...(response.fallback === undefined ? {} : { fallback: response.fallback }), ...(response.runtime ? { runtime: response.runtime } : {}) }
 }
 function matches(session: Session, revision: number): boolean { return active === session && session.revision === revision }
 function stale(): never { throw new AIError('aborted', '听译片段已失效', 'mock') }
@@ -35,20 +43,25 @@ function clear(): void {
 export async function startListening(payload: MessageRequest<'audio/start'>, sender: chrome.runtime.MessageSender): Promise<MessageResponse<'audio/start'>> {
   const { session: id, revision } = sessionSchema.parse(payload)
   const key = owner(sender)
+  watchListeningSettings()
+  const epoch = settingsEpoch
   const settings = await getSettings()
+  if (!settings.videoListeningEnabled) throw new Error('请先在设置 → 视频双语字幕中开启 AI 听译。')
   if (!isHostEnabled(settings, new URL(sender.url ?? '').hostname)) throw new Error('本站已停用翻翻')
-  const { provider } = await resolveForTranslation(settings)
+  const { provider } = await resolveForTranslation(settings, true)
   if (!provider.refineTranscript) throw new Error('请先在翻翻设置中配置 AI 服务，听译需要 AI 纠错与翻译。')
+  if (epoch !== settingsEpoch) stale()
   if (active && active.owner !== key) throw new Error('另一个页面正在听译，请先停止后重试。')
   if (active) clear()
-  const session: Session = { id, owner: key, revision, context: [], abort: new AbortController(), busy: false, language: (settings.videoSubtitleSourceLanguage ?? 'auto').split('-')[0]! }
+  const session: Session = { id, owner: key, revision, context: [], abort: new AbortController(), busy: false }
   active = session
   try {
     await ensureDocument()
     if (!matches(session, revision)) stale()
-    await local('load')
-    if (!matches(session, revision)) stale()
-    return { ready: true }
+    const loaded = await local('load')
+    const current = await getSettings()
+    if (!matches(session, revision) || !current.videoListeningEnabled || !isHostEnabled(current, new URL(sender.url ?? '').hostname)) stale()
+    return { ready: true, fallback: loaded.fallback ?? false, ...(loaded.runtime ? { runtime: loaded.runtime } : {}) }
   } catch (error) { if (active === session) clear(); throw error }
 }
 export async function updateListening(payload: MessageRequest<'audio/update'>, sender: chrome.runtime.MessageSender): Promise<{ ok: true }> {
@@ -72,11 +85,12 @@ function owned(id: string, revision: number, sender: chrome.runtime.MessageSende
 }
 export async function recognizeListening(payload: MessageRequest<'audio/recognize'>, sender: chrome.runtime.MessageSender): Promise<{ text: string }> {
   const input = chunkSchema.parse(payload)
+  if (!(await getSettings()).videoListeningEnabled) { clear(); stale() }
   const session = owned(input.session, input.revision, sender)
   if (session.busy) throw new Error('本地识别仍在处理中')
   session.busy = true
   try {
-    const result = await local('transcribe', input.audio, session.language, `${session.id}:${input.revision}`)
+    const result = await local('transcribe', input.audio, undefined, `${session.id}:${input.revision}`)
     if (!matches(session, input.revision)) stale()
     return result
   } finally { session.busy = false }
@@ -86,17 +100,23 @@ export async function refineListening(payload: MessageRequest<'audio/refine'>, s
   const session = owned(input.session, input.revision, sender)
   if (!input.text.trim()) return { original: '', translation: '' }
   const settings = await getSettings()
-  if (!matches(session, input.revision) || !isHostEnabled(settings, new URL(sender.url ?? '').hostname)) stale()
+  if (!settings.videoListeningEnabled || !matches(session, input.revision) || !isHostEnabled(settings, new URL(sender.url ?? '').hostname)) stale()
+  const sameTarget = await isVideoInTargetLanguage([input.text], settings.videoSubtitleTargetLanguage)
+  if (!matches(session, input.revision)) stale()
+  if (sameTarget) { session.context = []; return { original: '', translation: '' } }
   const { provider } = await resolveForTranslation(settings)
+  if (!matches(session, input.revision)) stale()
   if (!provider.refineTranscript) throw new Error('请配置支持纠错与翻译的 AI 服务')
   const result = await provider.refineTranscript({
     text: input.text, context: session.context.join('\n'), title: input.title,
     targetLanguage: targetLanguage(settings.videoSubtitleTargetLanguage).name,
   }, session.abort.signal)
   if (!matches(session, input.revision)) stale()
+  if ((await getSettings()).videoSubtitleTargetLanguage !== settings.videoSubtitleTargetLanguage) return { original: '', translation: '' }
+  if (!matches(session, input.revision)) stale()
   session.context.push(result.original)
   session.context = session.context.slice(-3)
-  return result
+  return isRedundantTranslation(result.original, result.translation) ? { original: '', translation: '' } : result
 }
 export async function transcribeListening(payload: MessageRequest<'audio/chunk'>, sender: chrome.runtime.MessageSender): Promise<MessageResponse<'audio/chunk'>> {
   const { text } = await recognizeListening(payload, sender)
@@ -104,6 +124,15 @@ export async function transcribeListening(payload: MessageRequest<'audio/chunk'>
 }
 // A closed tab must not keep model memory or an in-flight text request alive.
 export function registerListeningCleanup(): void {
+  watchListeningSettings()
   chrome.tabs.onRemoved.addListener((id) => { if (active?.owner.startsWith(`${id}:`)) clear() })
   chrome.tabs.onUpdated.addListener((id, change) => { if (change.status === 'loading' && active?.owner.startsWith(`${id}:`)) clear() })
+}
+
+export async function failedListening(_payload: MessageRequest<'audio/fatal'>, sender: chrome.runtime.MessageSender): Promise<{ ok: true }> {
+  if (sender.id !== chrome.runtime.id || sender.tab) throw new Error('Invalid listening sender')
+  const tabId = active ? Number(active.owner.split(':')[0]) : undefined
+  clear()
+  if (tabId !== undefined) void chrome.tabs.sendMessage(tabId, { target: 'fanfan-listening-stopped' }).catch(() => undefined)
+  return { ok: true }
 }

@@ -1,8 +1,13 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
+import { dirname, resolve } from 'node:path'
 
 const r = (p: string) => fileURLToPath(new URL(p, import.meta.url))
+const require = createRequire(import.meta.url)
+const ortEntry = require.resolve('onnxruntime-web')
+const ortCommon = createRequire(ortEntry).resolve('onnxruntime-common')
 
 /**
  * Build #1 — extension pages + the MV3 background service worker.
@@ -15,7 +20,13 @@ const r = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: { '@': r('./src') },
+    // Keep browser JS, Tensor types and copied JSEP artifacts on the same ORT
+    // version. Node tests retain the native binding's own common dependency.
+    alias: {
+      '@': r('./src'),
+      'onnxruntime-web': resolve(dirname(ortEntry), 'ort.webgpu.min.mjs'),
+      'onnxruntime-common': resolve(dirname(ortCommon), '../esm/index.js'),
+    },
   },
   // The Anthropic SDK reads `process.env.*` for ambient credentials. There is no
   // `process` in a service worker, so we shim it to an empty object: the provider

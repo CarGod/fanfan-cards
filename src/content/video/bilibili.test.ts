@@ -27,9 +27,12 @@ describe('parseBilibiliUrl', () => {
 
 describe('pickBilibiliSubtitle', () => {
   const human = (lan: string) => ({ lan, lan_doc: lan })
+  it('auto keeps the available default instead of forcing English', () => {
+    expect(pickBilibiliSubtitle([human('ja'), human('en')], 'auto')?.lan).toBe('ja')
+  })
   it('prefers a human track in the reader’s source language over the AI one', () => {
     const list = [human('ai-zh'), human('ai-en'), human('en-US')]
-    expect(pickBilibiliSubtitle(list, 'auto')?.lan).toBe('en-US')
+    expect(pickBilibiliSubtitle(list, 'en')?.lan).toBe('en-US')
     expect(pickBilibiliSubtitle([human('ai-zh'), human('ai-en')], 'en')?.lan).toBe('ai-en')
   })
 

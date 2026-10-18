@@ -1,3 +1,4 @@
+import { isVideoInTargetLanguage } from '@/shared/videoLanguage.ts'
 import { t } from '@/i18n/index.ts'
 import { sendMessage } from '@/services/messaging.ts'
 import { noteOrphanError } from '@/shared/extensionContext.ts'
@@ -476,16 +477,12 @@ export class YouTubeSubtitles {
 
       const sourceLanguage = this.sourceLanguage
       const targetLanguage = this.targetLanguage
-      if (sourceLanguage.split('-')[0] === targetLanguage.split('-')[0]) {
-        this.fail(t('video.error.same_language'))
-        return
-      }
       const choice = chooseTrack(captions.tracks as CaptionTrack[], {
         sourceLanguage,
         targetLanguage,
       })
       if (!choice) {
-        this.fail(t(sourceLanguage === 'auto' ? 'video.error.no_track' : 'video.error.language_missing'))
+        this.fail(t('video.error.no_track'))
         return
       }
 
@@ -496,6 +493,16 @@ export class YouTubeSubtitles {
         return
       }
 
+      const sameTarget = await isVideoInTargetLanguage(cues.map(cue => cue.text), targetLanguage)
+      if (run !== this.run) return
+      if (sameTarget) {
+        this.teardownRun()
+        this.status = 'off'
+        this.trackName = ''
+        this.error = ''
+        this.sync()
+        return
+      }
       this.cues = cues
       this.groups = groupCues(cues)
       this.displayCues = alignedDisplayCues(cues, this.groups)

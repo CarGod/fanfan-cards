@@ -860,10 +860,8 @@ export const MESSAGES = {
   'video.status.waiting_video': { 'zh-CN': '正在等待视频数据…', en: 'Waiting for video data…' },
   'video.status.loading_track': { 'zh-CN': '正在读取字幕…', en: 'Loading subtitles…' },
   'video.error.bridge_timeout': { 'zh-CN': '页面脚本没有响应', en: 'The page script did not respond' },
-  'video.control.source_language': { 'zh-CN': '原字幕语言', en: 'Source language' },
+  'video.control.source_language': { 'zh-CN': '优先字幕语言', en: 'Preferred caption language' },
   'video.control.target_language': { 'zh-CN': '翻译为', en: 'Translate to' },
-  'video.error.language_missing': { 'zh-CN': '没有所选语言的字幕，请更换原字幕语言。不会自动切换到其他语言。', en: 'No captions in the selected language. Choose another source language.' },
-  'video.error.same_language': { 'zh-CN': '请选择不同的原字幕语言和翻译语言', en: 'Choose different source and translation languages' },
   'video.error.no_track': { 'zh-CN': '这个视频没有可用的字幕轨', en: 'No usable subtitle track on this video' },
   'video.error.empty_track': {
     'zh-CN': '取到的字幕是空的，稍后重试',
@@ -1300,9 +1298,14 @@ export const MESSAGES = {
   // --- v2.2：任意网站的视频字幕 ---
   'options.video.title': { 'zh-CN': '视频双语字幕', en: 'Bilingual video subtitles' },
   'options.video.desc': {
-    'zh-CN': '视频字幕默认英语翻译为中文，可在下方单独设置，不影响网页翻译。找不到所选原字幕语言时会提示，不会切换到其他语言。',
-    en: 'Video subtitles default to English → Chinese. Choose languages below independently of page translation. Missing source captions will not silently switch to another language.',
+    'zh-CN': '视频按实际字幕或语音语言翻译为下方目标语言；已确认同语种时静默跳过。优先字幕语言只用于选轨，不限制其他语言；听译自动识别语音。',
+    en: 'Translate captions or speech into the video target language. Confirmed same-language content is skipped silently. Caption preference does not block other languages; speech language is detected automatically.',
   },
+  'options.video.listening': { 'zh-CN': '允许 AI 听译', en: 'Enable AI listening' },
+  'options.video.listening_desc': { 'zh-CN': '开启后，在无字幕视频上点击「开启 AI 听译」才开始采集。默认 Base 本地识别，首次下载约 85 MB；GPU 不可用时使用 Tiny（约 44 MB）。音频不上传，文字纠错与翻译使用已配置的 AI 服务。关闭会立即停止听译。', en: 'After enabling, click Start AI listening on a video without subtitles to capture audio. Base runs locally (about 85 MB on first use); unavailable GPUs fall back to Tiny (about 44 MB). Audio stays local; text correction and translation use your configured AI service. Turning this off stops listening.' },
+  'video.audio.gpu_lost': { 'zh-CN': 'GPU 连接已中断，听译已停止。请重新开启听译。', en: 'GPU connection lost. Listening stopped; start it again to retry.' },
+  'video.audio.fallback': { 'zh-CN': 'GPU 不可用 · 已使用 Tiny 本地识别', en: 'GPU unavailable · using local Tiny recognition' },
+  'video.audio.model_hint': { 'zh-CN': '默认 Base 本地识别，首次约 85 MB；音频不上传，文字由已配置的 AI 纠错翻译。', en: 'Local Base recognition, about 85 MB on first use. Audio stays local; your configured AI corrects and translates text.' },
   'options.video.auto': { 'zh-CN': '打开视频就自动开', en: 'Turn on automatically' },
   'options.video.auto_desc': {
     'zh-CN': '在播放器上点过一次开关，也会记成这个选择。',
@@ -1326,7 +1329,6 @@ export const MESSAGES = {
   'video.generic.chip_loading': { 'zh-CN': '字幕准备中…', en: 'Loading subs…' },
   'video.generic.chip_on': { 'zh-CN': '双语字幕 · 开', en: 'Bilingual subs · on' },
   'video.generic.chip_error': { 'zh-CN': '没找到字幕轨', en: 'No subtitle track' },
-  'video.generic.chip_not_source': { 'zh-CN': '字幕不是{lang}，不开', en: 'Subs are not {lang}' },
   'video.generic.chip_login': { 'zh-CN': '登录 B 站后再试', en: 'Sign in to Bilibili first' },
   'video.generic.chip_network': { 'zh-CN': '字幕没拿到，再点一次', en: 'Could not fetch subs, tap again' },
   'video.generic.chip_title': {

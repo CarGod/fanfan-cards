@@ -112,10 +112,14 @@ const CSS = `
   letter-spacing: 0.02em;
   cursor: pointer;
   opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
   transition: opacity 150ms ease-out;
 }
 .${HOST_CLASS}[data-show="true"] .${CHIP_CLASS} {
   opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 .${CHIP_CLASS}[data-status="on"] {
   background: #ff6a3d;

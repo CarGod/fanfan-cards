@@ -54,7 +54,8 @@ export function pickBilibiliSubtitle<T extends { lan: string }>(
   sourceLanguage: string,
 ): T | null {
   if (list.length === 0) return null
-  const want = (sourceLanguage === 'auto' ? 'en' : sourceLanguage).toLowerCase()
+  if (sourceLanguage === 'auto') return list[0]!
+  const want = sourceLanguage.toLowerCase()
   const isAi = (item: T): boolean => item.lan.toLowerCase().startsWith('ai-')
   const language = (item: T): string => item.lan.toLowerCase().replace(/^ai-/, '')
   return (
@@ -115,9 +116,10 @@ function languageItems(): LanguageItem[] {
   return items
 }
 
-async function waitForLanguageItems(): Promise<LanguageItem[]> {
+async function waitForLanguageItems(signal?: AbortSignal): Promise<LanguageItem[]> {
   const deadline = Date.now() + MENU_WAIT_MS
   for (;;) {
+    signal?.throwIfAborted()
     const items = languageItems()
     if (items.length > 0 || Date.now() >= deadline) return items
     await sleep(POLL_MS)
@@ -145,9 +147,10 @@ function ensureRequestLog(): void {
 }
 
 /** 等播放器发出一个快照里没有的字幕文件请求。 */
-async function waitForNewSubtitleRequest(known: ReadonlySet<string>): Promise<string | null> {
+async function waitForNewSubtitleRequest(known: ReadonlySet<string>, signal?: AbortSignal): Promise<string | null> {
   const deadline = Date.now() + REQUEST_WAIT_MS
   for (;;) {
+    signal?.throwIfAborted()
     const fresh = requestLog.find((url) => !known.has(url))
     if (fresh) return fresh
     if (Date.now() >= deadline) return null
@@ -155,13 +158,14 @@ async function waitForNewSubtitleRequest(known: ReadonlySet<string>): Promise<st
   }
 }
 
-async function fetchSubtitleFile(url: string): Promise<Cue[]> {
+async function fetchSubtitleFile(url: string, signal?: AbortSignal): Promise<Cue[]> {
   let last: CueSourceError = new CueSourceError('network')
   for (let attempt = 0; attempt < 2; attempt += 1) {
     if (attempt > 0) await sleep(800)
+    signal?.throwIfAborted()
     try {
       // CDN 回的是 `Access-Control-Allow-Origin: *`，带上 cookie 反而会被浏览器拦下。
-      const response = await fetch(url, { credentials: 'omit' })
+      const response = await fetch(url, { credentials: 'omit', signal: signal ?? null })
       if (!response.ok) {
         last = new CueSourceError('network', `${response.status} ${url}`)
         continue
@@ -170,6 +174,7 @@ async function fetchSubtitleFile(url: string): Promise<Cue[]> {
       if (!parsed.success) throw new CueSourceError('network', `unexpected subtitle body ${url}`)
       return cuesFromBilibili(parsed.data.body)
     } catch (error) {
+      signal?.throwIfAborted()
       last = error instanceof CueSourceError ? error : new CueSourceError('network', `${String(error)} ${url}`)
     }
   }
@@ -189,15 +194,15 @@ export class BilibiliCueSource implements CueSource {
     return media ? `${media.bvid}#${media.page}` : ''
   }
 
-  async load(_video: HTMLVideoElement, settings: Settings): Promise<Cue[]> {
-    const items = await waitForLanguageItems()
+  async load(_video: HTMLVideoElement, settings: Settings, signal?: AbortSignal): Promise<Cue[]> {
+    const items = await waitForLanguageItems(signal)
     // 没有语言项就是这支视频没字幕（AI 字幕要登录 B 站才有）。
     if (items.length === 0) throw new CueSourceError('no_track')
     const chosen = pickBilibiliSubtitle(items, settings.videoSubtitleSourceLanguage)!
 
     const known = new Set(requestLog)
     if (!chosen.element.classList.contains(ACTIVE_CLASS)) chosen.element.click()
-    let url = await waitForNewSubtitleRequest(known)
+    let url = await waitForNewSubtitleRequest(known, signal)
     // 播放器早就加载过这条字幕（页面一打开 CC 就是开着的），再点也不会请求：
     // 用它最近请求过的那个。
     if (!url) {
@@ -206,7 +211,8 @@ export class BilibiliCueSource implements CueSource {
     }
     if (!url) throw new CueSourceError('network', 'player made no subtitle request')
 
-    const cues = await fetchSubtitleFile(url)
+    const cues = await fetchSubtitleFile(url, signal)
+    signal?.throwIfAborted()
     this.usedUrl = url
     // 字幕是我们替读者打开的，原文在我们这层已经有了；它自己画的那行收起来，关掉时还回去。
     document.documentElement.setAttribute(HIDE_NATIVE_ATTR, '')

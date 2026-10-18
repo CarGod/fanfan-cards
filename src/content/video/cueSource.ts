@@ -33,7 +33,7 @@ export interface CueSource {
    */
   key?(): string
   /** 拿全部 cue。拿不到抛 {@link CueSourceError} 说清楚为什么，好让按钮上直说。 */
-  load(video: HTMLVideoElement, settings: Settings): Promise<Cue[]>
+  load(video: HTMLVideoElement, settings: Settings, signal?: AbortSignal): Promise<Cue[]>
   /** 关掉双语时把动过的东西还原（比如 `<track>` 的 mode）。 */
   release(): void
 }

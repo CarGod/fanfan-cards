@@ -1,6 +1,6 @@
 import { openModelSettings } from './openOptions.ts'
 import { currentHealth, resolveForTranslation, restoreProvider, useTemporaryProvider } from './providerHealth.ts'
-import { startListening, updateListening, transcribeListening, recognizeListening, refineListening, registerListeningCleanup } from './handlers/listening.ts'
+import { startListening, updateListening, transcribeListening, recognizeListening, refineListening, failedListening, registerListeningCleanup } from './handlers/listening.ts'
 import { registerConfigurationSync } from './configuration.ts'
 import { APP_PAGE, OPTIONS_PAGE } from '@/shared/constants.ts'
 import { registerHandlers } from '@/services/messaging.ts'
@@ -60,6 +60,7 @@ registerHandlers({
     return { explanation: await provider.explainWord({ ...input, thinkingLevel: settings.thinkingLevel }) }
   },
   'audio/start': startListening,
+  'audio/fatal': failedListening,
   'audio/update': updateListening,
   'audio/chunk': transcribeListening,
   'audio/recognize': recognizeListening,

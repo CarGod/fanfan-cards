@@ -1,5 +1,25 @@
 # Release notes
 
+## 2.4.1
+
+### 简体中文
+
+- 在「设置 → 视频翻译」新增「允许 AI 听译」开关，默认关闭；开启后仍需点击无字幕视频上的听译按钮才采集播放器音频。关闭开关会停止当前听译。
+- AI 听译默认使用 Base 本地 GPU 识别（首次模型下载约 85 MB）；GPU 不可用时回退 Tiny 本地 CPU 识别。改进多线程性能，修复旧 GPU 运行时的数值异常，并避免下载失败反复切换模型。
+- 视频字幕与语音按实际语言翻译，不再限制为英语。可靠识别为目标语言时静默跳过，保留手动字幕轨偏好。
+- 修复全屏视频中长期残留或重复的「字幕准备中」提示，改进停止、重启和设置切换时的取消处理。
+
+### English
+
+- Add an opt-in Enable AI listening switch under Video subtitles. It is off by default; users must still click the listening button on a video without subtitles to capture player audio. Turning the setting off stops listening.
+- Prefer local Base GPU speech recognition (about 85 MB on first model download), with local Tiny CPU fallback when GPU support is unavailable. Improve CPU threading, fix numerical errors in the previous GPU runtime, and avoid repeated model switching after download failures.
+- Translate captions and speech in their actual language rather than restricting them to English. Silently skip content reliably identified as the target language while retaining preferred caption-track selection.
+- Fix persistent or duplicate preparing-subtitles indicators in full-screen video, and improve cancellation when stopping, restarting, or changing settings.
+
+### Review and privacy notes
+
+Player audio stays in local memory and is recognized locally; no microphone is used. Recognition text, recent textual context and the page title may be sent to the user's configured AI service for correction and translation. Fixed-revision model data is fetched from Hugging Face and cached; executable JavaScript and WebAssembly are packaged with the extension. The feature is disabled by default and requires an explicit player action after enabling. Existing host/extension permissions are retained relative to the repository's 2.4.0 manifest; reviewers comparing an older store version should review `offscreen` and the Hugging Face model-download hosts. Speech recognition can still make errors, especially on short or mixed-language clips; no universal accuracy or real-time guarantee is claimed.
+
 ## 2.3.3
 
 ### 简体中文

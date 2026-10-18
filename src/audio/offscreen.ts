@@ -1,10 +1,12 @@
+type RuntimeInfo = { model: string; device: string; dtype: string; threads: number }
 import { RollingAudio } from './rollingAudio.ts'
 let worker: Worker | null = null
 let sequence = 0
+let workerProfile: 'base-webgpu-q4f16' | 'tiny' = 'base-webgpu-q4f16'
 let epoch = 0
 const rolling = new RollingAudio()
 let idleTimer: ReturnType<typeof setTimeout> | undefined
-let pending: { id: number; resolve: (value: { text: string }) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> } | null = null
+let pending: { id: number; load: boolean; resolve: (value: { text: string; fallback?: boolean; runtime?: RuntimeInfo }) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> } | null = null
 
 function reset(): void {
   epoch++
@@ -12,26 +14,35 @@ function reset(): void {
   clearTimeout(idleTimer)
   worker?.terminate()
   worker = null
+  workerProfile = 'base-webgpu-q4f16'
   if (pending) { clearTimeout(pending.timer); pending.reject(new Error('本地识别已停止')); pending = null }
 }
-function run(samples?: Float32Array, language?: string): Promise<{ text: string }> {
+function run(samples?: Float32Array, language?: string): Promise<{ text: string; fallback?: boolean; runtime?: RuntimeInfo }> {
   if (pending) return Promise.reject(new Error('本地识别忙碌，请稍后重试'))
   if (!worker) {
     worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
-    worker.onmessage = (event: MessageEvent<{ id: number; text: string; error?: string }>) => {
+    const createdWorker = worker
+    worker.onmessage = (event: MessageEvent<{ id: number; text: string; error?: string; fatal?: boolean; errorCode?: string; fallback?: boolean; runtime?: RuntimeInfo }>) => {
+      if (worker !== createdWorker) return
+      if (event.data.fatal) { reset(); void chrome.runtime.sendMessage({ type: 'audio/fatal', payload: {} }).catch(() => undefined); return }
       if (pending?.id !== event.data.id) return
       const task = pending
       pending = null
       clearTimeout(task.timer)
+      if (event.data.errorCode === 'gpu-init-failed' && task.load && workerProfile !== 'tiny') {
+        worker?.terminate(); worker = null; workerProfile = 'tiny'
+        void run().then(result => task.resolve({ ...result, fallback: true }), task.reject)
+        return
+      }
       if (event.data.error) task.reject(new Error(event.data.error))
-      else task.resolve({ text: event.data.text })
+      else task.resolve({ text: event.data.text, fallback: event.data.fallback ?? false, ...(event.data.runtime ? { runtime: event.data.runtime } : {}) })
     }
-    worker.onerror = () => reset()
+    worker.onerror = () => { if (worker === createdWorker) reset() }
   }
   return new Promise((resolve, reject) => {
     const id = ++sequence
-    pending = { id, resolve, reject, timer: setTimeout(() => reset(), samples ? 90_000 : 240_000) }
-    worker!.postMessage({ id, samples, language }, samples ? [samples.buffer] : [])
+    pending = { id, load: !samples, resolve, reject, timer: setTimeout(() => reset(), samples ? 90_000 : 240_000) }
+    worker!.postMessage({ id, samples, language, profile: workerProfile }, samples ? [samples.buffer] : [])
   })
 }
 

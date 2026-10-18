@@ -9,9 +9,10 @@ const track = (language: string, kind = 'subtitles', mode = 'disabled') => ({
 })
 
 describe('pickTextTrack', () => {
-  it('prefers the reader’s source language, treating auto as English', () => {
+  it('preserves an explicit preference without treating auto as English', () => {
     const tracks = [track('zh-CN'), track('en-US'), track('ja')]
-    expect(pickTextTrack(tracks, 'auto')?.language).toBe('en-US')
+    expect(pickTextTrack(tracks, 'auto')?.language).toBe('zh-CN')
+    expect(pickTextTrack(tracks, 'en')?.language).toBe('en-US')
     expect(pickTextTrack(tracks, 'ja')?.language).toBe('ja')
   })
 

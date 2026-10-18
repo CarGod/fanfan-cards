@@ -136,3 +136,18 @@ describe('local listening lifecycle', () => {
   })
 
 })
+
+it('clears the previous overlay when a same-target speech window is silently skipped', async () => {
+  let window = 0
+  vi.mocked(sendMessage).mockImplementation(async type => type === 'audio/refine'
+    ? (++window === 1 ? { original: 'Foreign speech', translation: '翻译' } : { original: '', translation: '' })
+    : type === 'audio/recognize' ? { text: 'recognized speech' } : { ready: true })
+  const caption = vi.fn()
+  const listening = new LocalListening(() => undefined, caption)
+  await listening.start(); listening.bind(snapshot())
+  listening.observe(snapshot({ chunks: 1 }), sample); await flush()
+  expect(caption).toHaveBeenLastCalledWith('Foreign speech', '翻译')
+  listening.observe(snapshot({ chunks: 2 }), sample); await flush()
+  expect(caption).toHaveBeenLastCalledWith('', '')
+  listening.stop()
+})

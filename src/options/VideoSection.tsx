@@ -84,11 +84,21 @@ export function VideoSection({
           />
         </div>
 
+        <div className="row-between" style={{ marginBottom: 16 }}>
+          <div>
+            <div style={{ fontWeight: 600 }}>{t('options.video.listening')}</div>
+            <div className="faint">{t('options.video.listening_desc')}</div>
+          </div>
+          <Toggle checked={settings.videoListeningEnabled}
+            onChange={(next) => void update({ videoListeningEnabled: next })}
+            label={t('options.video.listening')} />
+        </div>
+
         <Field label={t('video.control.source_language')}>
           <select className="input" value={settings.videoSubtitleSourceLanguage}
             aria-label={t('video.control.source_language')}
             onChange={(event) => void update({ videoSubtitleSourceLanguage: event.target.value })}>
-            {SOURCE_LANGUAGES.filter((item) => item.code !== 'auto').map((item) => (
+            {SOURCE_LANGUAGES.map((item) => (
               <option key={item.code} value={item.code}>{t(item.labelKey)}</option>
             ))}
           </select>

@@ -20,6 +20,7 @@ export class LocalListening {
   active = false
   state = ''
   error = ''
+  fallback = false
   constructor(private readonly changed: () => void, private readonly caption: (original: string, translation: string) => void) {}
 
   async start(): Promise<boolean> {
@@ -30,8 +31,9 @@ export class LocalListening {
     this.state = '正在加载本地模型'
     this.changed()
     try {
-      await sendMessage('audio/start', { session: id, revision: 0 })
+      const result = await sendMessage('audio/start', { session: id, revision: 0 })
       if (!this.active || this.session !== id) return false
+      this.fallback = result.fallback ?? false
       this.state = '等待语音'
       this.heartbeat = window.setInterval(() => { void this.update().catch(() => undefined) }, 20_000)
       this.changed()
@@ -121,8 +123,8 @@ export class LocalListening {
       const result = await sendMessage('audio/refine', { session, revision, text, title: document.title.slice(0, 300) })
       if (!this.active || this.session !== session || this.revision !== revision) return
       this.timings.translationMs = Math.round(performance.now() - started)
+      this.clearCaption()
       if (result.original) {
-        this.clearCaption()
         this.caption(result.original, result.translation)
         if (!this.paused && !this.ended) this.clearCaptionTimer = window.setTimeout(() => this.clearCaption(), 12_000)
       }
@@ -140,13 +142,14 @@ export class LocalListening {
     clearInterval(this.heartbeat)
     clearTimeout(this.clearCaptionTimer)
     this.active = false
+    this.fallback = false
     this.session = ''
     this.state = '听译完成'
     this.changed()
   }
 
   private clearCaption(): void { clearTimeout(this.clearCaptionTimer); this.caption('', '') }
-  private fail(error: unknown): void {
+  fail(error: unknown): void {
     this.stop()
     this.error = error instanceof Error ? error.message : '听译失败，请重试'
     this.state = '听译失败 · 重试'
@@ -155,6 +158,7 @@ export class LocalListening {
   stop(): void {
     void this.update(true).catch(() => undefined)
     this.active = false
+    this.fallback = false
     this.session = ''
     this.revision = 0
     this.captureRevision = -1

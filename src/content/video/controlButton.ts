@@ -198,7 +198,7 @@ export class SubtitleControl {
 
     this.panel.append(
       row(t('video.control.source_language'), languageSelect(
-        t('video.control.source_language'), SOURCE_LANGUAGES.filter((item) => item.code !== 'auto'), this.state.sourceLanguage,
+        t('video.control.source_language'), SOURCE_LANGUAGES, this.state.sourceLanguage,
         (next) => this.handlers.onSourceLanguage(next),
       )),
       row(t('video.control.target_language'), languageSelect(

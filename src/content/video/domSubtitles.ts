@@ -2,7 +2,7 @@ import { t } from '@/i18n/index.ts'
 import { sendMessage } from '@/services/messaging.ts'
 import { noteOrphanError } from '@/shared/extensionContext.ts'
 import { STORAGE_KEYS } from '@/shared/constants.ts'
-import { isInSourceLanguage } from '@/shared/language.ts'
+import { isVideoInTargetLanguage } from '@/shared/videoLanguage.ts'
 import { storage } from '@/storage/area.ts'
 import { getSettings, watchSettings, isHostEnabled } from '@/storage/repositories/settingsRepo.ts'
 import { injectVideoStyles } from './styles.ts'
@@ -194,8 +194,8 @@ export class DomSubtitleWatcher {
     const text = element ? normalizeText(element.innerText || element.textContent || '') : ''
     if (text === this.lastText) return
     this.lastText = text
-    // 空行，或者这一行不是读者设置的源语言（中文 CC）：不画、不请求。
-    if (!text || !isInSourceLanguage([text], this.sourceLanguage)) {
+    // 空行不画；语言仅按实际文本和视频目标判断。
+    if (!text) {
       this.hideLine()
       return
     }
@@ -215,6 +215,9 @@ export class DomSubtitleWatcher {
     if (this.inFlight.has(text)) return
     this.inFlight.add(text)
     try {
+      const sameTarget = await isVideoInTargetLanguage([text], this.targetLanguage)
+      if (run !== this.languageRun || this.lastText !== text) return
+      if (sameTarget) { this.cache.set(text, ''); return }
       const { translations } = await sendMessage('page/translate', { texts: [text], hint: document.title, targetLanguage: this.targetLanguage })
       if (run !== this.languageRun) return
       const translation = normalizeText(translations[0] ?? '')

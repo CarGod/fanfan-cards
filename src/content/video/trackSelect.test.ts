@@ -37,10 +37,10 @@ describe('chooseTrack', () => {
     expect(chosen?.reason).toContain('自动生成')
   })
 
-  it('绝不选目标语言的轨——把中文再翻成中文是破坏而不是功能', () => {
+  it('目标语言标签仍需读取实际文本再判定，不能误挡混合字幕', () => {
     expect(
-      chooseTrack([track('zh-Hans'), track('zh-CN')], { targetLanguage: 'zh-CN' }),
-    ).toBeNull()
+      chooseTrack([track('zh-Hans'), track('zh-CN')], { targetLanguage: 'zh-CN' })?.track.languageCode,
+    ).toBe('zh-Hans')
   })
 
   it('目标语言的轨存在时也跳过它，选别的', () => {
@@ -64,9 +64,9 @@ describe('chooseTrack', () => {
     expect(chosen?.track.kind).toBeUndefined()
   })
 
-  it('指定英语缺失时不静默切换到不认识的语言', () => {
+  it('偏好英语缺失时仍可选择日语翻译', () => {
     const chosen = chooseTrack([track('ja')], { sourceLanguage: 'en', targetLanguage: 'zh-CN' })
-    expect(chosen).toBeNull()
+    expect(chosen?.track.languageCode).toBe('ja')
   })
 
   it('忽略没有地址的轨', () => {

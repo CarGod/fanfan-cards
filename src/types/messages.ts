@@ -35,7 +35,8 @@ export interface MessageMap {
   'provider/use': { req: { id: string; provider: ProviderId }; res: { ok: true } }
   'provider/restore': { req: { id: string }; res: { ok: true } }
   'provider/test': { req: ExplainWordInput; res: { explanation: WordExplanation } }
-  'audio/start': { req: { session: string; revision: number }; res: { ready: true } }
+  'audio/fatal': { req: Record<string, never>; res: { ok: true } }
+  'audio/start': { req: { session: string; revision: number }; res: { ready: true; fallback?: boolean; runtime?: { model: string; device: string; dtype: string; threads: number } } }
   'audio/update': { req: { session: string; revision: number; stop?: boolean }; res: { ok: true } }
   'audio/chunk': { req: { session: string; revision: number; audio: string; title: string }; res: { original: string; translation: string } }
   'audio/recognize': { req: { session: string; revision: number; audio: string; title: string }; res: { text: string } }

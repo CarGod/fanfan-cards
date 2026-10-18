@@ -1,8 +1,8 @@
 import { t } from '@/i18n/index.ts'
 import type { MessageKey } from '@/i18n/messages.ts'
 import { sendMessage } from '@/services/messaging.ts'
-import { noteOrphanError } from '@/shared/extensionContext.ts'
-import { isInSourceLanguage, sourceLanguage } from '@/shared/language.ts'
+import { noteOrphanError, onOrphaned } from '@/shared/extensionContext.ts'
+import { isVideoInTargetLanguage } from '@/shared/videoLanguage.ts'
 import { getSettings, isHostEnabled, saveSettings, watchSettings } from '@/storage/repositories/settingsRepo.ts'
 import type { Settings } from '@/types/settings.ts'
 import { BilibiliCueSource, isBilibiliPlayer } from './bilibili.ts'
@@ -32,6 +32,8 @@ const FIRST_BATCHES = [2, 4]
 const MAX_CONCURRENT = 3
 /** 等 `<track>` 把 cue 加载出来的上限。 */
 const CUES_WAIT_MS = 8_000
+/** Only subtitle-track discovery/loading, never local speech-model downloads or AI translation. */
+const PREPARE_TIMEOUT_MS = 20_000
 /** 视频比这还小的多半是预览图、背景装饰，不值得挂一颗按钮。 */
 const MIN_WIDTH = 240
 /** 页面 DOM 一直在变（播放器每秒都在改进度条），扫描要节流。 */
@@ -55,15 +57,15 @@ export function isSubtitleTrack(track: { kind: string }): boolean {
 /**
  * 挑一条轨。
  *
- * 读者设了源语言就按它挑；没设（自动）就当英文——这个产品是学英文的。都没有，
+ * 读者设了源语言就按它挑；自动不限定语言。偏好轨没有时，
  * 就用网站正在显示的那条；再没有，第一条。
  */
 export function pickTextTrack<T extends TrackLike>(tracks: readonly T[], sourceLanguage: string): T | null {
   const usable = tracks.filter(isSubtitleTrack)
   if (usable.length === 0) return null
-  const want = (sourceLanguage === 'auto' ? 'en' : sourceLanguage).toLowerCase()
+  const want = sourceLanguage === 'auto' ? '' : sourceLanguage.toLowerCase()
   return (
-    usable.find((track) => track.language.toLowerCase().startsWith(want)) ??
+    usable.find((track) => !!want && track.language.toLowerCase().startsWith(want)) ??
     usable.find((track) => track.mode === 'showing') ??
     usable[0]!
   )
@@ -94,18 +96,24 @@ export class TrackCueSource implements CueSource {
   private track: TextTrack | null = null
   private originalMode: TextTrackMode = 'disabled'
 
-  async load(video: HTMLVideoElement, settings: Settings): Promise<Cue[]> {
+  async load(video: HTMLVideoElement, settings: Settings, signal?: AbortSignal): Promise<Cue[]> {
+    signal?.throwIfAborted()
     const track = pickTextTrack(Array.from(video.textTracks), settings.videoSubtitleSourceLanguage)
     if (!track) throw new CueSourceError('no_track')
     this.track = track
     this.originalMode = track.mode
     // `hidden`：浏览器照常加载 cue、照常触发时间轴，只是不再自己画——这一层交给我们。
-    track.mode = 'hidden'
+    if (track.mode === 'disabled') track.mode = 'hidden'
 
     const deadline = Date.now() + CUES_WAIT_MS
-    while ((!track.cues || track.cues.length === 0) && Date.now() < deadline) await sleep(200)
+    while ((!track.cues || track.cues.length === 0) && Date.now() < deadline) {
+      await sleep(200)
+      signal?.throwIfAborted()
+    }
+    signal?.throwIfAborted()
     const cues = track.cues ? cuesFromTrack(track.cues) : []
     if (cues.length === 0) throw new CueSourceError('no_track')
+    track.mode = 'hidden'
     return cues
   }
 
@@ -135,13 +143,12 @@ function hostParent(): HTMLElement {
   return document.documentElement
 }
 
-type FailReason = CueSourceFailure | 'not_source'
+type FailReason = CueSourceFailure
 
 const FAIL_LABEL: Record<FailReason, MessageKey> = {
   no_track: 'video.generic.chip_error',
   login: 'video.generic.chip_login',
   network: 'video.generic.chip_network',
-  not_source: 'video.generic.chip_not_source',
 }
 
 class VideoBinding {
@@ -156,7 +163,7 @@ class VideoBinding {
   private perCue: string[] = []
   /** 上次加载 cue 时媒体的身份，见 {@link CueSource.key}。 */
   private mediaKey = ''
-  private sourceCode = 'auto'
+  private skippedTarget = false
 
   private enabled = false
   private hovering = false
@@ -165,6 +172,9 @@ class VideoBinding {
   private run = 0
   private frame = 0
   private revealTimer = 0
+  private hoverTimer = 0
+  private prepareTimer = 0
+  private preparation: AbortController | null = null
   /** 这次开关是读者点的，还是页面一打开自动开的。自动失败不打扰人，点了失败得告诉人。 */
   private userTriggered = false
   private disposers: Array<() => void> = []
@@ -199,6 +209,8 @@ class VideoBinding {
     const onFullscreen = (): void => {
       const parent = hostParent()
       if (this.host.parentElement !== parent) parent.append(this.host)
+      this.setHover(false)
+      this.position()
     }
     document.addEventListener('fullscreenchange', onFullscreen)
     this.disposers.push(() => document.removeEventListener('fullscreenchange', onFullscreen))
@@ -219,6 +231,9 @@ class VideoBinding {
     for (const dispose of this.disposers) dispose()
     this.disposers = []
     if (this.revealTimer) clearTimeout(this.revealTimer)
+    if (this.hoverTimer) clearTimeout(this.hoverTimer)
+    if (this.frame) cancelAnimationFrame(this.frame)
+    this.frame = 0
     this.overlay.destroy()
     this.host.remove()
   }
@@ -231,11 +246,11 @@ class VideoBinding {
   }
 
   /**
-   * 按钮什么时候露出来：鼠标在视频上、正在准备字幕、或者刚点过 / 刚出错的那几秒。
+   * 按钮什么时候露出来：鼠标刚移动、或者刚点过 / 刚出错的那几秒；准备状态也不常驻。
    * 字幕开着的时候按钮不常驻——看片的人不需要一颗一直亮着的按钮，字幕本身就是状态。
    */
   private updateShow(): void {
-    this.host.dataset['show'] = String(this.hovering || this.revealTimer !== 0 || this.status === 'loading')
+    this.host.dataset['show'] = String(!this.skippedTarget && (this.hovering || this.revealTimer !== 0))
   }
 
   private reveal(ms: number): void {
@@ -253,7 +268,15 @@ class VideoBinding {
    */
   pointerAt(x: number, y: number): void {
     const rect = this.video.getBoundingClientRect()
-    this.setHover(x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom)
+    if (this.hoverTimer) clearTimeout(this.hoverTimer)
+    this.hoverTimer = 0
+    const full = document.fullscreenElement
+    const inside = (!full || full.contains(this.video)) && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+    this.setHover(inside)
+    if (inside) this.hoverTimer = window.setTimeout(() => {
+      this.hoverTimer = 0
+      this.setHover(false)
+    }, REVEAL_MS)
   }
 
   private renderChip(): void {
@@ -263,8 +286,7 @@ class VideoBinding {
       on: 'video.generic.chip_on',
       error: FAIL_LABEL[this.failReason],
     } as const
-    const source = sourceLanguage(this.sourceCode === 'auto' ? 'en' : this.sourceCode)
-    this.chip.textContent = t(labelKey[this.status], { lang: t(source.labelKey) })
+    this.chip.textContent = t(labelKey[this.status])
     this.chip.dataset['status'] = this.status
     this.chip.title = t('video.generic.chip_title')
     this.updateShow()
@@ -295,7 +317,7 @@ class VideoBinding {
   }
 
   reloadLanguages(): void {
-    if (!this.enabled) return
+    if (!this.enabled && !this.skippedTarget) return
     this.disable()
     this.enabled = true
     void this.enable()
@@ -303,21 +325,26 @@ class VideoBinding {
 
   private async enable(): Promise<void> {
     const run = (this.run += 1)
+    this.mediaKey = this.source.key?.() ?? ''
+    const preparation = new AbortController()
+    this.preparation = preparation
+    this.prepareTimer = window.setTimeout(() => {
+      if (run === this.run) this.fail('network')
+    }, PREPARE_TIMEOUT_MS)
     this.status = 'loading'
     this.renderChip()
     this.ensureLoop()
 
-    const settings = await getSettings()
-    if (run !== this.run) return
-    this.sourceCode = settings.videoSubtitleSourceLanguage
-    this.mediaKey = this.source.key?.() ?? ''
-
+    let settings: Settings
     let cues: Cue[]
     try {
-      cues = await this.source.load(this.video, settings)
+      settings = await getSettings()
+      if (run !== this.run) return
+      cues = await this.source.load(this.video, settings, preparation.signal)
     } catch (error) {
       if (run !== this.run) return
       // 按钮上只放一句人话；具体是哪一步没通留在控制台，排查时要看。
+      if (noteOrphanError(error)) { this.disable(); return }
       console.warn('[fanfan] video subtitles unavailable:', error)
       this.fail(error instanceof CueSourceError ? error.reason : 'network')
       return
@@ -327,12 +354,20 @@ class VideoBinding {
       this.fail('no_track')
       return
     }
-    // 只在字幕是读者设置的源语言时才开：中文字幕的视频叠一层中文，不是帮忙是添乱。
-    if (!isInSourceLanguage(cues.map((cue) => cue.text), settings.videoSubtitleSourceLanguage)) {
-      this.fail('not_source')
+    const sameTarget = await isVideoInTargetLanguage(cues.map(cue => cue.text), settings.videoSubtitleTargetLanguage)
+    if (run !== this.run) return
+    if (sameTarget) {
+      this.disable()
+      this.skippedTarget = true
+      this.userTriggered = false
+      if (this.revealTimer) clearTimeout(this.revealTimer)
+      this.revealTimer = 0
+      this.setHover(false)
+      this.updateShow()
       return
     }
 
+    this.finishPreparation()
     this.cues = cues
     this.groups = groupCues(cues)
     this.displayCues = alignedDisplayCues(cues, this.groups)
@@ -345,12 +380,20 @@ class VideoBinding {
     void this.translateAll(run, settings.videoSubtitleTargetLanguage)
   }
 
+  private finishPreparation(): void {
+    if (this.prepareTimer) clearTimeout(this.prepareTimer)
+    this.prepareTimer = 0
+    this.preparation?.abort()
+    this.preparation = null
+  }
+
   /**
    * 没开起来。只关掉这一次，不碰「下一支默认开」的设置——失败不是读者的选择，
    * 一支没字幕的视频不该把以后每一支都关掉。
    */
   private fail(reason: FailReason): void {
     this.run += 1
+    this.finishPreparation()
     this.status = 'error'
     this.failReason = reason
     this.enabled = false
@@ -359,10 +402,13 @@ class VideoBinding {
     this.renderChip()
     if (this.userTriggered) this.reveal(REVEAL_ERROR_MS)
     this.userTriggered = false
+    this.ensureLoop()
   }
 
   private disable(): void {
+    this.skippedTarget = false
     this.run += 1
+    this.finishPreparation()
     this.enabled = false
     this.status = 'off'
     this.cues = []
@@ -402,7 +448,8 @@ class VideoBinding {
   private position(): void {
     const rect = this.video.getBoundingClientRect()
     // 视频被网站藏起来（换集、折叠）时，按钮和字幕也一起藏。
-    const visible = rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < innerHeight
+    const full = document.fullscreenElement
+    const visible = (!full || full.contains(this.video)) && rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < innerHeight
     this.host.style.display = visible ? '' : 'none'
     if (!visible) return
     const parent = hostParent()
@@ -459,14 +506,27 @@ export class GenericVideoSubtitles {
   private scanTimer = 0
   private disposers: Array<() => void> = []
   private started = false
+  private lifecycle = 0
 
   async start(): Promise<void> {
-    const settings = await getSettings()
-    if (!settings.enabled || !isHostEnabled(settings, location.hostname)) return
+    if (this.started) return
+    this.started = true
+    const lifecycle = ++this.lifecycle
+    let settings: Settings
+    try { settings = await getSettings() } catch (error) {
+      if (lifecycle !== this.lifecycle) return
+      noteOrphanError(error)
+      this.destroy()
+      return
+    }
+    if (!this.started || lifecycle !== this.lifecycle) return
+    if (!settings.enabled || !isHostEnabled(settings, location.hostname)) { this.started = false; return }
     injectVideoStyles()
     this.started = true
     this.applySettings(settings)
     this.disposers.push(watchSettings((next) => this.applySettings(next)))
+    this.disposers.push(onOrphaned(() => this.destroy()))
+    if (!this.started) return
 
     this.scan()
     this.observer = new MutationObserver(() => this.scheduleScan())
@@ -502,11 +562,14 @@ export class GenericVideoSubtitles {
   }
 
   destroy(): void {
+    this.started = false
+    this.lifecycle += 1
     for (const dispose of this.disposers) dispose()
     this.disposers = []
     this.observer?.disconnect()
     this.observer = null
     if (this.scanTimer) clearTimeout(this.scanTimer)
+    this.scanTimer = 0
     for (const binding of this.bindings.values()) binding.destroy()
     this.bindings.clear()
   }

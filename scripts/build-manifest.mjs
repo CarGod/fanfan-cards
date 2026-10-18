@@ -9,14 +9,24 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync, copyFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const distDir = join(root, 'dist')
 // Bundle ONNX executable assets locally; never load runtime code from a CDN.
+const require = createRequire(import.meta.url)
+const ortEntry = require.resolve('onnxruntime-web')
+const ortDir = dirname(ortEntry)
+const commonEntry = createRequire(ortEntry).resolve('onnxruntime-common')
+const ortVersion = JSON.parse(readFileSync(join(ortDir, '../package.json'), 'utf8')).version
+const commonVersion = JSON.parse(readFileSync(join(dirname(commonEntry), '../../package.json'), 'utf8')).version
+if (ortVersion !== '1.30.0' || commonVersion !== ortVersion) throw new Error('Browser ONNX runtime/common must both be pinned to 1.30.0')
 mkdirSync(join(distDir, 'wasm'), { recursive: true })
-for (const name of ['ort-wasm-simd-threaded.jsep.mjs', 'ort-wasm-simd-threaded.jsep.wasm']) {
-  copyFileSync(join(root, 'node_modules/onnxruntime-web/dist', name), join(distDir, 'wasm', name))
+// ORT 1.30's WebGPU entry loads asyncify, not the legacy JSEP loader.
+for (const name of ['ort-wasm-simd-threaded.asyncify.mjs', 'ort-wasm-simd-threaded.asyncify.wasm']) {
+  copyFileSync(join(ortDir, name), join(distDir, 'wasm', name))
 }
+writeFileSync(join(distDir, 'wasm/runtime.json'), JSON.stringify({ onnxruntimeWeb: ortVersion, onnxruntimeCommon: commonVersion }) + '\n')
 
 const manifestPath = join(distDir, 'manifest.json')
 const sourceManifestPath = join(root, 'public', 'manifest.json')

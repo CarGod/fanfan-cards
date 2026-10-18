@@ -148,7 +148,7 @@ export const settingsSchema = z.object({
    * 设备，期待的是「我调过了」，而不是每次从头再调一遍。
    */
   /** Video language preferences are independent from page translation. */
-  videoSubtitleSourceLanguage: z.string().default('en'),
+  videoSubtitleSourceLanguage: z.string().default('auto'),
   videoSubtitleTargetLanguage: z.string().default('zh-CN'),
   videoSubtitleMode: z.enum(['bilingual', 'translationOnly']).default('bilingual'),
   videoSubtitleFontScale: z.number().min(0.6).max(2).default(1),
@@ -156,6 +156,7 @@ export const settingsSchema = z.object({
   videoSubtitleBackground: z.number().min(0).max(1).default(0.7),
   /** 打开视频就自动开字幕，而不是每次手动点一下。 */
   videoSubtitleAuto: z.boolean().default(false),
+  videoListeningEnabled: z.boolean().default(false),
 
   /**
    * 翻翻模式：把词库里已有的词在网页上标出来。
