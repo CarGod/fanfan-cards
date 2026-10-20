@@ -17,7 +17,7 @@ import type { ResolvedLanguage } from './types.ts'
 type Entry = Record<ResolvedLanguage, string>
 
 export const MESSAGES = {
-  'feedback.translation_slow': { 'zh-CN': '翻译响应较慢，仍在等待；超时后会提示，请勿重复点击', en: 'Translation is taking longer than usual. Still waiting; a timeout will be reported. Please do not click again.' },
+  'feedback.translation_slow': { 'zh-CN': '翻译响应较慢，仍在等待；超时后会提示', en: 'Translation is taking longer than usual. Still waiting; a timeout will be reported.' },
   'provider.config.failed': { 'zh-CN': '故障中', en: 'Unavailable' },
   'provider.config.temporary': { 'zh-CN': '临时使用', en: 'Temporary' },
   'provider.config.using': { 'zh-CN': '正在临时使用 {name}', en: 'Temporarily using {name}' },

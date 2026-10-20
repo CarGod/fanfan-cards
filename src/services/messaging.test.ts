@@ -85,3 +85,46 @@ it('bounds a silent background request without replaying it', async () => {
     expect(vi.getTimerCount()).toBe(0)
   } finally { vi.useRealTimers() }
 })
+
+/*
+ * 「翻译响应较慢」只说给正在等的人听。
+ *
+ * 它曾经挂在每一个 page/translate 上：读者没碰任何开关，视频字幕在后台跑、
+ * 无限滚动的新段落在补译、站点记住的整页翻译自己续上了——任何一批超过 8 秒，
+ * 右下角就冒出一句「请勿重复点击」，读者根本不知道自己点了什么。
+ */
+describe('slow translation notice', () => {
+  const notices: unknown[] = []
+  const listen = (event: Event) => notices.push((event as CustomEvent<unknown>).detail)
+
+  beforeEach(() => {
+    notices.length = 0
+    vi.useFakeTimers()
+    vi.stubGlobal('window', new EventTarget())
+    window.addEventListener('fanfan:translation-notice', listen)
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it('stays quiet for a request nobody is waiting on', async () => {
+    let answer: (value: unknown) => void = () => undefined
+    transport.mockImplementation(() => new Promise((resolve) => { answer = resolve }))
+    const result = sendMessage('page/translate', { texts: ['Hello'] })
+    await vi.advanceTimersByTimeAsync(10_000)
+    answer({ ok: true, data: { translations: ['你好'] } })
+    await expect(result).resolves.toEqual({ translations: ['你好'] })
+    expect(notices).toEqual([])
+  })
+
+  it('tells the reader once their own request passes eight seconds', async () => {
+    let answer: (value: unknown) => void = () => undefined
+    transport.mockImplementation(() => new Promise((resolve) => { answer = resolve }))
+    const result = sendMessage('page/translate', { texts: ['Hello'] }, { notifySlow: true })
+    await vi.advanceTimersByTimeAsync(7_999)
+    expect(notices).toEqual([])
+    await vi.advanceTimersByTimeAsync(1)
+    expect(notices).toHaveLength(1)
+    answer({ ok: true, data: { translations: ['你好'] } })
+    await expect(result).resolves.toEqual({ translations: ['你好'] })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+})

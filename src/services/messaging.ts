@@ -11,6 +11,21 @@ import { AIError, type AIErrorCode } from '@/types/ai.ts'
 import { isContextInvalidated, isMessageChannelClosed, isExtensionAlive } from '@/shared/extensionContext.ts'
 import { t } from '@/i18n/index.ts'
 
+export interface SendOptions {
+  /**
+   * Say 「翻译响应较慢」 in the page corner if this request passes 8 seconds.
+   *
+   * Only for a request the reader is staring at, waiting: the paragraph they
+   * just pressed the key over. Everything else stays quiet — a resumed page
+   * translation, a batch for content an infinite feed just loaded, a video's
+   * subtitle track, a line-shape retry. Nobody is waiting on those, and a
+   * twelve-paragraph batch to a language model routinely takes longer than
+   * eight seconds anyway. Announcing them made readers believe translation had
+   * switched itself on.
+   */
+  notifySlow?: boolean
+}
+
 /**
  * Typed `chrome.runtime` messaging.
  *
@@ -21,6 +36,7 @@ import { t } from '@/i18n/index.ts'
 export async function sendMessage<T extends MessageType>(
   type: T,
   payload: MessageRequest<T>,
+  options: SendOptions = {},
 ): Promise<MessageResponse<T>> {
   const envelope: Envelope<T> = { type, payload }
 
@@ -28,7 +44,7 @@ export async function sendMessage<T extends MessageType>(
   for (let attempt = 0; ; attempt += 1) {
     try {
       reply = (await (type === 'page/translate'
-        ? boundedTranslationMessage(() => chrome.runtime.sendMessage(envelope))
+        ? boundedTranslationMessage(() => chrome.runtime.sendMessage(envelope), options.notifySlow === true)
         : chrome.runtime.sendMessage(envelope))) as Reply<T> | undefined
       break
     } catch (error) {
@@ -58,7 +74,7 @@ export async function sendMessage<T extends MessageType>(
 }
 
 /** A reloaded extension may leave a pending message promise unresolved. */
-async function boundedTranslationMessage(send: () => Promise<unknown>): Promise<unknown> {
+async function boundedTranslationMessage(send: () => Promise<unknown>, notifySlow: boolean): Promise<unknown> {
   let timer: ReturnType<typeof setTimeout> | undefined
   let liveness: ReturnType<typeof setInterval> | undefined
   let slow: ReturnType<typeof setTimeout> | undefined
@@ -66,9 +82,11 @@ async function boundedTranslationMessage(send: () => Promise<unknown>): Promise<
     return await Promise.race([
       Promise.resolve().then(send),
       new Promise<never>((_, reject) => {
-        slow = setTimeout(() => {
-          if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('fanfan:translation-notice', { detail: t('feedback.translation_slow') }))
-        }, 8_000)
+        if (notifySlow) {
+          slow = setTimeout(() => {
+            if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('fanfan:translation-notice', { detail: t('feedback.translation_slow') }))
+          }, 8_000)
+        }
         timer = setTimeout(() => reject(new AIError('timeout', t('error.messaging.no_response'), 'mock')), 45_000)
         liveness = setInterval(() => {
           if (!isExtensionAlive()) reject(new AIError('stale_context', 'Extension context invalidated', 'mock'))

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const translate = vi.fn()
 vi.mock('@/services/messaging.ts', () => ({
-  sendMessage: (type: string, payload: { texts: string[] }) => translate(type, payload),
+  sendMessage: (type: string, payload: { texts: string[] }, options?: unknown) => translate(type, payload, options),
 }))
 
 const { ParagraphTranslator } = await import('./paragraphTranslator.ts')
@@ -67,6 +67,23 @@ describe('整段翻译跟随内容变化', () => {
     expect(translate.mock.calls[1]![1].texts[0]).toContain('protein binders')
     expect(document.querySelectorAll('.ara-translation')).toHaveLength(1)
     expect(document.querySelector('.ara-translation')?.textContent).toBe(`[译:${FULL.length}]`)
+    translator.destroy()
+  })
+
+  /*
+   * 按键是读者在等；展开后的重译是页面自己变了，读者可能早就在读别处。
+   * 只有前者值得一句「翻译响应较慢」。
+   */
+  it('只有按键那一次会在慢的时候提示，跟随重译不提示', async () => {
+    const translator = new ParagraphTranslator()
+    translator.setKey('backtick')
+    await gesture(translator)
+    expect(translate.mock.calls[0]![2]).toEqual({ notifySlow: true })
+
+    paragraph.querySelector('span')!.textContent = FULL
+    await settle(2500)
+    expect(translate).toHaveBeenCalledTimes(2)
+    expect(translate.mock.calls[1]![2]).not.toMatchObject({ notifySlow: true })
     translator.destroy()
   })
 

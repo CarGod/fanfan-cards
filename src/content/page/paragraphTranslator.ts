@@ -1,5 +1,5 @@
 import { AIError, aiErrorMessage } from '@/types/ai.ts'
-import { sendMessage } from '@/services/messaging.ts'
+import { sendMessage, type SendOptions } from '@/services/messaging.ts'
 import {
   TRANSLATED_MARK,
   TRANSLATION_CLASS,
@@ -152,7 +152,7 @@ export class ParagraphTranslator {
     // The paragraph is translated on the key *press*, not on a click: the
     // cursor is already where the reader is looking, so asking them to also
     // click would add a step and risk following a link.
-    if (this.hovered) void this.translate(this.hovered)
+    if (this.hovered) void this.translate(this.hovered, { notifySlow: true })
   }
 
   private onKeyUp = (event: KeyboardEvent): void => {
@@ -222,13 +222,19 @@ export class ParagraphTranslator {
     outline.classList.add(HOVER_CLASS)
   }
 
-  /** The paragraph grew (or changed); replace its translation with a fresh one. */
+  /**
+   * The paragraph grew (or changed); replace its translation with a fresh one.
+   *
+   * The page did this, not the reader, so a slow answer is not announced: on a
+   * feed that keeps re-rendering, 「翻译响应较慢」 would pop up while they are
+   * reading something else entirely.
+   */
   private async retranslate(unit: WatchedUnit): Promise<void> {
     clearSlot(unit.element)
     await this.translate(unit)
   }
 
-  private async translate(unit: TranslationUnit): Promise<void> {
+  private async translate(unit: TranslationUnit, send: SendOptions = {}): Promise<void> {
     const { element, text } = unit
 
     // Same gesture, second time: take it back off.
@@ -246,7 +252,7 @@ export class ParagraphTranslator {
       const result = await sendMessage('page/translate', {
         texts: [text],
         hint: document.title,
-      })
+      }, send)
       const outcome = fillSlot(element, text, result.translations[0] ?? '')
       if (outcome !== 'rejected') {
         this.watcher.watch({ element, text })
