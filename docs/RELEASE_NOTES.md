@@ -1,5 +1,21 @@
 # Release notes
 
+## 2.5.1
+
+### 简体中文
+
+- 浏览网页时不再无故弹出「翻译响应较慢」：视频字幕、记住的整页翻译、滚动加载的新内容等后台翻译即使较慢也不再提示；只有按键翻译一段、等待超过 8 秒时才提示。超时和失败照常提示。
+- 提示文案去掉「请勿重复点击」。
+
+### English
+
+- Stop showing "Translation is taking longer than usual" while just browsing. Background translation — video subtitles, a remembered page translation, newly loaded content — no longer announces itself when slow; the notice appears only when a paragraph you translated with the key takes more than 8 seconds. Timeouts and failures are still reported.
+- The notice no longer says "Please do not click again".
+
+### Permissions and privacy
+
+No new extension permissions, host permissions, data categories, or data recipients.
+
 ## 2.5.0
 
 ### 简体中文
