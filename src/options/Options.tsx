@@ -4,7 +4,7 @@ import { ModelPicker } from './ModelPicker.tsx'
 import { sendMessage } from '@/services/messaging.ts'
 import { ProviderNotice } from '@/components/ProviderNotice.tsx'
 import { CONFIG_STATE_KEY, getConfigState, type ConfigState } from '@/configuration/state.ts'
-import { synchronizeConfiguration } from '@/configuration/service.ts'
+import { adoptExistingSetup, synchronizeConfiguration } from '@/configuration/service.ts'
 import { startConfigurationPolling } from '@/configuration/polling.ts'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Field, SegmentedControl, Select, Toggle } from '@/components/index.tsx'
@@ -31,6 +31,7 @@ import { ShortcutSection } from './ShortcutSection.tsx'
 import { FanfanSection } from './FanfanSection.tsx'
 import { VideoSection } from './VideoSection.tsx'
 import { ConfigurationSection } from './ConfigurationSection.tsx'
+import { BackupNotice } from './BackupNotice.tsx'
 import { truncate } from '@/shared/utils.ts'
 
 function ExternalAction({ href, children, primary = false }: { href: string; children: ReactNode; primary?: boolean }) {
@@ -127,7 +128,7 @@ export function Options() {
     })
     void (async () => {
       // Restore the linked source before showing editable settings.
-      const state = await synchronizeConfiguration()
+      const state = await adoptExistingSetup(await synchronizeConfiguration())
       if (!alive) return
       setConfigState(state)
       setNeedsDirectory(!state.setupComplete && state.mode !== 'directory')
@@ -305,6 +306,12 @@ export function Options() {
       </nav> : null}
 
       <div>
+      <BackupNotice onRestored={() => {
+        setNeedsDirectory(false)
+        dismissWelcome()
+        setSetupNotice('backup.restored')
+        select('model')
+      }} />
       {needsDirectory ? <ConfigurationSection onboarding onConfigure={() => {
         setNeedsDirectory(false)
         select('model')

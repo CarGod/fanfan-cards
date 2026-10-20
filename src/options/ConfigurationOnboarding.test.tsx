@@ -3,7 +3,10 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { setLanguage } from '@/i18n/index.ts'
-import { createMemoryAdapter, setStorageAdapter } from '@/storage/area.ts'
+import { createMemoryAdapter, setStorageAdapter, storage } from '@/storage/area.ts'
+import { backupSettingsBeforeUpgrade } from '@/storage/backups.ts'
+import { STORAGE_KEYS } from '@/shared/constants.ts'
+import { DEFAULT_SETTINGS } from '@/types/settings.ts'
 import { getConfigState, updateConfigState } from '@/configuration/state.ts'
 import { emptyDocument } from '@/configuration/document.ts'
 import { getSettings, saveSettings } from '@/storage/repositories/settingsRepo.ts'
@@ -56,6 +59,48 @@ it('starts with a folder choice, even after a cosmetic edit, without opening the
   expect(picker).not.toHaveBeenCalled()
   expect(cloudGet).not.toHaveBeenCalled()
   expect(cloudSet).not.toHaveBeenCalled()
+})
+it('an upgraded installation with a saved key or GitHub token opens its settings, not first-run setup', async () => {
+  const configured = await saveSettings({ provider: 'deepseek' })
+  await saveSettings({
+    providers: { ...configured.providers, deepseek: { apiKey: 'sk-local', model: '', baseUrl: '' } },
+    sync: { ...configured.sync, token: 'ghp-local', owner: 'reader' },
+  })
+  // What older versions left behind for someone who kept settings on this device only.
+  await updateConfigState({ mode: 'manual', status: 'local', setupComplete: false })
+  await render()
+  expect(container.textContent).not.toContain('先选择配置目录')
+  expect(container.querySelector('.settings-nav')).not.toBeNull()
+  expect(container.querySelector('.provider-grid')).not.toBeNull()
+  expect((await getConfigState()).setupComplete).toBe(true)
+  expect((await getSettings()).providers.deepseek.apiKey).toBe('sk-local')
+  expect(picker).not.toHaveBeenCalled()
+  expect(writeDirectory).not.toHaveBeenCalled()
+})
+it('offers settings an upgrade lost and restores them from the first screen', async () => {
+  const before = { ...DEFAULT_SETTINGS, provider: 'deepseek',
+    providers: { ...DEFAULT_SETTINGS.providers, deepseek: { apiKey: 'sk-before', model: '', baseUrl: '' } } }
+  await storage().set(STORAGE_KEYS.settings, before)
+  await backupSettingsBeforeUpgrade('2.5.0')
+  await storage().set(STORAGE_KEYS.settings, DEFAULT_SETTINGS)
+  await render()
+  expect(container.textContent).toContain('升级前（上一版本')
+  expect(container.textContent).toContain('先选择配置目录')
+  await act(async () => { button('恢复升级前的配置').click() })
+  expect((await getSettings()).providers.deepseek.apiKey).toBe('sk-before')
+  expect(container.textContent).toContain('已恢复升级前的配置')
+  expect(container.textContent).not.toContain('先选择配置目录')
+  expect(container.querySelector('.provider-grid')).not.toBeNull()
+  expect(button('恢复升级前的配置')).toBeUndefined()
+})
+it('dismissing the backup offer keeps the current settings', async () => {
+  await storage().set(STORAGE_KEYS.settings, { ...DEFAULT_SETTINGS, sync: { ...DEFAULT_SETTINGS.sync, token: 'ghp-before' } })
+  await backupSettingsBeforeUpgrade('2.5.0')
+  await storage().set(STORAGE_KEYS.settings, DEFAULT_SETTINGS)
+  await render()
+  await act(async () => { button('不用恢复').click() })
+  expect(button('恢复升级前的配置')).toBeUndefined()
+  expect((await getSettings()).sync.token).toBe('')
 })
 it('opens the picker on the click and starts setup with automatic folder sync for an empty folder', async () => {
   await render()

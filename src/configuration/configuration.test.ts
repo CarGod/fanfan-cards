@@ -8,7 +8,7 @@ import {
   settingsFromDocument, type ConfigDocument,
 } from './document.ts'
 import { getConfigState, updateConfigState } from './state.ts'
-import { importConfiguration, selectConfigMode, startFreshConfiguration, synchronizeConfiguration, SYNC_PREFIX } from './service.ts'
+import { importConfiguration, restoreSettingsBackup, selectConfigMode, synchronizeConfiguration, SYNC_PREFIX } from './service.ts'
 
 let remote: Record<string, unknown>
 let set: ReturnType<typeof vi.fn>
@@ -126,7 +126,7 @@ describe('configuration replication', () => {
   })
 
   it('manual mode ignores subsequently arriving account configuration', async () => {
-    await startFreshConfiguration()
+    await selectConfigMode('manual')
     await saveSettings({ theme: 'dark' })
     installRemote(doc({ theme: 'light' }, Date.now() + 5000))
     await synchronizeConfiguration()
@@ -170,16 +170,25 @@ describe('configuration replication', () => {
     expect(remote[SYNC_PREFIX + 'theme']).toMatchObject({ value: 'dark' })
   })
 
-  it('fresh setup clears device credentials without changing the account or vocabulary', async () => {
-    installRemote(doc({ 'sync.token': 'account-key' }))
+  it('restoring an upgrade backup brings keys back and replicates over the copy that lost them', async () => {
+    await saveSettings({ provider: 'deepseek', providers: { ...DEFAULT_SETTINGS.providers,
+      deepseek: { apiKey: 'before-upgrade', model: '', baseUrl: '' } }, sync: { ...DEFAULT_SETTINGS.sync, token: 'ghp-before' } })
     await synchronizeConfiguration()
+    const before = structuredClone(await storage().get(STORAGE_KEYS.settings))
     await storage().set(STORAGE_KEYS.words, { kept: true })
-    await startFreshConfiguration()
-    expect((await getSettings()).sync.token).toBe('')
-    expect(remote[SYNC_PREFIX + 'sync.token']).toMatchObject({ value: 'account-key' })
+    await saveSettings({ providers: DEFAULT_SETTINGS.providers, sync: DEFAULT_SETTINGS.sync, theme: 'dark' })
+    await synchronizeConfiguration()
+    expect(remote[SYNC_PREFIX + 'providers.deepseek.apiKey']).toMatchObject({ value: '' })
+    await updateConfigState({ setupComplete: false })
+
+    await restoreSettingsBackup({ version: '2.4.0', savedAt: 1, settings: before })
+    const settings = await getSettings()
+    expect(settings).toMatchObject({ provider: 'deepseek', theme: DEFAULT_SETTINGS.theme, sync: { token: 'ghp-before' } })
+    expect(settings.providers.deepseek.apiKey).toBe('before-upgrade')
     expect(await storage().get(STORAGE_KEYS.words)).toEqual({ kept: true })
-    await selectConfigMode('auto')
-    expect((await getSettings()).sync.token).toBe('account-key')
+    expect((await getConfigState()).setupComplete).toBe(true)
+    await synchronizeConfiguration()
+    expect(remote[SYNC_PREFIX + 'providers.deepseek.apiKey']).toMatchObject({ value: 'before-upgrade' })
   })
 
   it('corrupted local replication metadata never prevents normal local saves', async () => {
@@ -188,6 +197,38 @@ describe('configuration replication', () => {
     expect((await getSettings()).autoSpeak).toBe(true)
     await synchronizeConfiguration()
     expect(remote[SYNC_PREFIX + 'autoSpeak']).toMatchObject({ value: true })
+  })
+
+  it('a remote edit changes only its own field, even where the local document lags the settings', async () => {
+    // Migrations write settings directly: v10 moved this custom gateway to openai without
+    // touching the document, which still says `custom`.
+    await storage().set(STORAGE_KEYS.settings, {
+      ...DEFAULT_SETTINGS, provider: 'openai', sync: { ...DEFAULT_SETTINGS.sync, token: 'local-github' },
+      providers: { ...DEFAULT_SETTINGS.providers, openai: { apiKey: 'gateway-key', model: 'm', baseUrl: 'https://gw' } },
+    })
+    await storage().set(DOCUMENT_KEY, doc({ provider: 'custom', 'providers.custom.apiKey': 'gateway-key' }, 50))
+    installRemote(doc({ provider: 'custom', 'providers.custom.apiKey': 'gateway-key' }, 50))
+    installRemote(doc({ theme: 'dark' }, 200))
+
+    expect((await synchronizeConfiguration()).status).toBe('restored')
+    const settings = await getSettings()
+    expect(settings.theme).toBe('dark')
+    expect(settings.provider).toBe('openai')
+    expect(settings.providers.openai.apiKey).toBe('gateway-key')
+    expect(settings.sync.token).toBe('local-github')
+  })
+
+  it('one unreadable cell in the local document does not hand every field to an older remote copy', async () => {
+    await saveSettings({ provider: 'deepseek', providers: { ...DEFAULT_SETTINGS.providers,
+      deepseek: { apiKey: 'current-key', model: '', baseUrl: '' } } })
+    const stored = await getDocument()
+    await storage().set(DOCUMENT_KEY, { ...stored, fields: { ...stored.fields,
+      'providers.qwen.apiKey': { value: 'newer-build', updatedAt: Date.now(), revision: 'newer' } } })
+    installRemote(doc({ 'providers.deepseek.apiKey': 'old-key' }, 100))
+
+    await synchronizeConfiguration()
+    expect((await getSettings()).providers.deepseek.apiKey).toBe('current-key')
+    expect(remote[SYNC_PREFIX + 'providers.deepseek.apiKey']).toMatchObject({ value: 'current-key' })
   })
 
   it('keeps device mode separate from the replicated settings document', async () => {

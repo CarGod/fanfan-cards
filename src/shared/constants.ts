@@ -17,6 +17,8 @@ export const STORAGE_KEYS = {
   syncState: 'ara:syncState',
   /** 读者点选过的视频字幕位置，按站点存；不进 settings，不随配置同步。 */
   videoSubtitleSelectors: 'ara:videoSubtitleSelectors',
+  /** 升级前的设置副本，含密钥；只在本机，不随配置同步，不进导出。 */
+  settingsBackups: 'ara:settingsBackups',
 } as const
 
 export const SCHEMA_VERSION = 10

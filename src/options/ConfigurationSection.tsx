@@ -7,6 +7,7 @@ import {
   connectDirectory, selectConfigMode, synchronizeConfiguration,
 } from '@/configuration/service.ts'
 import { CONFIG_STATE_KEY, getConfigState, initialConfigState, updateConfigState, type ConfigState } from '@/configuration/state.ts'
+import { dateTimeKey } from '@/shared/utils.ts'
 
 function browserName(fallback: string): string {
   const nav = navigator as Navigator & { userAgentData?: { brands: { brand: string }[] } }
@@ -93,11 +94,6 @@ export function ConfigurationSection({ onConfigure, onConnected, onboarding = fa
       ? t('config.directory_saved') : t('config.browser_saved', { name })
     return t(`config.${state.status}`)
   }
-  const formatTime = (time: number) => {
-    const date = new Date(time)
-    const pad = (value: number) => String(value).padStart(2, '0')
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-  }
 
   return (
     <section className="card section-card configuration-section">
@@ -106,8 +102,8 @@ export function ConfigurationSection({ onConfigure, onConnected, onboarding = fa
       {!onboarding ? <div className="config-status" role="status" aria-live="polite">
         <strong>{syncEnabled ? t('config.enabled') : statusText()}</strong>
         {syncEnabled ? <div className="muted">{statusText()}</div> : null}
-        {state.lastSavedAt ? <div className="muted">{t('config.last_saved', { time: formatTime(state.lastSavedAt) })}</div> : null}
-        {state.lastRestoredAt ? <div className="muted">{t('config.last_restored', { time: formatTime(state.lastRestoredAt) })}</div> : null}
+        {state.lastSavedAt ? <div className="muted">{t('config.last_saved', { time: dateTimeKey(state.lastSavedAt) })}</div> : null}
+        {state.lastRestoredAt ? <div className="muted">{t('config.last_restored', { time: dateTimeKey(state.lastRestoredAt) })}</div> : null}
         <div className="faint">{state.mode === 'auto' ? t('config.cloud_limit') : state.mode === 'directory' ? t('config.icloud_limit') : t('config.manual_hint')}</div>
       </div> : null}
 

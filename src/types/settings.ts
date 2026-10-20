@@ -247,6 +247,30 @@ export type { FanfanPaletteId }
 
 export const DEFAULT_SETTINGS: Settings = settingsSchema.parse({})
 
+/**
+ * 读存起来的设置，一个字段一个字段地认。
+ *
+ * 这一版读不懂的值——新版本加的服务商、后来收紧的取值范围、一个写坏的字段——只把
+ * 它自己退回默认值。整份对象一起退回默认值，等于让旁边存着的 API Key 和 GitHub
+ * 连接陪葬，而下一次随便保存点什么，就把这份默认值写回去了。
+ */
+export function readSettings(raw: unknown): Settings {
+  const whole = settingsSchema.safeParse(raw ?? {})
+  if (whole.success) return whole.data
+  const salvaged = settingsSchema.safeParse(readable(settingsSchema, raw))
+  return salvaged.success ? salvaged.data : DEFAULT_SETTINGS
+}
+
+/** Readable values pass through; an unreadable one becomes `undefined`, i.e. its default. */
+function readable(schema: z.ZodType, raw: unknown): unknown {
+  const inner = schema instanceof z.ZodDefault ? (schema.unwrap() as z.ZodType) : schema
+  if (inner instanceof z.ZodObject && raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
+    const value = raw as Record<string, unknown>
+    return Object.fromEntries(Object.entries(inner.shape).map(([key, child]) => [key, readable(child as z.ZodType, value[key])]))
+  }
+  return schema.safeParse(raw).success ? raw : undefined
+}
+
 /** Catalogue used by the options UI and the provider factory. */
 export interface ProviderMeta {
   id: z.infer<typeof providerIdSchema>

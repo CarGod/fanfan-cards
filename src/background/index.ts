@@ -5,6 +5,7 @@ import { registerConfigurationSync } from './configuration.ts'
 import { APP_PAGE, OPTIONS_PAGE } from '@/shared/constants.ts'
 import { registerHandlers } from '@/services/messaging.ts'
 import { initStorage } from '@/storage/migrations.ts'
+import { backupSettingsBeforeUpgrade } from '@/storage/backups.ts'
 import { getSettings } from '@/storage/repositories/settingsRepo.ts'
 import type { ContentCommand } from '@/types/messages.ts'
 import { handleExplain } from './handlers/explain.ts'
@@ -30,10 +31,14 @@ import { onLanguageChange } from '@/i18n/index.ts'
 
 import { CONTEXT_MENU_ID, refreshContextMenu } from './contextMenu.ts'
 
+// The first start of a new version copies the old settings before sync or
+// migrations can change them. Never rejects: a failed copy must not stall them.
+const backedUp = backupSettingsBeforeUpgrade(chrome.runtime.getManifest().version).catch(() => undefined)
+
 // Registered in the first synchronous turn, before any await: a listener added
 // later would miss the very event that woke this worker up.
 registerListeningCleanup()
-registerConfigurationSync()
+registerConfigurationSync(backedUp)
 registerSyncScheduler()
 registerReminder()
 registerBadge()
@@ -86,6 +91,7 @@ registerHandlers({
 
 chrome.runtime.onInstalled.addListener((details) => {
   void (async () => {
+    await backedUp
     await initStorage()
     void refreshContextMenu()
     await ensureSyncAlarm()
@@ -102,7 +108,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 // Menus live in a separate store that survives worker restarts but not browser
 // restarts, so re-assert them on startup as well as on install.
 chrome.runtime.onStartup.addListener(() => {
-  void initStorage()
+  void backedUp.then(initStorage)
   void refreshContextMenu()
   void ensureSyncAlarm()
   void ensureReminderAlarm()

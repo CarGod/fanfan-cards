@@ -1,10 +1,11 @@
 import { storage } from '@/storage/area.ts'
 import { withLock } from '@/storage/mutex.ts'
 import { STORAGE_KEYS } from '@/shared/constants.ts'
-import { DEFAULT_SETTINGS, settingsSchema } from '@/types/settings.ts'
+import type { SettingsBackup } from '@/storage/backups.ts'
+import { readSettings } from '@/types/settings.ts'
 import {
   DOCUMENT_KEY, FIELD_PATHS, documentForEdit, emptyDocument, getDocument, mergeDocuments,
-  parseDocument, same, settingsFromDocument, type ConfigDocument,
+  parseDocument, same, settingsFromDocument, settingsWithChanges, storedSettings, type ConfigDocument,
 } from './document.ts'
 import { getConfigState, updateConfigState, type ConfigMode, type ConfigState } from './state.ts'
 import {
@@ -57,7 +58,10 @@ async function applyRemote(remote: ConfigDocument): Promise<{ doc: ConfigDocumen
     const doc = mergeDocuments(local, remote)
     const restored = !same(local, doc)
     if (restored) {
-      await storage().setMany({ [STORAGE_KEYS.settings]: settingsFromDocument(doc), [DOCUMENT_KEY]: doc })
+      const raw = await storage().get<unknown>(STORAGE_KEYS.settings)
+      const current = readSettings(raw)
+      const next = settingsWithChanges(current, local, doc)
+      await storage().setMany({ [STORAGE_KEYS.settings]: storedSettings(raw, current, next), [DOCUMENT_KEY]: doc })
     }
     return { doc, restored }
   })
@@ -106,6 +110,21 @@ export async function synchronizeConfiguration(): Promise<ConfigState> {
     lastRestoredAt: null, directoryName: null, setupComplete: false }))
 }
 
+/**
+ * 升级不是首装。
+ *
+ * 老版本只在同步成功、导入文件或连上目录时才记「已完成配置」，只在本机保存配置的人一直没有
+ * 这个标记——升级后整页被首装引导盖住，导航也藏了，看上去 Key 和 GitHub 连接全丢了，
+ * 其实都还在。这台设备上已经存着 AI Key 或 GitHub token，就足以说明配置做过了。
+ * 只改过主题这类外观设置不算，那仍是该走引导的新用户。
+ */
+export async function adoptExistingSetup(state: ConfigState): Promise<ConfigState> {
+  if (state.setupComplete || state.mode === 'directory') return state
+  const settings = readSettings(await storage().get<unknown>(STORAGE_KEYS.settings))
+  const configured = Object.values(settings.providers).some((item) => item.apiKey.trim()) || !!settings.sync.token.trim()
+  return configured ? updateConfigState({ setupComplete: true }) : state
+}
+
 export async function selectConfigMode(mode: ConfigMode): Promise<void> {
   await withLock(SYNC_LOCK, async () => {
     const before = await getConfigState()
@@ -122,23 +141,29 @@ export async function importConfiguration(raw: unknown): Promise<void> {
     // Explicit file selection is a device-local choice; it never replaces account data.
     await updateConfigState({ mode: 'manual', status: 'local', lastSavedAt: null, lastRestoredAt: null })
     await withLock(STORAGE_KEYS.settings, async () => {
-      const current = settingsSchema.parse(await storage().get(STORAGE_KEYS.settings) ?? {})
+      const raw = await storage().get<unknown>(STORAGE_KEYS.settings)
+      const current = readSettings(raw)
       const next = settingsFromDocument(doc)
       const edited = await documentForEdit(current, next)
-      await storage().setMany({ [STORAGE_KEYS.settings]: next, [DOCUMENT_KEY]: edited })
+      await storage().setMany({ [STORAGE_KEYS.settings]: storedSettings(raw, current, next), [DOCUMENT_KEY]: edited })
     })
     await updateConfigState({ status: 'restored', lastRestoredAt: Date.now(), setupComplete: true })
   })
 }
 
-export async function startFreshConfiguration(): Promise<void> {
+/**
+ * Put back what was there before an upgrade. Choosing to restore is an edit like any
+ * other, so it replicates and wins over whatever copy elsewhere lost the same keys.
+ */
+export async function restoreSettingsBackup(backup: SettingsBackup): Promise<void> {
   await withLock(SYNC_LOCK, async () => {
-    await updateConfigState({ mode: 'manual', status: 'local', setupComplete: true,
-      lastSavedAt: null, lastRestoredAt: null })
     await withLock(STORAGE_KEYS.settings, async () => {
-      // Defaults must not become deletion events against the existing account.
-      await storage().setMany({ [STORAGE_KEYS.settings]: DEFAULT_SETTINGS, [DOCUMENT_KEY]: emptyDocument() })
+      const current = readSettings(await storage().get<unknown>(STORAGE_KEYS.settings))
+      const next = readSettings(backup.settings)
+      const edited = await documentForEdit(current, next)
+      await storage().setMany({ [STORAGE_KEYS.settings]: storedSettings(backup.settings, next, next), [DOCUMENT_KEY]: edited })
     })
+    await updateConfigState({ setupComplete: true })
   })
 }
 

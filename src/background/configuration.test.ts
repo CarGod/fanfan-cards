@@ -4,7 +4,7 @@ import { synchronizeConfiguration } from '@/configuration/service.ts'
 import { registerConfigurationSync } from './configuration.ts'
 vi.mock('@/configuration/service.ts', () => ({ SYNC_PREFIX: 'fanfan:config:v1:', synchronizeConfiguration: vi.fn() }))
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.clearAllMocks() })
-function setup(periodInMinutes?: number) {
+function setup(periodInMinutes?: number, before?: Promise<unknown>) {
   vi.useFakeTimers()
   const onChanged = vi.fn(), onAlarm = vi.fn(), onFocus = vi.fn(), onStartup = vi.fn()
   const create = vi.fn()
@@ -14,9 +14,18 @@ function setup(periodInMinutes?: number) {
     windows: { onFocusChanged: { addListener: onFocus } },
     runtime: { onStartup: { addListener: onStartup }, onInstalled: { addListener: vi.fn() } },
   })
-  registerConfigurationSync()
+  registerConfigurationSync(before)
   return { onChanged, onAlarm, onFocus, onStartup, create }
 }
+it('holds the first sync until the upgrade backup has read the settings', async () => {
+  let release!: () => void
+  setup(undefined, new Promise<void>((resolve) => { release = resolve }))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(synchronizeConfiguration).not.toHaveBeenCalled()
+  release()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(synchronizeConfiguration).toHaveBeenCalledTimes(1)
+})
 it('syncs local edits after debounce and retries without opening settings', async () => {
   const { onChanged, onAlarm, create } = setup()
   expect(synchronizeConfiguration).toHaveBeenCalledTimes(1)

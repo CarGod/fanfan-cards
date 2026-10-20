@@ -4,16 +4,18 @@ import { SYNC_PREFIX, synchronizeConfiguration } from '@/configuration/service.t
 
 const ALARM = 'fanfan:configuration-retry'
 const PERIOD_MINUTES = 1
-export function registerConfigurationSync(): void {
+/** `before` holds every sync back until it settles: the upgrade backup has to see settings first. */
+export function registerConfigurationSync(before?: Promise<unknown>): void {
   let timer: ReturnType<typeof setTimeout> | undefined
   let running = false
   let lastStarted = -Infinity
   let pendingEdit = false
+  const sync = before ? () => before.then(synchronizeConfiguration) : synchronizeConfiguration
   const run = (rememberEdit = false) => {
     if (running) { pendingEdit ||= rememberEdit; return }
     running = true
     lastStarted = Date.now()
-    void Promise.resolve(synchronizeConfiguration()).finally(() => {
+    void Promise.resolve(sync()).finally(() => {
       running = false
       if (pendingEdit) { pendingEdit = false; run() }
     })

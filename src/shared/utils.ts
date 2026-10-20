@@ -51,6 +51,13 @@ export function dateKey(at: number = Date.now()): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
+/** `YYYY-MM-DD HH:MM:SS` in local time. */
+export function dateTimeKey(at: number): string {
+  const d = new Date(at)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${dateKey(at)} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
 export function startOfDay(at: number = Date.now()): number {
   const d = new Date(at)
   d.setHours(0, 0, 0, 0)
