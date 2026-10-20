@@ -1,5 +1,23 @@
 # Release notes
 
+## 2.5.0
+
+### 简体中文
+
+- 修复升级后 AI 密钥、GitHub 连接等配置丢失：某一项设置无法读取时只影响这一项；保存和配置同步只写入实际改动，不再用默认值覆盖其他设置。
+- 已在本机保存过 AI 密钥或 GitHub Token 的安装，升级后直接进入原有设置，不再显示首次设置引导。
+- 每次升级前在本机保留一份设置副本；升级后如果 AI 密钥或 GitHub 连接缺失，设置页顶部可一键恢复升级前的配置。
+
+### English
+
+- Fix AI keys, the GitHub connection and other settings going missing after an update. A setting that cannot be read now affects only itself, and saves and configuration sync write only actual changes instead of overwriting other settings with defaults.
+- Installations that already saved an AI key or GitHub token open their existing settings after an update instead of first-time setup.
+- Settings are copied locally before each update. If an AI key or the GitHub connection is missing afterwards, the settings page offers to restore the settings from before the update.
+
+### Permissions and privacy
+
+No new extension permissions, host permissions, data categories, or data recipients. The pre-update copy of settings, including keys, stays in the browser's local extension storage: it is not written to the configuration file or browser sync, not exported, and not sent anywhere. The privacy policy now describes this copy.
+
 ## 2.4.1
 
 ### 简体中文
