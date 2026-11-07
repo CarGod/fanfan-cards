@@ -1,5 +1,25 @@
 # Release notes
 
+## 2.6.0
+
+### 简体中文
+
+- 在模型设置中点击获取或刷新服务商的模型列表，支持 OpenAI、Anthropic、DeepSeek、小米 MiMo、Gemini 及提供标准模型列表接口的兼容网关。
+- 可搜索模型名称，区分内置推荐与接口发现的待测试模型。保留手动填写，不自动更换当前模型。
+- 接口不可用、权限不足或限流时，保留当前选择、已有列表与手动入口。更换服务商、地址或 Key 后，取消旧请求并清除旧列表。
+- Gemini 按生成能力筛选，过滤明确的纯图像、嵌入与语音模型。列表可见不代表兼容全部查词功能，选定后仍可使用“测试连接”确认。
+
+### English
+
+- Fetch or refresh model lists from OpenAI, Anthropic, DeepSeek, Xiaomi MiMo, Gemini, and compatible gateways that expose a standard models endpoint.
+- Search model names, with built-in suggestions and unverified discovered models shown separately. Manual entry remains available, and the current model never changes automatically.
+- Keep the current selection, previous list, and manual fallback when discovery fails. Cancel old requests and clear discovered models when the provider, endpoint, or key changes.
+- Filter Gemini by generation support and exclude clearly image-only, embedding, and speech models. A listed model is not a guarantee of full lookup compatibility; use Test connection to check it.
+
+### Permissions and privacy
+
+No new extension permissions or host permissions. Discovery runs only after a click and sends the configured key directly to the selected provider or gateway, without page content or vocabulary. Model metadata stays in the current settings-page session and is not included in configuration backups or sync. The privacy policy now describes this request.
+
 ## 2.5.2
 
 ### 简体中文

@@ -431,18 +431,18 @@ export function Options() {
               />
             </Field>
 
-            <Field
-              label={t('options.model.model')}
-              hint={
+            {/* This is a multi-control group, not a label wrapping the fetch button. */}
+            <div className="field" role="group" aria-label={t('options.model.model')}>
+              <span className="field-label">{t('options.model.model')}</span>
+              <ModelPicker key={meta.id} provider={settings.provider} config={config} value={config.model} defaultModel={meta.defaultModel} suggestions={meta.modelSuggestions} onChange={(model) => patchProvider({ model })} />
+              <div className="field-hint">{
                 config.model.trim()
                   ? t('options.model.hint_active', { value: config.model.trim() })
                   : t('options.model.hint_default', {
                       value: meta.defaultModel || t('options.model.manual_required'),
                     })
-              }
-            >
-              <ModelPicker key={meta.id} value={config.model} defaultModel={meta.defaultModel} suggestions={meta.modelSuggestions} onChange={(model) => patchProvider({ model })} />
-            </Field>
+              }</div>
+            </div>
 
             <Advanced>
             <Field

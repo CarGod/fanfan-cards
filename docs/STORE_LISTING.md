@@ -123,11 +123,11 @@
 | `notifications` | 用户开启每日提醒后，在设定时间发出一条「有卡片待复习」的通知。默认关闭。 |
 | 内容脚本 `http://*/*`、`https://*/*` | 划词解释与整页翻译的作用对象就是「用户正在读的任意网页」——无法预先枚举域名。用户划词、翻译或启用自动字幕时读取对应文本；用户开启翻翻模式后在本地扫描可见文本并匹配收藏词。听译开关默认关闭，须启用后再次点击播放器按钮才处理音轨，音频仅留在本机。用户可以在弹窗里按站点关闭，也可以全局关闭。 |
 | 内容脚本 `youtube.com`（`world: "MAIN"`） | 双语字幕功能需要读取播放器公开的字幕轨信息，并取得播放器为字幕请求生成的一次性校验参数——这些只存在于页面自身的 JavaScript 上下文中，隔离世界读不到。该脚本不访问任何扩展 API，只做这一件事。详见隐私政策。 |
-| `host_permissions`：`api.anthropic.com`、`api.openai.com`、`api.deepseek.com`、`generativelanguage.googleapis.com` | 直接把解释与翻译请求发给用户选定的 AI 服务商。不经过任何中转服务器，因此必须直连这些域名。 |
+| `host_permissions`：`api.anthropic.com`、`api.openai.com`、`api.deepseek.com`、`generativelanguage.googleapis.com` | 直接把解释与翻译请求发给用户选定的 AI 服务商，并在用户点击时读取该服务商的可用模型列表。不经过任何中转服务器，因此必须直连这些域名。 |
 | `host_permissions`：`translate.googleapis.com` | 不配 Key 时的默认后端：把选中的词、所在句子、被翻译的段落和字幕发给谷歌翻译接口。同样不经中转。 |
 | `host_permissions`：`huggingface.co`、`*.huggingface.co`、`*.hf.co` | 用户启动听译时下载并缓存固定版本的模型数据。推理 JS/WASM 随扩展打包；不从这些地址执行远程代码，不向其发送音频、识别文字或 AI 密钥。 |
 | `host_permissions`：`api.github.com` | 用户主动启用 GitHub 同步后，把词卡写入**用户自己的**仓库。 |
-| `optional_host_permissions`：`https://*/*` | 仅用于用户自行填写的 OpenAI 兼容 API 地址。**不预先申请**：用户在设置页点击「测试连接」时，才按其填写的那个域名单独请求授权。 |
+| `optional_host_permissions`：`https://*/*` | 用于用户配置的兼容 API 地址及尚未授权的 AI 服务商域名。**不预先申请**：用户在设置页点击「测试连接」或「获取模型列表」时，才按目标域名单独请求授权。读取模型列表只发送该服务的 Key，不包含网页或词卡内容。 |
 | `optional_host_permissions`：`http://localhost/*` | 支持把本机运行的模型服务（Ollama、LM Studio 等）作为服务商。同样按需申请。 |
 
 > 广泛主机权限与全站内容脚本会让审核明显变慢，这是正常的，**不要重复提交**。

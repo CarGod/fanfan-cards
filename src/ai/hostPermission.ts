@@ -22,7 +22,7 @@ export function optionalApiOrigin(rawUrl: string): string {
 
 /**
  * Custom gateways are optional, so their host access is requested only after
- * the user clicks "测试连接". Calling request directly (rather than awaiting a
+ * the user clicks "测试连接" or explicitly fetches a model list. Calling request directly (rather than awaiting a
  * preliminary contains check) preserves Chrome's user-gesture requirement.
  */
 export async function requestOptionalApiAccess(rawUrl: string): Promise<void> {
