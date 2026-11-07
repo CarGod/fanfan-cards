@@ -39,15 +39,14 @@ describe('DeepSeek', () => {
 
 describe('OpenAI', () => {
   it('只发 reasoning_effort，没有独立开关', () => {
-    const b = body()
+    const b = { model: 'gpt-6-luna' } as Record<string, unknown>
     applyReasoning(b, 'openai', 'high')
     expect(b['reasoning_effort']).toBe('high')
     expect(b['thinking']).toBeUndefined()
   })
 
-  /** OpenAI 没有「关」这一档，最低就是 low——退到最低，而不是假装关掉了。 */
-  it('关闭退到最低档，而不是发一个不存在的值', () => {
-    const b = body()
+  it('不能关闭思考的模型退到最低档', () => {
+    const b = { model: 'gpt-6-astra' } as Record<string, unknown>
     applyReasoning(b, 'openai', 'off')
     expect(b['reasoning_effort']).toBe('low')
   })

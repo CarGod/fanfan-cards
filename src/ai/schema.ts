@@ -116,8 +116,7 @@ export const WORD_EXPLANATION_KEYS = [
   'contextMeaning',
   'englishDefinition',
   'sentenceTranslation',
-  'example',
-  'exampleTranslation',
+  'examples',
   'synonyms',
 ] as const
 
@@ -169,6 +168,7 @@ export const WORD_EXPLANATION_JSON_SCHEMA = {
         'At most three entries.',
       items: {
         type: 'object',
+        additionalProperties: false,
         properties: {
           partOfSpeech: {
             type: 'string',

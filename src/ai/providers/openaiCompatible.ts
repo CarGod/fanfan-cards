@@ -19,6 +19,7 @@ import type {
 import { t } from '@/i18n/index.ts'
 import { postJson } from '../http.ts'
 import { extractJson } from '../json.ts'
+import { applyOpenAIParameters } from './openaiParameters.ts'
 import {
   batchTranslateSystemPrompt,
   buildBatchTranslatePrompt,
@@ -52,7 +53,7 @@ import {
  * reasoning, and the response comes back with `finish_reason: "length"` and an
  * empty `content` — which reads as "the model said nothing".
  *
- * `max_tokens` is a ceiling, not a charge: unused headroom costs nothing.
+ * The output-token limit is a ceiling, not a charge: unused headroom costs nothing.
  */
 /**
  * 这个端点用哪一套参数表达「少想一点」。
@@ -330,16 +331,15 @@ export function applyReasoning(
   dialect: ReasoningDialect,
   level: ThinkingLevel | undefined,
 ): void {
+  if (dialect === 'openai') {
+    applyOpenAIParameters(body, level)
+    return
+  }
+
   if (dialect === 'none' || !level) return
 
   if (dialect === 'mimo') {
     body['thinking'] = { type: level === 'off' ? 'disabled' : 'enabled' }
-    return
-  }
-
-  if (dialect === 'openai') {
-    // OpenAI 没有独立的开关，最低档就是 `low`。
-    body['reasoning_effort'] = level === 'high' ? 'high' : 'low'
     return
   }
 

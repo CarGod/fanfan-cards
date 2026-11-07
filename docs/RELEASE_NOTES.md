@@ -1,5 +1,25 @@
 # Release notes
 
+## 2.5.2
+
+### 简体中文
+
+- 修复 GPT-6 Luna 等 OpenAI 推理模型因输出长度参数不兼容而无法使用的问题，测试连接、查词、翻译和 AI 听译均使用适配后的请求参数。
+- 按具体模型处理思考深度：Luna 的「关闭」会真正关闭思考；不支持关闭的模型使用其最低档位。推理开启时不再发送不兼容的采样参数。
+- 修复查词结果格式中的嵌套对象约束和例句必填字段，避免 OpenAI 严格格式校验拒绝请求。
+- 模型列表加入 GPT-6 Luna。保留已有模型选择、密钥与配置，以及 GPT-4、DeepSeek、小米 MiMo 和兼容网关的原有行为。
+
+### English
+
+- Fix output-token parameter errors with GPT-6 Luna and other OpenAI reasoning models across connection tests, context lookup, translation and AI listening.
+- Apply model-specific reasoning settings. Off disables reasoning on Luna; models without an off setting use their lowest supported effort. Active reasoning no longer sends incompatible sampling parameters.
+- Fix nested-object constraints and required example fields in lookup output schemas so OpenAI's strict validation accepts the request.
+- Add GPT-6 Luna to the model suggestions. Keep existing model choices, keys and settings, and preserve GPT-4, DeepSeek, Xiaomi MiMo and compatible gateway behavior.
+
+### Permissions and privacy
+
+No new extension permissions, host permissions, data categories, or data recipients.
+
 ## 2.5.1
 
 ### 简体中文

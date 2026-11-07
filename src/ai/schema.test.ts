@@ -1,6 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AIError } from '@/types/ai.ts'
-import { coerceBatchTranslations, coerceExplanation, coerceSynonyms } from './schema.ts'
+import {
+  BATCH_TRANSLATION_JSON_SCHEMA,
+  EXAMPLE_JSON_SCHEMA,
+  SUMMARY_JSON_SCHEMA,
+  TRANSLATION_JSON_SCHEMA,
+  coerceBatchTranslations,
+  coerceExplanation,
+  coerceSynonyms,
+  explanationJsonSchema,
+} from './schema.ts'
+import { TRANSCRIPT_SCHEMA } from './transcript.ts'
 
 const GOOD = {
   word: 'accused',
@@ -19,6 +29,41 @@ const GOOD = {
   ],
   synonyms: [{ word: 'charge', meaning: '正式提出指控，法律色彩更强' }],
 }
+
+/** OpenAI validates every nested object, not only the top-level envelope. */
+function assertStrictObjectContract(schema: unknown, path = 'root'): void {
+  if (!schema || typeof schema !== 'object') return
+  const node = schema as Record<string, unknown>
+  if (node['type'] === 'object') {
+    expect(node['additionalProperties'], path).toBe(false)
+    const properties = node['properties'] as Record<string, unknown>
+    expect([...(node['required'] as string[])].sort(), path).toEqual(Object.keys(properties).sort())
+    for (const [key, value] of Object.entries(properties)) assertStrictObjectContract(value, `${path}.${key}`)
+  }
+  if (node['items']) assertStrictObjectContract(node['items'], `${path}[]`)
+}
+
+describe('strict output contracts', () => {
+  it.each(['full', 'core', 'extras'] as const)('has an OpenAI-compatible %s explanation schema', detail => {
+    assertStrictObjectContract(explanationJsonSchema(detail))
+  })
+
+  it('requires the actual list of examples, not obsolete single-example fields', () => {
+    const schema = explanationJsonSchema('full') as { required: string[] }
+    expect(schema.required).toContain('examples')
+    expect(schema.required).not.toContain('example')
+    expect(schema.required).not.toContain('exampleTranslation')
+    // Old saved/model responses are still understood by the response parser.
+    expect(coerceExplanation({ meaning: '你好', example: 'Hello.', exampleTranslation: '你好。' }, 'hello').examples)
+      .toEqual([{ sentence: 'Hello.', translation: '你好。' }])
+  })
+
+  it('keeps every other shared operation strictly valid', () => {
+    for (const schema of [TRANSLATION_JSON_SCHEMA, BATCH_TRANSLATION_JSON_SCHEMA, EXAMPLE_JSON_SCHEMA, SUMMARY_JSON_SCHEMA, TRANSCRIPT_SCHEMA]) {
+      assertStrictObjectContract(schema)
+    }
+  })
+})
 
 describe('coerceExplanation', () => {
   it('passes a well-formed response straight through', () => {

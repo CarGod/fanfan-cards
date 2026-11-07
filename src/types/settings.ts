@@ -352,7 +352,7 @@ export const PROVIDER_CATALOGUE: readonly ProviderMeta[] = [
     badge: { key: 'provider.badge.compatible', tone: 'compatible' },
     defaultModel: 'gpt-4o-mini',
     defaultBaseUrl: 'https://api.openai.com/v1',
-    modelSuggestions: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'],
+    modelSuggestions: ['gpt-6-luna', 'gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'],
     requiresKey: true,
     keyUrl: 'https://platform.openai.com/api-keys',
   },
