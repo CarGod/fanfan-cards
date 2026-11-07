@@ -12,3 +12,7 @@
 - 商店资料：商品详情、隐私声明和数据用途均未改动。
 - 隐私政策：https://github.com/CarGod/fanfan-cards/blob/main/docs/PRIVACY.md
 - 商店：https://chromewebstore.google.com/detail/ejhmidlnfffkpolnaiflfaojgfbngjba
+
+## 后续状态
+
+2026-11-07：本次审核已撤回，由包含相同修复及模型列表功能的 v2.6.0 替换提交。见 [v2.6.0 提交回执](fanfan-cards-v2.6.0-submission.md)。
