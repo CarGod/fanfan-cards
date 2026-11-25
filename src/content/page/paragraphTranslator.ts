@@ -230,6 +230,10 @@ export class ParagraphTranslator {
    * reading something else entirely.
    */
   private async retranslate(unit: WatchedUnit): Promise<void> {
+    if (!unit.element.hasAttribute(TRANSLATED_MARK)) {
+      this.watcher.forget(unit.element)
+      return
+    }
     clearSlot(unit.element)
     await this.translate(unit)
   }

@@ -124,7 +124,9 @@ const paragraphTranslator = new ParagraphTranslator({
 
 export function App({ host }: { host: HTMLElement }) {
   const { t } = useI18n()
-  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
+  const [savedSettings, setSettings] = useState<Settings | null>(null)
+  const settingsLoaded = savedSettings !== null
+  const settings = savedSettings ?? DEFAULT_SETTINGS
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -294,18 +296,16 @@ export function App({ host }: { host: HTMLElement }) {
     }
   }, [fanfanOn, host])
 
-  /*
-   * 显示模式跟着设置走，且**不需要重新翻译**——它只是一个 CSS 开关。
-   * 读者在弹窗里拨一下，已经翻好的内容立刻变；改主意再拨回来，原文还在那儿。
-   *
-   * 生命周期挂在这里，而不是挂在整页翻译的启停上：整页翻译关掉之后，页面上
-   * 可能还留着悬停翻译出来的段落，它们同样守这个模式。清理留给「这个站被禁用」
-   * 和卸载——那才是我们真的要从别人 DOM 上撤干净的时刻。
-   */
   useEffect(() => {
+    if (!enabled && pageTranslator.isRunning()) pageTranslator.stop()
+    pageTranslator.setTranslationOnly(enabled && settings.translationMode === 'translationOnly')
     setTranslationMode(enabled ? settings.translationMode : 'bilingual')
-    return () => setTranslationMode('bilingual')
   }, [enabled, settings.translationMode])
+
+  useEffect(() => () => {
+    pageTranslator.stop()
+    setTranslationMode('bilingual')
+  }, [])
 
   /*
    * Inject the translation stylesheet once, on mount.
@@ -329,7 +329,7 @@ export function App({ host }: { host: HTMLElement }) {
    * again on every article is not a feature, it is the state having been lost.
    */
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled || !settingsLoaded) return
     let cancelled = false
     void sendMessage('page/shouldTranslate', {})
       .then((result) => {
@@ -345,7 +345,7 @@ export function App({ host }: { host: HTMLElement }) {
     return () => {
       cancelled = true
     }
-  }, [enabled, settings.pageTranslationRange, settings.targetLanguage, settings.pageTranslationConcurrency])
+  }, [enabled, settingsLoaded, settings.pageTranslationRange, settings.targetLanguage, settings.pageTranslationConcurrency])
   const languages = useMemo(
     () => ({ source: settings.sourceLanguage, target: settings.targetLanguage }),
     [settings.sourceLanguage, settings.targetLanguage],

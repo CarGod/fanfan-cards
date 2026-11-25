@@ -52,6 +52,7 @@ export class ChangeWatcher {
     private readonly onChanged: (unit: WatchedUnit) => void,
     /** Runs on every scheduled sweep, for work that is not about one unit. */
     private readonly onTick?: () => void,
+    private readonly ignoreText?: (node: Text) => boolean,
   ) {}
 
   watch(unit: WatchedUnit): void {
@@ -60,8 +61,8 @@ export class ChangeWatcher {
   }
 
   /** Starts watching without a unit — for callers that only need the tick. */
-  begin(): void {
-    this.start()
+  begin(watchVisibility = false): void {
+    this.start(watchVisibility)
   }
 
   forget(element: Element): void {
@@ -99,13 +100,14 @@ export class ChangeWatcher {
     }
   }
 
-  private start(): void {
+  private start(watchVisibility = false): void {
     if (this.observer) return
     this.observer = new MutationObserver((records) => {
       const interesting = records.some((record) => {
         if (isOurs(record.target)) return false
-        if (record.type === 'characterData') return true
-        return [...record.addedNodes].some((node) => !isOurs(node))
+        if (record.type === 'attributes') return true
+        if (record.type === 'characterData') return !this.ignoreText?.(record.target as Text)
+        return [...record.addedNodes, ...record.removedNodes].some((node) => !isOurs(node))
       })
       if (interesting) this.schedule()
     })
@@ -113,6 +115,7 @@ export class ChangeWatcher {
       childList: true,
       subtree: true,
       characterData: true,
+      ...(watchVisibility ? { attributeFilter: ['hidden', 'inert', 'aria-hidden', 'class', 'style', 'contenteditable', 'translate'] } : {}),
     })
   }
 

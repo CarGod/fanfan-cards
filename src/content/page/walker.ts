@@ -1,3 +1,4 @@
+import { isEditable } from '../dom/editable.ts'
 import { isXIdentity } from './xIdentity.ts'
 import { CONTENT_HOST_ID } from '@/shared/constants.ts'
 import { shouldTranslateText } from '@/shared/language.ts'
@@ -16,10 +17,8 @@ import { shouldTranslateText } from '@/shared/language.ts'
  *   text must be descended into, or viewport-gated lazy translation collapses
  *   into "translate everything at once" (their #1881).
  *
- * What we skip: broad site-specific rule sets, attribute protection, in-place text
- * swapping, ruby/MathML handling, drop-cap patches. Those exist to *replace*
- * page text; we only ever append a translation next to it, so none of them
- * apply.
+ * Bilingual annotations use paragraph boundaries. Translation-only mode
+ * visits the individual text nodes so site controls retain their structure.
  *
  * Layout access is injected so the selection logic can be tested without a
  * rendering engine.
@@ -177,9 +176,12 @@ const HAS_LETTER = /\p{L}/u
 
 function defaultIsHidden(element: Element): boolean {
   if (!(element instanceof HTMLElement)) return false
-  if (element.hidden || element.getAttribute('aria-hidden') === 'true') return true
+  if (element.hidden || element.inert || element.getAttribute('aria-hidden') === 'true') return true
   const style = getComputedStyle(element)
-  return style.display === 'none' || style.visibility === 'hidden'
+  return style.display === 'none' || style.visibility === 'hidden' ||
+    style.contentVisibility === 'hidden' ||
+    (style.position === 'absolute' && (style.clipPath === 'inset(50%)' ||
+      /^rect\(([-.\d]+)(?:px)?,?\s+\1(?:px)?,?\s+\1(?:px)?,?\s+\1(?:px)?\)$/.test(style.clip)))
 }
 
 /**
@@ -225,7 +227,8 @@ interface SkipContext {
 
 /** Ordered cheapest-first; the style read is last because it forces layout. */
 function isSkippable(element: Element, context: SkipContext): boolean {
-  if (SKIP_TAGS.has(element.tagName) || isOptedOut(element) || isXIdentity(element)) return true
+  if (!(element instanceof HTMLElement) || SKIP_TAGS.has(element.tagName) ||
+    isEditable(element) || isOptedOut(element) || isXIdentity(element)) return true
   if (!context.allowTranslated && element.hasAttribute(TRANSLATED_MARK)) return true
   if (hasHiddenClass(element)) return true
 
@@ -247,7 +250,7 @@ function isSkippable(element: Element, context: SkipContext): boolean {
  * `aria-hidden` icon inside a paragraph would otherwise be spliced into the
  * source text and translated as if the reader could see it.
  */
-function textFromNodes(nodes: Iterable<Node>): string {
+export function textFromNodes(nodes: Iterable<Node>): string {
   const whitespace = new Map<Element, string>()
   const whiteSpaceOf = (element: Element | null): string => {
     if (!element) return 'normal'
@@ -439,6 +442,29 @@ export function materializeTranslationUnit(unit: TranslationUnit): TranslationUn
   return { element: wrapper, text: directText(wrapper) }
 }
 
+function walkContext(options: WalkOptions): SkipContext {
+  return {
+    isHidden: options.isHidden ?? defaultIsHidden,
+    fontFamilyOf:
+      options.fontFamilyOf ??
+      ((element: Element) => (element instanceof HTMLElement ? getComputedStyle(element).fontFamily : '')),
+    range: options.range ?? 'content',
+  }
+}
+
+/** Walk text in its actual container, including inline links and button labels. */
+export function visitPageText(root: Element, options: WalkOptions, visit: (node: Text) => void): void {
+  const context = walkContext(options)
+  const walk = (element: Element) => {
+    if (isSkippable(element, context)) return
+    for (const child of element.childNodes) {
+      if (child instanceof Text) visit(child)
+      else if (child instanceof Element) walk(child)
+    }
+  }
+  walk(root)
+}
+
 /**
  * Collects units in document order.
  *
@@ -447,13 +473,7 @@ export function materializeTranslationUnit(unit: TranslationUnit): TranslationUn
  * both a sentence and three paragraphs yields four units rather than one blob.
  */
 export function collectUnits(root: Element, options: WalkOptions = {}): TranslationUnit[] {
-  const context: SkipContext = {
-    isHidden: options.isHidden ?? defaultIsHidden,
-    fontFamilyOf:
-      options.fontFamilyOf ??
-      ((element: Element) => (element instanceof HTMLElement ? getComputedStyle(element).fontFamily : '')),
-    range: options.range ?? 'content',
-  }
+  const context = walkContext(options)
   const heightOf = options.heightOf ?? ((el: Element) => el.getBoundingClientRect().height)
   const viewportHeight = options.viewportHeight ?? (typeof window === 'undefined' ? 800 : window.innerHeight)
   const minLength = options.minLength ?? 2
@@ -503,15 +523,15 @@ export function collectUnits(root: Element, options: WalkOptions = {}): Translat
 }
 
 /** Batches units into requests, bounded by both count and characters. */
-export function batchUnits(
-  units: TranslationUnit[],
+export function batchUnits<T extends TranslationUnit>(
+  units: T[],
   limits: { maxUnits?: number; maxChars?: number } = {},
-): TranslationUnit[][] {
+): T[][] {
   const maxUnits = limits.maxUnits ?? 10
   const maxChars = limits.maxChars ?? 2200
 
-  const batches: TranslationUnit[][] = []
-  let current: TranslationUnit[] = []
+  const batches: T[][] = []
+  let current: T[] = []
   let chars = 0
 
   for (const unit of units) {
@@ -545,15 +565,7 @@ export function findUnitAt(
   target: Element | null,
   options: WalkOptions = {},
 ): TranslationUnit | null {
-  const context: SkipContext = {
-    isHidden: options.isHidden ?? defaultIsHidden,
-    fontFamilyOf:
-      options.fontFamilyOf ??
-      ((element: Element) =>
-        element instanceof HTMLElement ? getComputedStyle(element).fontFamily : ''),
-    range: options.range ?? 'all',
-    allowTranslated: true,
-  }
+  const context = { ...walkContext({ ...options, range: options.range ?? 'all' }), allowTranslated: true }
   // Explicit prose containers can be brief; arbitrary structural containers
   // keep the higher floor that suppresses navigation and control labels.
   const semanticMinLength = options.minLength ?? 3

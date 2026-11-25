@@ -1,3 +1,4 @@
+import { TRANSLATION_CACHE_LIMIT } from '@/shared/constants.ts'
 import { sendMessage } from '@/services/messaging.ts'
 import { AIError, aiErrorMessage } from '@/types/ai.ts'
 import {
@@ -8,6 +9,7 @@ import {
   type TranslationUnit,
 } from './walker.ts'
 import { clearAllSlots, clearSlot, createSlot, fillSlot, sweepOrphanSlots } from './slot.ts'
+import { InPlaceText, type TextUnit } from './inPlaceText.ts'
 import { LineRetryBudget } from './lineRetry.ts'
 import { ChangeWatcher } from './watcher.ts'
 import { noteOrphanError } from '@/shared/extensionContext.ts'
@@ -19,9 +21,8 @@ import { noteOrphanError } from '@/shared/extensionContext.ts'
  *
  * Three rules shape this file, all learned from read-frog's engine:
  *
- * 1. **Never touch the original.** Translations are appended as siblings marked
- *    `notranslate`. Nothing is replaced, so "turn it off" is a DOM removal, not
- *    an attempt to reconstruct the page from memory.
+ * 1. Bilingual mode annotates the source. Translation-only mode writes to its
+ *    original Text nodes, keeping site elements and their behavior in place.
  * 2. **Order by what the reader is looking at, do not wait for them to get
  *    there.** This used to be gated on an IntersectionObserver, which saved
  *    requests but spent them at the worst moment: you arrive at a paragraph and
@@ -78,7 +79,16 @@ export interface PageTranslatorOptions {
   onError?: (message: string) => void
 }
 
+type PageUnit = TranslationUnit | TextUnit
+const isTextUnit = (unit: PageUnit): unit is TextUnit => 'node' in unit
+
 export class PageTranslator {
+  private readonly inPlace = new InPlaceText()
+  private modeResults = new Map<string, string>()
+  private translationOnly = false
+  private generation = 0
+  private configuredConcurrency = DEFAULT_CONCURRENT
+
   private readonly watcher = new ChangeWatcher(
     (unit) => {
       clearSlot(unit.element)
@@ -89,10 +99,11 @@ export class PageTranslator {
       sweepOrphanSlots()
       this.absorbNewUnits()
     },
+    (node) => this.translationOnly && this.inPlace.isOwnWrite(node),
   )
   private readonly lineRetries = new LineRetryBudget()
   /** 换行被压平、等着逐行补一次的段落。等主队列排空再处理。 */
-  private lineShapeLost: TranslationUnit[] = []
+  private lineShapeLost: PageUnit[] = []
   /**
    * 这一轮**此刻**允许几个请求同时在飞。
    *
@@ -103,13 +114,13 @@ export class PageTranslator {
   private concurrency = DEFAULT_CONCURRENT
   /** 这一轮已经因为限流重排过多少批。 */
   private requeues = 0
-  private queue: TranslationUnit[] = []
+  private queue: PageUnit[] = []
   private flushing = false
   private state: TranslatorState = 'idle'
   private done = 0
   private failures = 0
   /** Per-unit guard against an empty/redundant provider response looping forever. */
-  private rejectedRetries = new Map<Element, number>()
+  private rejectedRetries = new WeakMap<PageUnit, number>()
   /**
    * Every unit we know about, keyed by element.
    *
@@ -124,6 +135,17 @@ export class PageTranslator {
 
   constructor(options: PageTranslatorOptions = {}) {
     this.options = options
+  }
+
+  setTranslationOnly(enabled: boolean): void {
+    if (this.translationOnly === enabled) return
+    this.translationOnly = enabled
+    if (this.isRunning()) {
+      const results = this.modeResults
+      this.stop()
+      this.modeResults = results
+      this.start({ ...this.walkOptions, concurrency: this.configuredConcurrency })
+    }
   }
 
   isRunning(): boolean {
@@ -147,12 +169,13 @@ export class PageTranslator {
     this.state = 'running'
     this.done = 0
     this.failures = 0
-    this.rejectedRetries.clear()
+    this.rejectedRetries = new WeakMap()
     // 补救额度按「一轮翻译」计：重新开一次整页翻译，就该重新给一次机会。
     this.lineRetries.reset()
     this.lineShapeLost = []
     // 每一轮都从设置值重新起步：上一轮退让到 1，不该拖累这一轮。
-    this.concurrency = clampConcurrency(options.concurrency)
+    this.configuredConcurrency = clampConcurrency(options.concurrency)
+    this.concurrency = this.configuredConcurrency
     this.requeues = 0
     this.emit()
 
@@ -160,8 +183,11 @@ export class PageTranslator {
       ...(options.range ? { range: options.range } : {}),
       ...(options.targetLanguage ? { targetLanguage: options.targetLanguage } : {}),
     }
-    const units = collectUnits(document.body, this.walkOptions).map(materializeTranslationUnit)
-    this.units = units
+    // A manually translated paragraph may already have a sibling hiding a control.
+    if (this.translationOnly) clearAllSlots()
+    const units = this.translationOnly ? this.inPlace.collect(this.walkOptions)
+      : collectUnits(document.body, this.walkOptions).map(materializeTranslationUnit)
+    this.units = this.translationOnly ? [] : units
 
     /*
      * Everything already on the page is queued now, not when it scrolls into
@@ -174,7 +200,7 @@ export class PageTranslator {
      * queueing costs the same requests in a better order — what you are looking
      * at is still translated first, and the rest is ready before you get there.
      */
-    for (const unit of units) this.enqueue(unit)
+    for (const unit of units) this.enqueue(unit, true)
     this.watchForNewContent()
     void this.flush()
   }
@@ -197,11 +223,16 @@ export class PageTranslator {
    * content the page loaded after we started.
    */
   private watchForNewContent(): void {
-    this.watcher.begin()
+    this.watcher.begin(this.translationOnly)
   }
 
   private absorbNewUnits(): void {
     if (this.state !== 'running') return
+    if (this.translationOnly) {
+      for (const unit of this.inPlace.collect(this.walkOptions)) this.enqueue(unit)
+      void this.flush()
+      return
+    }
     const seen = new Set(this.units.map((unit) => unit.element))
     const fresh = collectUnits(document.body, this.walkOptions)
       .map(materializeTranslationUnit)
@@ -222,18 +253,24 @@ export class PageTranslator {
   pause(): void {
     this.watcher.stop()
     // 排队中的那些永远等不到译文了，占位符得撤掉，不然页面上留一排「翻译中…」。
-    for (const unit of this.queue) clearSlot(unit.element)
+    for (const unit of this.queue) {
+      if (!isTextUnit(unit)) clearSlot(unit.element)
+    }
     this.queue = []
     this.state = 'idle'
     this.emit()
   }
 
   stop(): void {
+    this.generation += 1
+    this.flushing = false
+    this.modeResults = new Map()
+    this.inPlace.restore()
     this.watcher.stop()
     this.units = []
     this.queue = []
     this.lineShapeLost = []
-    this.rejectedRetries.clear()
+    this.rejectedRetries = new WeakMap()
     this.state = 'idle'
 
     clearAllSlots()
@@ -248,27 +285,40 @@ export class PageTranslator {
     this.emit()
   }
 
-  private enqueue(unit: TranslationUnit): void {
-    if (unit.element.hasAttribute(TRANSLATED_MARK)) return
-    // Marked before the request goes out: a second observer callback for the
-    // same element must not produce a second translation under it. The visible
-    // placeholder waits until the request is actually sent, so a long queue
-    // does not litter the page with "翻译中…" lines that sit there for a minute.
-    unit.element.setAttribute(TRANSLATED_MARK, 'pending')
+  private enqueue(unit: PageUnit, reuseModeResults = false): void {
+    if (isTextUnit(unit)) {
+      if (!this.inPlace.current(unit)) return
+    } else {
+      if (unit.element.hasAttribute(TRANSLATED_MARK)) return
+      unit.element.setAttribute(TRANSLATED_MARK, 'pending')
+    }
+
+    // Keep finished labels instant when the reader changes display modes.
+    // Rich bilingual paragraphs may require different text boundaries.
+    const cached = reuseModeResults ? this.modeResults.get(unit.text) : undefined
+    if (cached !== undefined) {
+      if (!isTextUnit(unit)) unit.element.after(createSlot(unit.element))
+      if (this.fill(unit, cached) === 'filled') {
+        if (!isTextUnit(unit)) this.watcher.watch(unit)
+        this.done += 1
+        return
+      }
+    }
     this.queue.push(unit)
   }
 
   private async flush(): Promise<void> {
     if (this.flushing) return
     this.flushing = true
+    const run = this.generation
 
     try {
-      while (this.queue.length > 0 && this.state === 'running') {
+      while (run === this.generation && this.queue.length > 0 && this.state === 'running') {
         // Re-sorted every round: if the reader jumps to the end of a long page,
         // the next requests should be for what is now on screen, not for what
         // was on screen when the run started.
         this.sortByDistanceFromViewport()
-        const batches: TranslationUnit[][] = []
+        const batches: PageUnit[][] = []
         while (batches.length < this.concurrency && this.queue.length > 0) {
           /*
            * Peek, then remove exactly the batch we are about to send.
@@ -292,18 +342,38 @@ export class PageTranslator {
       }
 
       // 主队列空了，限流额度这才轮得到补救用。
-      if (this.state === 'running' && this.lineShapeLost.length > 0) {
+      if (run === this.generation && this.state === 'running' && this.lineShapeLost.length > 0) {
         const pending = this.lineShapeLost
         this.lineShapeLost = []
-        await this.lineRetries.retranslate(pending)
+        await this.lineRetries.retranslate(pending, (unit, text) => {
+          if (run === this.generation) this.fill(unit, text)
+        })
       }
     } finally {
-      this.flushing = false
+      if (run === this.generation) {
+        this.flushing = false
+        if (this.queue.length && this.isRunning()) void this.flush()
+      }
     }
   }
 
-  private async translateBatch(batch: TranslationUnit[]): Promise<void> {
-    for (const unit of batch) unit.element.after(createSlot(unit.element))
+  private fill(unit: PageUnit, translation: string) {
+    const outcome = isTextUnit(unit)
+      ? this.inPlace.fill(unit, translation)
+      : fillSlot(unit.element, unit.text, translation)
+    if (outcome === 'filled' && this.modeResults.size < TRANSLATION_CACHE_LIMIT) {
+      this.modeResults.set(unit.text, translation)
+    }
+    return outcome
+  }
+
+  private async translateBatch(batch: PageUnit[]): Promise<void> {
+    const generation = this.generation
+    batch = batch.filter(unit => !isTextUnit(unit) || this.inPlace.current(unit))
+    if (!batch.length) return
+    for (const unit of batch) {
+      if (!isTextUnit(unit)) unit.element.after(createSlot(unit.element))
+    }
 
     try {
       const result = await sendMessage('page/translate', {
@@ -311,21 +381,23 @@ export class PageTranslator {
         hint: document.title,
       })
 
-      const lost: TranslationUnit[] = []
+      if (generation !== this.generation) return
+      const lost: PageUnit[] = []
       let accepted = 0
       batch.forEach((unit, index) => {
-        const outcome = fillSlot(unit.element, unit.text, result.translations[index] ?? '')
+        const translation = result.translations[index] ?? ''
+        const outcome = this.fill(unit, translation)
         if (outcome === 'rejected') {
-          const retries = this.rejectedRetries.get(unit.element) ?? 0
+          const retries = this.rejectedRetries.get(unit) ?? 0
           if (retries < MAX_REJECTED_RETRIES) {
-            this.rejectedRetries.set(unit.element, retries + 1)
+            this.rejectedRetries.set(unit, retries + 1)
             this.enqueue(unit)
           }
           return
         }
-        this.rejectedRetries.delete(unit.element)
+        this.rejectedRetries.delete(unit)
         accepted += 1
-        this.watcher.watch(unit)
+        if (!isTextUnit(unit)) this.watcher.watch(unit)
         if (outcome === 'line-shape-lost') lost.push(unit)
       })
       // Consecutive, not cumulative: a run that keeps succeeding has recovered.
@@ -342,10 +414,11 @@ export class PageTranslator {
        */
       if (lost.length > 0) this.lineShapeLost.push(...lost)
     } catch (error) {
+      if (generation !== this.generation) return
       for (const unit of batch) {
         // Leave the original untouched and drop our placeholder: a page full of
         // error text would be worse than a page with nothing added.
-        clearSlot(unit.element)
+        if (!isTextUnit(unit)) clearSlot(unit.element)
       }
       /*
        * 扩展刚更新过，这个脚本已经和它失联了。再试多少次都是同一个结果，

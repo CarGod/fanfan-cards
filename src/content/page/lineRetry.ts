@@ -47,15 +47,18 @@ export class LineRetryBudget {
    * 补救本来就是排在主队列之后的锦上添花，没有任何理由为它抢额度——
    * 慢几秒钟没人看得出来，触发限流则是整页白翻。
    */
-  async retranslate(units: TranslationUnit[]): Promise<void> {
+  async retranslate(
+    units: TranslationUnit[],
+    apply = (unit: TranslationUnit, text: string): void => { fillSlot(unit.element, unit.text, text) },
+  ): Promise<void> {
     const allowed = this.take(units.length)
     for (const unit of units.slice(0, allowed)) {
-      await retranslateOne(unit)
+      await retranslateOne(unit, apply)
     }
   }
 }
 
-async function retranslateOne(unit: TranslationUnit): Promise<void> {
+async function retranslateOne(unit: TranslationUnit, apply: (unit: TranslationUnit, text: string) => void): Promise<void> {
   const lines = unit.text.split('\n').filter((line) => line.trim())
   if (lines.length < 2) return
 
@@ -65,7 +68,7 @@ async function retranslateOne(unit: TranslationUnit): Promise<void> {
       hint: document.title,
     })
     if (result.translations.length !== lines.length) return
-    fillSlot(unit.element, unit.text, rejoinOnSkeleton(unit.text, result.translations))
+    apply(unit, rejoinOnSkeleton(unit.text, result.translations))
   } catch (error) {
     // 补救失败不该升级成一次报错：槽里已经有一份读得懂的译文了。
     noteOrphanError(error)
