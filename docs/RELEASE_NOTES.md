@@ -1,5 +1,17 @@
 # Release notes
 
+## 2.6.1
+
+### 简体中文
+
+- 修复 X 等网站在整页翻译切到「仅译文」后，设置链接无法点击、箭头消失和隐藏提示意外显示的问题。
+- 译文保留网页原有按钮、链接和键盘焦点。网站更新文字后，点击「还原原文」会恢复最新内容。
+
+### English
+
+- Fixed broken settings links, missing icons, and exposed hidden hints in translation-only mode on X and other interactive sites.
+- Page translation preserves native buttons, links, and keyboard focus. Restoring the page keeps text updates made by the site.
+
 ## 2.6.0
 
 ### 简体中文
