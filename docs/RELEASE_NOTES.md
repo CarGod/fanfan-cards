@@ -1,5 +1,15 @@
 # Release notes
 
+## 2.6.2
+
+### 简体中文
+
+- 修复「仅译文」模式下单段翻译无法用快捷键还原的问题。鼠标停在译文上，再按一次单段翻译快捷键即可恢复该段原文。
+
+### English
+
+- Fixed the paragraph translation shortcut in translation-only mode. Hover over a translated paragraph and press the same shortcut again to restore its original text.
+
 ## 2.6.1
 
 ### 简体中文
