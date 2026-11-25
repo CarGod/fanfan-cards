@@ -82,7 +82,6 @@ function isTyping(): boolean {
 export class ParagraphTranslator {
   private key: ParagraphTriggerKey = 'off'
   private armed = false
-  private hovered: TranslationUnit | null = null
   /*
    * 高亮画在谁身上。
    *
@@ -148,11 +147,16 @@ export class ParagraphTranslator {
     if (!matches(this.key, event)) return
     if (event.repeat) return
     this.armed = true
-    this.updateHover()
+    const target = this.updateHover()
     // The paragraph is translated on the key *press*, not on a click: the
     // cursor is already where the reader is looking, so asking them to also
     // click would add a step and risk following a link.
-    if (this.hovered) void this.translate(this.hovered, { notifySlow: true })
+    if (target instanceof Element) {
+      this.watcher.forget(target)
+      clearSlot(target)
+    } else if (target) {
+      void this.translate(target, { notifySlow: true })
+    }
   }
 
   private onKeyUp = (event: KeyboardEvent): void => {
@@ -173,53 +177,32 @@ export class ParagraphTranslator {
 
   private disarm(): void {
     this.armed = false
-    this.clearHover()
+    this.setOutline(null)
   }
 
-  private clearHover(): void {
+  private setOutline(element: Element | null): void {
+    if (this.outlined === element) return
     this.outlined?.classList.remove(HOVER_CLASS)
-    this.outlined = null
-    this.hovered = null
+    this.outlined = element
+    element?.classList.add(HOVER_CLASS)
   }
 
-  private updateHover(): void {
-    if (!this.pointer) return
+  /** A completed translation returns its source for undo; new text returns a unit to translate. */
+  private updateHover(): Element | TranslationUnit | null {
+    if (!this.pointer) return null
     const under = document.elementFromPoint(this.pointer.x, this.pointer.y)
-
-    /*
-     * 悬停在译文上，算作悬停在它的原文上。
-     *
-     * `findUnitAt` 会把我们自己插入的节点直接判掉，所以不先换成原文的话，
-     * 「仅译文」模式下翻完一段就再也悬停不到它——这个手势最要紧的那一半
-     * （再按一次收起）就没了。
-     */
     const fromSlot = sourceForSlot(under)
-    const unit = findUnitAt(fromSlot ?? under, {
-      ...(this.options.targetLanguage ? { targetLanguage: this.options.targetLanguage() } : {}),
-    })
-    if (!unit) {
-      this.clearHover()
-      return
+    if (fromSlot) {
+      // The slot still identifies its owner when translation-only CSS hides the source.
+      this.setOutline(under?.closest(`.${TRANSLATION_CLASS}`) ?? null)
+      return fromSlot.getAttribute(TRANSLATED_MARK) === 'done' ? fromSlot : null
     }
 
-    // 原文可能是藏着的，那就描它的译文——描一个看不见的元素等于没描。
-    const outline = fromSlot
-      ? (under?.closest(`.${TRANSLATION_CLASS}`) ?? unit.element)
-      : unit.element
-
-    /*
-     * 段落没变、但该描的东西变了，也要重画。
-     *
-     * 只比段落是不够的：鼠标从原文挪到它自己的译文上，段落是同一个，
-     * 高亮却应当跟着挪过去。少了这半个判断，高亮会留在原文上——
-     * 而仅译文模式下原文是看不见的，读者眼里就是「高亮没了」。
-     */
-    if (unit.element === this.hovered?.element && outline === this.outlined) return
-
-    this.clearHover()
-    this.hovered = unit
-    this.outlined = outline
-    outline.classList.add(HOVER_CLASS)
+    const unit = findUnitAt(under, {
+      ...(this.options.targetLanguage ? { targetLanguage: this.options.targetLanguage() } : {}),
+    })
+    this.setOutline(unit?.element ?? null)
+    return unit?.element.getAttribute(TRANSLATED_MARK) === 'done' ? unit.element : unit
   }
 
   /**
@@ -241,12 +224,6 @@ export class ParagraphTranslator {
   private async translate(unit: TranslationUnit, send: SendOptions = {}): Promise<void> {
     const { element, text } = unit
 
-    // Same gesture, second time: take it back off.
-    if (element.getAttribute(TRANSLATED_MARK) === 'done') {
-      this.watcher.forget(element)
-      clearSlot(element)
-      return
-    }
     if (this.inFlight.has(element)) return
     this.inFlight.add(element)
 

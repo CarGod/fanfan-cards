@@ -7,7 +7,7 @@ vi.mock('@/services/messaging.ts', () => ({
 }))
 
 const { ParagraphTranslator, HOVER_CLASS } = await import('./paragraphTranslator.ts')
-const { setTranslationMode } = await import('./styles.ts')
+const { injectPageStyles, removePageStyles, setTranslationMode } = await import('./styles.ts')
 
 /**
  * 「再按一次收起」必须在两种显示模式下都成立。
@@ -58,6 +58,7 @@ beforeEach(() => {
 afterEach(() => {
   translator.destroy()
   setTranslationMode('bilingual')
+  removePageStyles()
   vi.useRealTimers()
 })
 
@@ -75,14 +76,20 @@ describe('悬停译文也能收起', () => {
   })
 
   it('仅译文模式下同样退得回来', async () => {
+    injectPageStyles()
     setTranslationMode('translationOnly')
+    const source = paragraph()
     await press()
-    expect(slot()).not.toBeNull()
+    expect(getComputedStyle(source).display).toBe('none')
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Backquote', key: '`' }))
 
     pointAt(() => slot())
     await press()
 
     expect(slot()).toBeNull()
+    expect(paragraph()).toBe(source)
+    expect(getComputedStyle(source).display).not.toBe('none')
+    expect(translate).toHaveBeenCalledTimes(1)
   })
 
   /** 描一个 display:none 的元素等于没描——读者按下键之前得知道自己要动哪一段。 */
